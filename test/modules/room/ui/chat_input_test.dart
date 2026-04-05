@@ -124,4 +124,31 @@ void main() {
 
     sessionState.dispose();
   });
+
+  testWidgets('Shift+Enter does not send message', (tester) async {
+    String? sentText;
+    final sessionState = signal<AgentSessionState?>(null);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: ChatInput(
+          onSend: (text) => sentText = text,
+          onCancel: () {},
+          sessionState: sessionState,
+        ),
+      ),
+    ));
+
+    await tester.enterText(find.byType(TextField), 'Hello');
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(sentText, isNull);
+
+    sessionState.dispose();
+  });
 }

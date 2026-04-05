@@ -67,6 +67,17 @@ class _ChatInputState extends State<ChatInput> {
       _focusNode = FocusNode();
       _ownsFocusNode = true;
     }
+    _focusNode.onKeyEvent = _handleKeyEvent;
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.enter &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      _send();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override
@@ -97,20 +108,15 @@ class _ChatInputState extends State<ChatInput> {
       child: Row(
         children: [
           Expanded(
-            child: CallbackShortcuts(
-              bindings: {
-                const SingleActivator(LogicalKeyboardKey.enter): _send,
-              },
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                readOnly: active,
-                maxLines: null,
-                textInputAction: TextInputAction.newline,
-                decoration: const InputDecoration(
-                  hintText: 'Type a message...',
-                  border: OutlineInputBorder(),
-                ),
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              readOnly: active,
+              maxLines: null,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText: 'Type a message...',
+                border: OutlineInputBorder(),
               ),
             ),
           ),
