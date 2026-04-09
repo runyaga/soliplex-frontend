@@ -9,13 +9,16 @@ class AgentRuntimeManager {
     required PlatformConstraints platform,
     required Future<ToolRegistry> Function(String roomId) toolRegistryResolver,
     required Logger logger,
+    SessionExtensionFactory? extensionFactory,
   })  : _platform = platform,
         _toolRegistryResolver = toolRegistryResolver,
-        _logger = logger;
+        _logger = logger,
+        _extensionFactory = extensionFactory;
 
   final PlatformConstraints _platform;
   final Future<ToolRegistry> Function(String roomId) _toolRegistryResolver;
   final Logger _logger;
+  final SessionExtensionFactory? _extensionFactory;
   final Map<String, ({ServerConnection connection, AgentRuntime runtime})>
       _cache = {};
   bool _isDisposed = false;
@@ -50,6 +53,7 @@ class AgentRuntimeManager {
       toolRegistryResolver: _toolRegistryResolver,
       platform: _platform,
       logger: _logger,
+      extensionFactory: _extensionFactory,
     );
   }
 

@@ -124,6 +124,9 @@ Future<ShellConfig> standard({
         : const NativePlatformConstraints(),
     toolRegistryResolver: (_) async => const ToolRegistry(),
     logger: LogManager.instance.getLogger('room'),
+    extensionFactory: wrapScriptEnvironmentFactory(
+      () => MontyScriptEnvironment.create(),
+    ),
   );
 
   final registry = RunRegistry();
