@@ -66,4 +66,5 @@ export 'src/runtime/session_extension.dart';
 export 'src/scripting/monty_script_environment.dart';
 export 'src/scripting/script_environment.dart';
 // ── Tools ──
+export 'src/tools/tool_execution_context.dart';
 export 'src/tools/tool_registry.dart';
