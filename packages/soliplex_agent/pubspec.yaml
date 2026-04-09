@@ -13,6 +13,10 @@ dependencies:
       url: https://github.com/soliplex/ag-ui.git
       path: sdks/community/dart
   collection: ^1.18.0
+  dart_monty:
+    git:
+      url: https://github.com/runyaga/dart_monty.git
+      ref: feat/monty-0.10-upgrade
   meta: ^1.9.0
   signals_core: ^6.2.0
   soliplex_client:
