@@ -28,12 +28,15 @@ import '../modules/room/ui/markdown/markdown_theme_extension.dart';
 
 /// Enable the Monty Python scripting sandbox for agent sessions.
 ///
-/// Defaults to `true` on native platforms, `false` on web (WASM glue not
-/// yet bundled). Override at build time:
+/// Defaults to `true` on native, `false` on web. Override at build time:
 ///
-///   flutter run --dart-define=ENABLE_SCRIPTING=false
-const _enableScripting = !kIsWeb &&
-    bool.fromEnvironment('ENABLE_SCRIPTING', defaultValue: true);
+///   flutter run --dart-define=ENABLE_SCRIPTING=false   # disable on native
+///   flutter run -d chrome --dart-define=ENABLE_SCRIPTING=true  # enable on web
+///
+/// On web, the WASM glue (monty_glue.js + worker + .wasm binary) must be
+/// bundled into the Flutter web build for this to work.
+const _enableScripting =
+    bool.fromEnvironment('ENABLE_SCRIPTING', defaultValue: !kIsWeb);
 
 const _defaultLogoAsset = 'assets/branding/soliplex/logo_1024.png';
 const _logoSize = 64.0;
