@@ -26,6 +26,15 @@ import '../modules/room/room_module.dart';
 import '../modules/room/run_registry.dart';
 import '../modules/room/ui/markdown/markdown_theme_extension.dart';
 
+/// Enable the Monty Python scripting sandbox for agent sessions.
+///
+/// Defaults to `true` on native platforms, `false` on web (WASM glue not
+/// yet bundled). Override at build time:
+///
+///   flutter run --dart-define=ENABLE_SCRIPTING=false
+const _enableScripting = !kIsWeb &&
+    bool.fromEnvironment('ENABLE_SCRIPTING', defaultValue: true);
+
 const _defaultLogoAsset = 'assets/branding/soliplex/logo_1024.png';
 const _logoSize = 64.0;
 
@@ -124,11 +133,11 @@ Future<ShellConfig> standard({
         : const NativePlatformConstraints(),
     toolRegistryResolver: (_) async => const ToolRegistry(),
     logger: LogManager.instance.getLogger('room'),
-    extensionFactory: kIsWeb
-        ? null
-        : wrapScriptEnvironmentFactory(
+    extensionFactory: _enableScripting
+        ? wrapScriptEnvironmentFactory(
             () => MontyScriptEnvironment.create(),
-          ),
+          )
+        : null,
   );
 
   final registry = RunRegistry();
