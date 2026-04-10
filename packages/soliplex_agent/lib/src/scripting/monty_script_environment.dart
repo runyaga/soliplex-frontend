@@ -33,7 +33,18 @@ class MontyScriptEnvironment implements ScriptEnvironment {
       stackDepth: 100,
     ),
   }) async {
-    final monty = Monty();
+    final Monty monty;
+    try {
+      monty = Monty();
+    } on Object catch (e) {
+      throw StateError(
+        'MontyScriptEnvironment: failed to initialize Monty interpreter. '
+        'On native platforms, ensure the Rust toolchain is installed. '
+        'On web, the WASM glue (monty_glue.js + worker) must be bundled '
+        'into the Flutter web build — this is not yet supported. '
+        'Original error: $e',
+      );
+    }
     return MontyScriptEnvironment._(monty, limits);
   }
 
