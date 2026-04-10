@@ -19,6 +19,11 @@ enum FailureReason {
   /// Tool execution failed (all retries exhausted).
   toolExecutionFailed,
 
+  /// Server returned a transient error (502, 503, 504).
+  ///
+  /// UI should suggest retry as the server might recover.
+  transientServerError,
+
   /// Internal error in the orchestrator itself.
   internalError,
 

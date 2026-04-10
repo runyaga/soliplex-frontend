@@ -479,6 +479,20 @@ class _RoomScreenState extends State<RoomScreen> {
           _SendErrorBanner(
             error: sendError,
             onDismiss: () => threadView.clearSendError(),
+            onRetry: (sendError.reason == FailureReason.transientServerError ||
+                    sendError.reason == FailureReason.networkLost)
+                ? () {
+                    final text = sendError.unsentText;
+                    threadView.clearSendError();
+                    if (text != null && text.isNotEmpty) {
+                      threadView.sendMessage(
+                        text,
+                        _state.runtime,
+                        stateOverlay: _buildStateOverlay(),
+                      );
+                    }
+                  }
+                : null,
           ),
         ChatInput(
           onSend: (text) => threadView.sendMessage(
@@ -526,10 +540,15 @@ class _RoomScreenState extends State<RoomScreen> {
 }
 
 class _SendErrorBanner extends StatelessWidget {
-  const _SendErrorBanner({required this.error, required this.onDismiss});
+  const _SendErrorBanner({
+    required this.error,
+    required this.onDismiss,
+    this.onRetry,
+  });
 
   final SendError error;
   final VoidCallback onDismiss;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -552,6 +571,15 @@ class _SendErrorBanner extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (onRetry != null)
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('Retry'),
+            ),
           IconButton(
             icon: const Icon(Icons.close, size: 16),
             onPressed: onDismiss,

@@ -14,6 +14,16 @@ void main() {
         const error = NetworkException(message: 'No internet');
         expect(classifyError(error), equals(FailureReason.networkLost));
       });
+
+      test('ApiException 500 maps to serverError', () {
+        const error = ApiException(message: 'Fatal', statusCode: 500);
+        expect(classifyError(error), equals(FailureReason.serverError));
+      });
+
+      test('ApiException 503 maps to transientServerError', () {
+        const error = ApiException(message: 'Overloaded', statusCode: 503);
+        expect(classifyError(error), equals(FailureReason.transientServerError));
+      });
     });
 
     group('TransportError hierarchy', () {
@@ -35,6 +45,11 @@ void main() {
       test('500 maps to serverError', () {
         const error = TransportError('Internal error', statusCode: 500);
         expect(classifyError(error), equals(FailureReason.serverError));
+      });
+
+      test('504 maps to transientServerError', () {
+        const error = TransportError('Gateway timeout', statusCode: 504);
+        expect(classifyError(error), equals(FailureReason.transientServerError));
       });
 
       test('null statusCode maps to serverError', () {

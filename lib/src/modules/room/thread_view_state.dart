@@ -207,10 +207,10 @@ class ThreadViewState {
         _trackerRegistry.onRunTerminated();
         _detachSession();
         _messages.value = _messagesLoaded(conversation);
-      case FailedState(:final conversation, :final error):
+      case FailedState(:final conversation, :final reason, :final error):
         _trackerRegistry.onRunTerminated();
         _detachSession();
-        _lastSendError.value = SendError(error);
+        _lastSendError.value = SendError(error, reason: reason);
         if (conversation != null) {
           _messages.value = _messagesLoaded(conversation);
         }
