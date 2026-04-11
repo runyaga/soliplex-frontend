@@ -11,7 +11,7 @@ dependencies:
   dart_monty:
     git:
       url: https://github.com/runyaga/dart_monty.git
-      ref: 25bb7de
+      ref: feat-repl-support
   meta: ^1.9.0
   soliplex_client:
     path: ../soliplex_client
