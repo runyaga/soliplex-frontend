@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dart_monty/dart_monty_bridge.dart';
@@ -131,45 +132,95 @@ Use help("soliplex_new_thread") for detailed parameter info on any function.''';
     return conn;
   }
 
+  /// Maximum time to wait between SSE events before considering the
+  /// connection hung. Resets on every event received.
+  static const _sseInactivityTimeout = Duration(seconds: 60);
+
   /// Consumes an AG-UI event stream, accumulating the assistant's response.
   ///
-  /// Updates [threadState] with the assistant's message and any state snapshots
-  /// received during the stream.
+  /// Uses an inactivity timeout: if no event arrives within
+  /// [_sseInactivityTimeout], the stream is cancelled and a
+  /// [TimeoutException] is thrown. The timer resets on every event.
+  ///
+  /// Updates [threadState] with the assistant's message and any state
+  /// snapshots received during the stream.
   Future<String> _consumeStream(
     Stream<BaseEvent> stream,
     _ThreadState threadState,
   ) async {
     final buffer = StringBuffer();
     String? lastMessageId;
+    final completer = Completer<String>();
+    Timer? inactivityTimer;
 
-    await for (final event in stream) {
-      switch (event) {
-        case TextMessageStartEvent(:final messageId):
-          lastMessageId = messageId;
-        case TextMessageContentEvent(:final delta):
-          buffer.write(delta);
-        case StateSnapshotEvent(:final snapshot):
-          threadState.state = snapshot;
-        case RunErrorEvent(:final message):
-          throw Exception('Agent run failed: $message');
-        case TextMessageEndEvent():
-        case RunStartedEvent():
-        case RunFinishedEvent():
-        case _:
-          break;
-      }
+    void resetTimer() {
+      inactivityTimer?.cancel();
+      inactivityTimer = Timer(_sseInactivityTimeout, () {
+        if (!completer.isCompleted) {
+          completer.completeError(
+            TimeoutException(
+              'SSE stream inactive for ${_sseInactivityTimeout.inSeconds}s',
+              _sseInactivityTimeout,
+            ),
+          );
+        }
+      });
     }
 
-    final responseText = buffer.toString();
+    resetTimer();
 
-    threadState.messages.add(
-      AssistantMessage(
-        id: lastMessageId ?? threadState.nextId('assistant'),
-        content: responseText,
-      ),
+    final subscription = stream.listen(
+      (event) {
+        resetTimer();
+        switch (event) {
+          case TextMessageStartEvent(:final messageId):
+            lastMessageId = messageId;
+          case TextMessageContentEvent(:final delta):
+            buffer.write(delta);
+          case StateSnapshotEvent(:final snapshot):
+            threadState.state = snapshot;
+          case RunErrorEvent(:final message):
+            inactivityTimer?.cancel();
+            if (!completer.isCompleted) {
+              completer.completeError(
+                Exception('Agent run failed: $message'),
+              );
+            }
+          case TextMessageEndEvent():
+          case RunStartedEvent():
+          case RunFinishedEvent():
+          case _:
+            break;
+        }
+      },
+      onDone: () {
+        inactivityTimer?.cancel();
+        if (!completer.isCompleted) {
+          final responseText = buffer.toString();
+          threadState.messages.add(
+            AssistantMessage(
+              id: lastMessageId ?? threadState.nextId('assistant'),
+              content: responseText,
+            ),
+          );
+          completer.complete(responseText);
+        }
+      },
+      onError: (Object error) {
+        inactivityTimer?.cancel();
+        if (!completer.isCompleted) {
+          completer.completeError(error);
+        }
+      },
+      cancelOnError: true,
     );
 
-    return responseText;
+    try {
+      return await completer.future;
+    } finally {
+      inactivityTimer?.cancel();
+      await subscription.cancel();
+    }
   }
 
   // -- Server Discovery ------------------------------------------------------

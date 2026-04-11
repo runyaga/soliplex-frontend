@@ -173,11 +173,9 @@ packages:
   dart_monty:
     dependency: transitive
     description:
-      path: "."
-      ref: "feat/api-design"
-      resolved-ref: "93cc6177b6b4ff7f6251eeefb927492f54a8ce0f"
-      url: "https://github.com/runyaga/dart_monty.git"
-    source: git
+      path: "/Users/runyaga/dev/dart_monty/feat-repl-support"
+      relative: false
+    source: path
     version: "0.20.0"
   dbus:
     dependency: transitive
