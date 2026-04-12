@@ -9,7 +9,9 @@ environment:
 
 dependencies:
   dart_monty:
-    path: /Users/runyaga/dev/dart_monty/feat-repl-support
+    git:
+      url: https://github.com/runyaga/dart_monty.git
+      ref: main
   meta: ^1.9.0
   soliplex_client:
     path: ../soliplex_client
