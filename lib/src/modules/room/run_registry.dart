@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show Timer, unawaited;
 
 import 'package:soliplex_agent/soliplex_agent.dart';
 
@@ -35,7 +35,11 @@ class CancelledRun extends RunOutcome {
 /// session to reattach to or a completed outcome to display.
 class RunRegistry {
   final Map<ThreadKey, _TrackedRun> _runs = {};
+  final Map<ThreadKey, Timer> _orphanTimers = {};
   bool _isDisposed = false;
+
+  /// Sessions detached by a route pop are cancelled after this duration.
+  static const _orphanTimeout = Duration(minutes: 5);
 
   /// Register a session for the given thread.
   ///
@@ -43,6 +47,7 @@ class RunRegistry {
   /// cancelled first (at most one run per thread).
   void register(ThreadKey key, AgentSession session) {
     assert(!_isDisposed, 'Cannot register on a disposed RunRegistry');
+    _orphanTimers.remove(key)?.cancel();
     final existing = _runs[key];
     if (existing != null && existing.session != null) {
       existing.session!.cancel();
@@ -52,10 +57,37 @@ class RunRegistry {
 
     unawaited(session.result.then((result) {
       if (_isDisposed) return;
+      _orphanTimers.remove(key)?.cancel();
       final terminalState = session.runState.value;
       run.outcome = _outcomeFrom(terminalState, result);
       run.session = null;
     }));
+  }
+
+  /// Start an orphan timer for [session] on [key].
+  ///
+  /// Called by [ThreadViewState] when a route pop detaches an active session.
+  /// If [session] is no longer the registered session for [key] (i.e. a new
+  /// run has already been registered), this is a no-op.
+  /// The timer is cancelled by [reattach], [register], or [dispose].
+  void detach(ThreadKey key, AgentSession session) {
+    if (_isDisposed) return;
+    final run = _runs[key];
+    if (run?.session != session) return;
+    _orphanTimers[key]?.cancel();
+    _orphanTimers[key] = Timer(_orphanTimeout, () {
+      if (_isDisposed) return;
+      _runs[key]?.session?.cancel();
+      _orphanTimers.remove(key);
+    });
+  }
+
+  /// Cancel any pending orphan timer for [key].
+  ///
+  /// Called by [ThreadViewState] when the user navigates back to a thread
+  /// that still has an active session.
+  void reattach(ThreadKey key) {
+    _orphanTimers.remove(key)?.cancel();
   }
 
   /// Returns the active (non-terminal) session for a thread.
@@ -73,6 +105,10 @@ class RunRegistry {
   /// Cancels all active sessions and releases resources.
   void dispose() {
     _isDisposed = true;
+    for (final timer in _orphanTimers.values) {
+      timer.cancel();
+    }
+    _orphanTimers.clear();
     for (final run in _runs.values) {
       run.session?.cancel();
     }

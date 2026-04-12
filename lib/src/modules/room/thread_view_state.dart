@@ -205,18 +205,18 @@ class ThreadViewState {
         );
       case CompletedState(:final conversation):
         _trackerRegistry.onRunTerminated();
-        _detachSession();
+        _detachSession(sessionCompleted: true);
         _messages.value = _messagesLoaded(conversation);
       case FailedState(:final conversation, :final error):
         _trackerRegistry.onRunTerminated();
-        _detachSession();
+        _detachSession(sessionCompleted: true);
         _lastSendError.value = SendError(error);
         if (conversation != null) {
           _messages.value = _messagesLoaded(conversation);
         }
       case CancelledState(:final conversation):
         _trackerRegistry.onRunTerminated();
-        _detachSession();
+        _detachSession(sessionCompleted: true);
         if (conversation != null) {
           _messages.value = _messagesLoaded(conversation);
         }
@@ -238,9 +238,12 @@ class ThreadViewState {
     );
   }
 
-  void _detachSession() {
+  void _detachSession({bool sessionCompleted = false}) {
     _runStateUnsub?.call();
     _runStateUnsub = null;
+    if (_activeSession != null && !sessionCompleted) {
+      _registry.detach(threadKey, _activeSession!);
+    }
     _activeSession = null;
     _streamingState.value = null;
     _sessionState.value = null;
@@ -249,6 +252,7 @@ class ThreadViewState {
   bool _restoreFromRegistry() {
     final session = _registry.activeSession(threadKey);
     if (session != null) {
+      _registry.reattach(threadKey);
       _attachSession(session);
       return true;
     }
