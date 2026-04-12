@@ -19,8 +19,9 @@ class ServerConnection {
 
   /// Creates a connection from a server URL and HTTP client.
   ///
-  /// A single [httpClient] is shared for both REST and SSE — AG-UI
-  /// streams are request-scoped, so no isolation is needed.
+  /// [httpClient] is used for REST calls. SSE streams send
+  /// `Connection: close` so they never enter the keep-alive pool —
+  /// no separate SSE client is required.
   ///
   /// [serverUrl] must be the root URL (e.g. `http://localhost:8000`).
   /// The `/api/v1` prefix is added automatically — do not include it.
@@ -61,10 +62,10 @@ class ServerConnection {
 
   final Future<void> Function()? _onClose;
 
-  /// Closes the API client (and its shared transport), then invokes any
-  /// injected teardown.
+  /// Closes both the REST and SSE clients, then invokes any injected teardown.
   Future<void> close() async {
     api.close();
+    agUiStreamClient.close();
     await _onClose?.call();
   }
 

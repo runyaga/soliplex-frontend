@@ -44,6 +44,13 @@ class AgUiStreamClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
+        // Prevent the underlying dart:io HttpClient from returning this
+        // connection to its keep-alive pool after the SSE stream ends.
+        // SSE connections that are later cancelled mid-stream send TCP RST,
+        // which poisons shared pool entries used by subsequent REST calls
+        // (e.g. createRun). Connection: close ensures SSE connections are
+        // always discarded, not reused.
+        'Connection': 'close',
       },
       body: input.toJson(),
       cancelToken: cancelToken,
