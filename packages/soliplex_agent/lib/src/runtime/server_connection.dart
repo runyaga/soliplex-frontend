@@ -20,8 +20,10 @@ class ServerConnection {
   /// Creates a connection from a server URL and HTTP client.
   ///
   /// [httpClient] is used for REST calls. SSE streams send
-  /// `Connection: close` so they never enter the keep-alive pool —
-  /// no separate SSE client is required.
+  /// `Connection: close` so they are never pooled by the native HTTP
+  /// client (dart:io / NSURLSession) — no separate SSE client is required.
+  /// On WASM/web the header is forwarded to the server but has no effect
+  /// on the browser's own connection reuse.
   ///
   /// [serverUrl] must be the root URL (e.g. `http://localhost:8000`).
   /// The `/api/v1` prefix is added automatically — do not include it.

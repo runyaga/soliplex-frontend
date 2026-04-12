@@ -44,12 +44,15 @@ class AgUiStreamClient {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
-        // Prevent the underlying dart:io HttpClient from returning this
-        // connection to its keep-alive pool after the SSE stream ends.
-        // SSE connections that are later cancelled mid-stream send TCP RST,
-        // which poisons shared pool entries used by subsequent REST calls
-        // (e.g. createRun). Connection: close ensures SSE connections are
-        // always discarded, not reused.
+        // On native platforms (dart:io / NSURLSession), the HTTP client
+        // maintains a keep-alive pool. SSE connections cancelled mid-stream
+        // send TCP RST; if that connection was pooled, subsequent REST calls
+        // (e.g. createRun) pick up a dead socket and throw NetworkException.
+        // Connection: close tells the native client not to pool SSE
+        // connections, eliminating this contamination path.
+        // On WASM/web the browser manages connections via fetch — this
+        // header is forwarded to the server but has no effect on the
+        // browser's own connection reuse.
         'Connection': 'close',
       },
       body: input.toJson(),
