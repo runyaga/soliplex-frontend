@@ -6,21 +6,6 @@ import 'widgets/ui_confirm_dialog.dart';
 import 'widgets/ui_form_dialog.dart';
 import 'widgets/ui_modal_dialog.dart';
 
-/// An injected ephemeral message — client-only, not persisted.
-class InjectedMessage {
-  const InjectedMessage({
-    required this.id,
-    required this.content,
-    this.format = 'markdown',
-    required this.createdAt,
-  });
-
-  final String id;
-  final String content;
-  final String format;
-  final DateTime createdAt;
-}
-
 /// Flutter implementation of [UiRenderer] for the Soliplex app.
 ///
 /// Requires a [GlobalKey<NavigatorState>] (for dialog routing) and a
