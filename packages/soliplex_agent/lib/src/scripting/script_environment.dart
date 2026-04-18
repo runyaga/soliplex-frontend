@@ -53,7 +53,8 @@ abstract interface class ScriptEnvironment implements SessionExtension {
 /// The closure captures app-level dependencies (server connections,
 /// OS provider, etc.) so callers only need to invoke it.
 typedef ScriptEnvironmentFactory = Future<ScriptEnvironment> Function(
-    SessionContext ctx);
+  SessionContext ctx,
+);
 
 /// Wraps a [ScriptEnvironmentFactory] as a [SessionExtensionFactory].
 ///

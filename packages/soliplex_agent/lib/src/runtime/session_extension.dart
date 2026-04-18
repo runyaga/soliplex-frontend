@@ -28,4 +28,5 @@ abstract interface class SessionExtension {
 
 /// Factory that creates extensions for each new session.
 typedef SessionExtensionFactory = Future<List<SessionExtension>> Function(
-    SessionContext ctx);
+  SessionContext ctx,
+);
