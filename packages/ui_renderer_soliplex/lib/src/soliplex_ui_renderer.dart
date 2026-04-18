@@ -32,8 +32,7 @@ class SoliplexUiRenderer implements UiRenderer {
   int _messageCounter = 0;
 
   BuildContext? get _context => _navigatorKey.currentContext;
-  ScaffoldMessengerState? get _messenger =>
-      _scaffoldMessengerKey.currentState;
+  ScaffoldMessengerState? get _messenger => _scaffoldMessengerKey.currentState;
 
   @override
   Future<String?> showModal({
@@ -83,7 +82,8 @@ class SoliplexUiRenderer implements UiRenderer {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   Text(body),
                 ],
               )

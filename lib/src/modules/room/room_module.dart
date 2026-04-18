@@ -1,4 +1,7 @@
+import 'package:flutter/widgets.dart' show VoidCallback;
 import 'package:go_router/go_router.dart';
+import 'package:signals_flutter/signals_flutter.dart' show ReadonlySignal;
+import 'package:ui_plugin/ui_plugin.dart';
 
 import '../../core/shell_config.dart';
 import '../auth/require_connected_server.dart';
@@ -14,6 +17,8 @@ ModuleContribution roomModule({
   required AgentRuntimeManager runtimeManager,
   required RunRegistry registry,
   bool enableDocumentFilter = false,
+  ReadonlySignal<List<InjectedMessage>>? injectedMessages,
+  VoidCallback? onRoomChanged,
 }) {
   final documentSelections = DocumentSelections();
   return ModuleContribution(
@@ -43,6 +48,8 @@ ModuleContribution roomModule({
         registry,
         enableDocumentFilter,
         documentSelections,
+        injectedMessages,
+        onRoomChanged,
       ),
       _buildRoute(
         '/room/:serverAlias/:roomId/thread/:threadId',
@@ -51,6 +58,8 @@ ModuleContribution roomModule({
         registry,
         enableDocumentFilter,
         documentSelections,
+        injectedMessages,
+        onRoomChanged,
       ),
     ],
   );
@@ -63,6 +72,8 @@ GoRoute _buildRoute(
   RunRegistry registry,
   bool enableDocumentFilter,
   DocumentSelections documentSelections,
+  ReadonlySignal<List<InjectedMessage>>? injectedMessages,
+  VoidCallback? onRoomChanged,
 ) {
   return GoRoute(
     path: path,
@@ -82,6 +93,8 @@ GoRoute _buildRoute(
           registry: registry,
           enableDocumentFilter: enableDocumentFilter,
           documentSelections: documentSelections,
+          injectedMessages: injectedMessages,
+          onRoomChanged: onRoomChanged,
         ),
       );
     },

@@ -28,7 +28,8 @@ class FakeUiRenderer implements UiRenderer {
     required String message,
     String? target,
   }) async {
-    _record('requestConfirm', {'verb': verb, 'message': message, 'target': target});
+    _record(
+        'requestConfirm', {'verb': verb, 'message': message, 'target': target});
     return confirmAnswer?.call(verb) ?? true;
   }
 
@@ -186,8 +187,7 @@ void main() {
     });
 
     test('returns submitted map', () async {
-      final r = FakeUiRenderer()
-        ..formAnswer = (_) => {'name': 'Alan'};
+      final r = FakeUiRenderer()..formAnswer = (_) => {'name': 'Alan'};
       final p = _plugin(r);
 
       final result = await _callHandler(
@@ -347,8 +347,7 @@ class _ThrowingRenderer implements UiRenderer {
 
   final String on;
 
-  Never _throw(String method) =>
-      throw StateError('$method deliberately threw');
+  Never _throw(String method) => throw StateError('$method deliberately threw');
 
   @override
   Future<bool> requestConfirm({

@@ -58,7 +58,10 @@ class _StateRow extends StatelessWidget {
           'Awaiting confirm: $verb',
           theme.colorScheme.error,
         ),
-      UiModalOpen(:final title) => ('Modal open: $title', theme.colorScheme.primary),
+      UiModalOpen(:final title) => (
+          'Modal open: $title',
+          theme.colorScheme.primary
+        ),
       UiFormOpen(:final schemaKey) => (
           'Form open ($schemaKey)',
           theme.colorScheme.secondary,

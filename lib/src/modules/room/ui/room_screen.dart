@@ -19,6 +19,7 @@ import '../room_state.dart';
 import '../run_registry.dart';
 import '../thread_list_state.dart';
 import '../thread_view_state.dart';
+import 'package:ui_plugin/ui_plugin.dart';
 import '../compute_display_messages.dart';
 import 'chat_input.dart';
 import 'chunk_visualization_page.dart';
@@ -54,6 +55,8 @@ class RoomScreen extends StatefulWidget {
     required this.registry,
     this.enableDocumentFilter = false,
     required this.documentSelections,
+    this.injectedMessages,
+    this.onRoomChanged,
   });
 
   final ServerEntry serverEntry;
@@ -63,6 +66,14 @@ class RoomScreen extends StatefulWidget {
   final RunRegistry registry;
   final bool enableDocumentFilter;
   final DocumentSelections documentSelections;
+
+  /// Ephemeral client-only messages injected by [UiPlugin.ui_inject_message].
+  /// Signal persists across room navigation; cleared when switching rooms.
+  final ReadonlySignal<List<InjectedMessage>>? injectedMessages;
+
+  /// Called when the room changes so the injected messages signal can be
+  /// cleared. Provided by the flavor (e.g. `renderer.clearInjectedMessages`).
+  final VoidCallback? onRoomChanged;
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
@@ -140,6 +151,7 @@ class _RoomScreenState extends State<RoomScreen> {
       _state.dispose();
       _chatController.clear();
       _state = _createRoomState();
+      widget.onRoomChanged?.call();
       if (widget.threadId != null) {
         _state.selectThread(widget.threadId!);
       } else {
@@ -691,6 +703,7 @@ class _RoomScreenState extends State<RoomScreen> {
     final status = threadView.messages.watch(context);
     final streaming = threadView.streamingState.watch(context);
     final sendError = threadView.lastSendError.watch(context);
+    final injected = widget.injectedMessages?.watch(context) ?? const [];
     final attachEnabled = room?.enableAttachments ?? false;
 
     _restoreUnsentText(sendError?.unsentText);
@@ -708,7 +721,8 @@ class _RoomScreenState extends State<RoomScreen> {
                 onRetry: threadView.refresh,
               ),
             MessagesLoaded(:final messages, :final messageStates) =>
-              computeDisplayMessages(messages, streaming).isEmpty
+              computeDisplayMessages(messages, streaming, injected: injected)
+                      .isEmpty
                   ? RoomWelcome(
                       room: room,
                       onSuggestionTapped: (suggestion) =>
@@ -725,6 +739,7 @@ class _RoomScreenState extends State<RoomScreen> {
                       messages: messages,
                       messageStates: messageStates,
                       streamingState: streaming,
+                      injected: injected,
                       executionTrackers: threadView.executionTrackers,
                       onFeedbackSubmit: threadView.submitFeedback,
                       onInspect: (runId) {

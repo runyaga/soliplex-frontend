@@ -56,8 +56,7 @@ const _uiShowModalSchema = HostFunctionSchema(
 
 const _uiShowFormSchema = HostFunctionSchema(
   name: 'ui_show_form',
-  description:
-      'Show a blocking form modal described by a JSON schema. '
+  description: 'Show a blocking form modal described by a JSON schema. '
       'Returns the submitted field map, or null if dismissed.',
   params: [
     HostParam(
@@ -90,8 +89,7 @@ const _uiInjectMessageSchema = HostFunctionSchema(
 
 const _uiRequestConfirmSchema = HostFunctionSchema(
   name: 'ui_request_confirm',
-  description:
-      'Ask the user to confirm a destructive verb. '
+  description: 'Ask the user to confirm a destructive verb. '
       'Returns true if approved, false if denied.',
   params: [
     HostParam(
@@ -158,18 +156,18 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
 
   @override
   List<HostFunction> get functions => [
-    HostFunction(schema: _uiNotifySchema, handler: _handleNotify),
-    HostFunction(schema: _uiShowModalSchema, handler: _handleShowModal),
-    HostFunction(schema: _uiShowFormSchema, handler: _handleShowForm),
-    HostFunction(
-      schema: _uiInjectMessageSchema,
-      handler: _handleInjectMessage,
-    ),
-    HostFunction(
-      schema: _uiRequestConfirmSchema,
-      handler: _handleRequestConfirm,
-    ),
-  ];
+        HostFunction(schema: _uiNotifySchema, handler: _handleNotify),
+        HostFunction(schema: _uiShowModalSchema, handler: _handleShowModal),
+        HostFunction(schema: _uiShowFormSchema, handler: _handleShowForm),
+        HostFunction(
+          schema: _uiInjectMessageSchema,
+          handler: _handleInjectMessage,
+        ),
+        HostFunction(
+          schema: _uiRequestConfirmSchema,
+          handler: _handleRequestConfirm,
+        ),
+      ];
 
   // ---------------------------------------------------------------------------
   // Handlers
