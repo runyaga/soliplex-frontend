@@ -20,11 +20,11 @@ final Logger _log = LogManager.instance.getLogger('MontyScriptEnvironment');
 class MontyScriptEnvironment implements ScriptEnvironment {
   /// Creates a [MontyScriptEnvironment] with the given [tools].
   ///
-  /// [os] is an optional OS provider for the Python interpreter.
+  /// [os] is an optional OS call handler for the Python interpreter.
   /// [executionTimeout] caps each Python execution; defaults to 30 s.
   MontyScriptEnvironment({
     required List<SoliplexTool> tools,
-    dm.OsProvider? os,
+    dm.OsCallHandler? os,
     Duration executionTimeout = const Duration(seconds: 30),
   })  : _tools = List.unmodifiable(tools),
         _montySession = dm.AgentSession(os: os),
