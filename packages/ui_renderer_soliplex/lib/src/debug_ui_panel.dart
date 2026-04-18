@@ -8,14 +8,20 @@ import 'package:ui_plugin/ui_plugin.dart';
 /// pending — approve/deny buttons to drive the flow from a test harness
 /// without needing the real Soliplex chat UI.
 ///
+/// Pass [renderer] to also get quick-inject buttons for testing
+/// [SystemInfoMessage] rendering.
+///
 /// Mount in a dev-only right panel or overlay:
 /// ```dart
-/// DebugUiPanel(plugin: uiPlugin)
+/// DebugUiPanel(plugin: uiPlugin, renderer: uiRenderer)
 /// ```
 class DebugUiPanel extends StatelessWidget {
-  const DebugUiPanel({super.key, required this.plugin});
+  const DebugUiPanel({super.key, required this.plugin, this.renderer});
 
   final UiPlugin plugin;
+
+  /// Optional renderer — enables the inject-test-message section.
+  final UiRenderer? renderer;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +42,12 @@ class DebugUiPanel extends StatelessWidget {
             if (state is UiAwaitingConfirm) ...[
               const SizedBox(height: 8),
               _ConfirmButtons(verb: state.verb),
+            ],
+            if (renderer != null) ...[
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              _InjectSection(renderer: renderer!),
             ],
           ],
         ),
@@ -106,6 +118,74 @@ class _ConfirmButtons extends StatelessWidget {
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InjectSection extends StatefulWidget {
+  const _InjectSection({required this.renderer});
+
+  final UiRenderer renderer;
+
+  @override
+  State<_InjectSection> createState() => _InjectSectionState();
+}
+
+class _InjectSectionState extends State<_InjectSection> {
+  final _controller = TextEditingController(
+    text: '**Hello** from `ui_inject_message`! This is _markdown_.',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _inject(String? format) {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+    widget.renderer.injectMessage(content: text, format: format);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Inject test message',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _controller,
+          maxLines: 2,
+          style: theme.textTheme.bodySmall,
+          decoration: const InputDecoration(
+            isDense: true,
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            FilledButton.tonal(
+              onPressed: () => _inject('markdown'),
+              child: const Text('Markdown'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () => _inject('plain'),
+              child: const Text('Plain'),
+            ),
+          ],
         ),
       ],
     );
