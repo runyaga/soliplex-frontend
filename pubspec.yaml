@@ -16,6 +16,7 @@ workspace:
   - packages/soliplex_logging
   - packages/soliplex_monty_plugin
   - packages/ui_plugin
+  - packages/ui_renderer_soliplex
 
 dependencies:
   flutter:
