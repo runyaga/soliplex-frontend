@@ -184,7 +184,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "7c10136879017e4294f9c7d6a639f4937ff66012"
+      resolved-ref: c3d7a069066a794441486c55e82f669503bfaf21
       url: "https://github.com/runyaga/dart_monty_core.git"
     source: git
     version: "0.0.1"
