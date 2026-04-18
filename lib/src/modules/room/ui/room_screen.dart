@@ -602,11 +602,13 @@ class _RoomScreenState extends State<RoomScreen> {
             IconButton(
               icon: const Icon(Icons.notifications_outlined, size: 20),
               tooltip: 'Test notify_show',
-              onPressed: () => _onNotify(const NotifyEvent(
-                kind: 'success',
-                title: 'notify_show works',
-                body: 'Python can call this tool to show SnackBars.',
-              ),),
+              onPressed: () => _onNotify(
+                const NotifyEvent(
+                  kind: 'success',
+                  title: 'notify_show works',
+                  body: 'Python can call this tool to show SnackBars.',
+                ),
+              ),
             ),
           if (attachEnabled && room != null)
             IconButton(

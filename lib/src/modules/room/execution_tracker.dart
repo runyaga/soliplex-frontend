@@ -55,7 +55,8 @@ class ExecutionTracker {
       case ServerToolCallStarted(:final toolName, :final toolCallId):
         _completeActiveStep();
         _addStep(toolName, toolCallId: toolCallId);
-        _toolCallsById[toolCallId] = ToolCallInfo(id: toolCallId, name: toolName);
+        _toolCallsById[toolCallId] =
+            ToolCallInfo(id: toolCallId, name: toolName);
         _flushToolCalls();
       case ServerToolCallCompleted(:final toolCallId, :final result):
         _completeActiveStep();
@@ -88,7 +89,8 @@ class ExecutionTracker {
       case ClientToolExecuting(:final toolName, :final toolCallId):
         _completeActiveStep();
         _addStep(toolName);
-        _toolCallsById[toolCallId] = ToolCallInfo(id: toolCallId, name: toolName);
+        _toolCallsById[toolCallId] =
+            ToolCallInfo(id: toolCallId, name: toolName);
         _flushToolCalls();
       case ClientToolCompleted(:final toolCallId, :final result, :final status):
         _completeActiveStep();

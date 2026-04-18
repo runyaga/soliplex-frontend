@@ -115,7 +115,7 @@ void main() {
     expect(backCalled, isTrue);
   });
 
-  testWidgets('shows Network Inspector button that fires callback',
+  testWidgets('shows Debug Console button that fires callback',
       (tester) async {
     bool inspectorCalled = false;
 
@@ -135,7 +135,7 @@ void main() {
       ),
     ));
 
-    await tester.tap(find.text('Network Inspector'));
+    await tester.tap(find.text('Debug Console'));
     expect(inspectorCalled, isTrue);
   });
 
