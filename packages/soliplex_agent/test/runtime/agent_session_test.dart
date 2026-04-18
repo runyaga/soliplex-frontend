@@ -722,7 +722,6 @@ void main() {
 
       expect(ext.disposeCount, equals(1));
     });
-
   });
 
   group('execution events', () {
