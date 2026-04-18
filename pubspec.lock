@@ -173,9 +173,11 @@ packages:
   dart_monty:
     dependency: transitive
     description:
-      path: "../dart_monty/main"
-      relative: true
-    source: path
+      path: "."
+      ref: main
+      resolved-ref: "121c74cd90e09741325ac5462b8d975ddcf91fcb"
+      url: "https://github.com/runyaga/dart_monty.git"
+    source: git
     version: "0.20.0"
   dart_monty_core:
     dependency: transitive
