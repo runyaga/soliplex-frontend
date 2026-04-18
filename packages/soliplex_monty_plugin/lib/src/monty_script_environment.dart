@@ -24,7 +24,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   /// [executionTimeout] caps each Python execution; defaults to 30 s.
   MontyScriptEnvironment({
     required List<SoliplexTool> tools,
-    dm.OsCallHandler? os,
+    dm.OsProvider? os,
     Duration executionTimeout = const Duration(seconds: 30),
   })  : _tools = List.unmodifiable(tools),
         _montySession = dm.AgentSession(os: os),
