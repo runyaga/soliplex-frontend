@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:soliplex_monty_plugin/soliplex_monty_plugin.dart'
+    show NotifyEvent;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -54,6 +56,7 @@ class RoomScreen extends StatefulWidget {
     required this.registry,
     this.enableDocumentFilter = false,
     required this.documentSelections,
+    this.notifyStream,
   });
 
   final ServerEntry serverEntry;
@@ -63,6 +66,7 @@ class RoomScreen extends StatefulWidget {
   final RunRegistry registry;
   final bool enableDocumentFilter;
   final DocumentSelections documentSelections;
+  final Stream<NotifyEvent>? notifyStream;
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
@@ -71,6 +75,7 @@ class RoomScreen extends StatefulWidget {
 class _RoomScreenState extends State<RoomScreen> {
   late RoomState _state;
   void Function()? _autoSelectUnsub;
+  StreamSubscription<NotifyEvent>? _notifySub;
   final _chatController = TextEditingController();
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
@@ -123,6 +128,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKey);
+    _notifySub = widget.notifyStream?.listen(_onNotify);
     _state = _createRoomState();
     if (widget.threadId != null) {
       _state.selectThread(widget.threadId!);
@@ -204,11 +210,39 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void dispose() {
     _cancelAutoSelect();
+    _notifySub?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _state.dispose();
     _chatController.dispose();
     _chatFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onNotify(NotifyEvent event) {
+    if (!mounted) return;
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (event.kind) {
+      'error' => colorScheme.error,
+      'success' => colorScheme.primary,
+      _ => null,
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              event.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (event.body.isNotEmpty) Text(event.body),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   bool _handleKey(KeyEvent event) {
@@ -221,7 +255,9 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _onBackToLobby() => context.go('/lobby');
 
-  void _onNetworkInspector() => context.push('/diagnostics/network');
+  void _onDebugConsole() => context.push(
+        '/room/${widget.serverEntry.alias}/${widget.roomId}/debug',
+      );
 
   void _onRoomInfo() {
     context.push('/room/${widget.serverEntry.alias}/${widget.roomId}/info');
@@ -323,7 +359,7 @@ class _RoomScreenState extends State<RoomScreen> {
             onThreadSelected: _onThreadSelected,
             onBackToLobby: _onBackToLobby,
             onCreateThread: _state.createThread,
-            onNetworkInspector: _onNetworkInspector,
+            onDebugConsole: _onDebugConsole,
             onRoomInfo: _onRoomInfo,
             roomName: roomName,
             onRetryThreads: () => _state.threadList.refresh(),
@@ -371,9 +407,9 @@ class _RoomScreenState extends State<RoomScreen> {
                       Navigator.pop(drawerContext);
                       _state.createThread();
                     },
-                    onNetworkInspector: () {
+                    onDebugConsole: () {
                       Navigator.pop(drawerContext);
-                      _onNetworkInspector();
+                      _onDebugConsole();
                     },
                     onRoomInfo: () {
                       Navigator.pop(drawerContext);
@@ -517,6 +553,16 @@ class _RoomScreenState extends State<RoomScreen> {
                   ),
                 ],
               ),
+            ),
+          if (widget.notifyStream != null)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, size: 20),
+              tooltip: 'Test notify_show',
+              onPressed: () => _onNotify(const NotifyEvent(
+                kind: 'success',
+                title: 'notify_show works',
+                body: 'Python can call this tool to show SnackBars.',
+              ),),
             ),
           if (attachEnabled && room != null)
             IconButton(
@@ -766,6 +812,7 @@ class _RoomScreenState extends State<RoomScreen> {
           ),
           onCancel: threadView.cancelRun,
           sessionState: threadView.sessionState,
+          scriptingState: threadView.scriptingState,
           controller: _chatController,
           focusNode: _chatFocusNode,
           enabled: status is MessagesLoaded,
