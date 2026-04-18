@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart' show VoidCallback;
+import 'package:flutter/widgets.dart' show VoidCallback, Widget;
 import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart' show ReadonlySignal;
 import 'package:ui_plugin/ui_plugin.dart';
@@ -19,6 +19,7 @@ ModuleContribution roomModule({
   bool enableDocumentFilter = false,
   ReadonlySignal<List<InjectedMessage>>? injectedMessages,
   VoidCallback? onRoomChanged,
+  Widget? debugPanel,
 }) {
   final documentSelections = DocumentSelections();
   return ModuleContribution(
@@ -50,6 +51,7 @@ ModuleContribution roomModule({
         documentSelections,
         injectedMessages,
         onRoomChanged,
+        debugPanel,
       ),
       _buildRoute(
         '/room/:serverAlias/:roomId/thread/:threadId',
@@ -60,6 +62,7 @@ ModuleContribution roomModule({
         documentSelections,
         injectedMessages,
         onRoomChanged,
+        debugPanel,
       ),
     ],
   );
@@ -74,6 +77,7 @@ GoRoute _buildRoute(
   DocumentSelections documentSelections,
   ReadonlySignal<List<InjectedMessage>>? injectedMessages,
   VoidCallback? onRoomChanged,
+  Widget? debugPanel,
 ) {
   return GoRoute(
     path: path,
@@ -95,6 +99,7 @@ GoRoute _buildRoute(
           documentSelections: documentSelections,
           injectedMessages: injectedMessages,
           onRoomChanged: onRoomChanged,
+          debugPanel: debugPanel,
         ),
       );
     },

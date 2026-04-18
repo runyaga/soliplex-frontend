@@ -57,6 +57,7 @@ class RoomScreen extends StatefulWidget {
     required this.documentSelections,
     this.injectedMessages,
     this.onRoomChanged,
+    this.debugPanel,
   });
 
   final ServerEntry serverEntry;
@@ -75,6 +76,10 @@ class RoomScreen extends StatefulWidget {
   /// cleared. Provided by the flavor (e.g. `renderer.clearInjectedMessages`).
   final VoidCallback? onRoomChanged;
 
+  /// Optional debug panel mounted as a collapsible overlay. Only shown when
+  /// non-null (flavors gate this on [kDebugMode]).
+  final Widget? debugPanel;
+
   @override
   State<RoomScreen> createState() => _RoomScreenState();
 }
@@ -85,6 +90,7 @@ class _RoomScreenState extends State<RoomScreen> {
   final _chatController = TextEditingController();
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
+  bool _debugExpanded = false;
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -438,7 +444,7 @@ class _RoomScreenState extends State<RoomScreen> {
             .watch(context)
         : <UploadEntry>[];
 
-    return Column(
+    final body = Column(
       children: [
         _buildRoomHeader(
           room,
@@ -451,6 +457,32 @@ class _RoomScreenState extends State<RoomScreen> {
           child: threadView == null
               ? _buildNoThreadBody(room)
               : _buildThreadBody(threadView, room),
+        ),
+      ],
+    );
+
+    if (widget.debugPanel == null) return body;
+
+    return Stack(
+      children: [
+        body,
+        Positioned(
+          right: 8,
+          bottom: 80,
+          width: 320,
+          child: _debugExpanded ? widget.debugPanel! : const SizedBox.shrink(),
+        ),
+        Positioned(
+          right: 8,
+          bottom: 44,
+          child: FloatingActionButton.small(
+            heroTag: 'debugToggle',
+            tooltip: 'Toggle debug panel',
+            onPressed: () => setState(() => _debugExpanded = !_debugExpanded),
+            child: Icon(
+              _debugExpanded ? Icons.bug_report : Icons.bug_report_outlined,
+            ),
+          ),
         ),
       ],
     );

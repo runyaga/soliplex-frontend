@@ -1,7 +1,7 @@
 import 'dart:async' show unawaited;
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_client_native/soliplex_client_native.dart';
@@ -92,6 +92,7 @@ Future<ShellConfig> standard({
     navigatorKey: navigatorKey,
     scaffoldMessengerKey: scaffoldMessengerKey,
   );
+  final debugUiPlugin = kDebugMode ? UiPlugin(renderer: uiRenderer) : null;
   LogManager.instance
     ..minimumLevel = LogLevel.debug
     ..addSink(StdoutSink());
@@ -214,6 +215,9 @@ Future<ShellConfig> standard({
         enableDocumentFilter: true,
         injectedMessages: uiRenderer.injectedMessages,
         onRoomChanged: uiRenderer.clearInjectedMessages,
+        debugPanel: debugUiPlugin != null
+            ? DebugUiPanel(plugin: debugUiPlugin, renderer: uiRenderer)
+            : null,
       ),
       quizModule(serverManager: serverManager),
       authModule(
