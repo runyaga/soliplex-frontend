@@ -159,11 +159,43 @@ function excTypeFromMsg(msg) {
   const prefix = msg.substring(0, colon).trim();
   return /^[A-Z][A-Za-z]+$/.test(prefix) ? prefix : null;
 }
-function readProgress(id, handle, tag, errMsg) {
+var SESSION_PROGRESS = {
+  completeIsError: (h) => wasm2.monty_complete_is_error(h),
+  completeResultJson: (h) => wasm2.monty_complete_result_json(h),
+  pendingFnName: (h) => wasm2.monty_pending_fn_name(h),
+  pendingFnArgsJson: (h) => wasm2.monty_pending_fn_args_json(h),
+  pendingFnKwargsJson: (h) => wasm2.monty_pending_fn_kwargs_json(h),
+  pendingCallId: (h) => wasm2.monty_pending_call_id(h),
+  pendingMethodCall: (h) => wasm2.monty_pending_method_call(h),
+  pendingFutureCallIds: (h) => wasm2.monty_pending_future_call_ids(h),
+  osCallFnName: (h) => wasm2.monty_os_call_fn_name(h),
+  osCallArgsJson: (h) => wasm2.monty_os_call_args_json(h),
+  osCallKwargsJson: (h) => wasm2.monty_os_call_kwargs_json(h),
+  osCallId: (h) => wasm2.monty_os_call_id(h),
+  nameLookupName: (h) => wasm2.monty_name_lookup_name(h)
+};
+var REPL_PROGRESS = {
+  completeIsError: (h) => wasm2.monty_repl_complete_is_error(h),
+  completeResultJson: (h) => wasm2.monty_repl_complete_result_json(h),
+  pendingFnName: (h) => wasm2.monty_repl_pending_fn_name(h),
+  pendingFnArgsJson: (h) => wasm2.monty_repl_pending_fn_args_json(h),
+  pendingFnKwargsJson: (h) => wasm2.monty_repl_pending_fn_kwargs_json(h),
+  pendingCallId: (h) => wasm2.monty_repl_pending_call_id(h),
+  pendingMethodCall: (h) => wasm2.monty_repl_pending_method_call(h),
+  pendingFutureCallIds: (h) => wasm2.monty_repl_pending_future_call_ids(h),
+  osCallFnName: (h) => wasm2.monty_repl_os_call_fn_name(h),
+  osCallArgsJson: (h) => wasm2.monty_repl_os_call_args_json(h),
+  osCallKwargsJson: (h) => wasm2.monty_repl_os_call_kwargs_json(h),
+  osCallId: (h) => wasm2.monty_repl_os_call_id(h),
+  // REPL auto-resolves NameLookup internally (process_repl_progress loop);
+  // PROGRESS_NAME_LOOKUP never surfaces to JS for REPL handles.
+  nameLookupName: null
+};
+function readProgress(id, handle, tag, errMsg, api) {
   switch (tag) {
     case PROGRESS_COMPLETE: {
-      const isErr = wasm2.monty_complete_is_error(handle);
-      const ptr = wasm2.monty_complete_result_json(handle);
+      const isErr = api.completeIsError(handle);
+      const ptr = api.completeResultJson(handle);
       const json = readAndFreeCString(ptr);
       if (json) {
         const adapted = adaptResultForDart(json, isErr === 1);
@@ -181,11 +213,11 @@ function readProgress(id, handle, tag, errMsg) {
       return { type: "result", id, ok: true, state: "complete", value: null };
     }
     case PROGRESS_PENDING: {
-      const fnName = readAndFreeCString(wasm2.monty_pending_fn_name(handle));
-      const argsJson = readAndFreeCString(wasm2.monty_pending_fn_args_json(handle));
-      const kwargsJson = readAndFreeCString(wasm2.monty_pending_fn_kwargs_json(handle));
-      const callId = wasm2.monty_pending_call_id(handle);
-      const methodCall = wasm2.monty_pending_method_call(handle);
+      const fnName = readAndFreeCString(api.pendingFnName(handle));
+      const argsJson = readAndFreeCString(api.pendingFnArgsJson(handle));
+      const kwargsJson = readAndFreeCString(api.pendingFnKwargsJson(handle));
+      const callId = api.pendingCallId(handle);
+      const methodCall = api.pendingMethodCall(handle);
       return {
         type: "result",
         id,
@@ -199,7 +231,7 @@ function readProgress(id, handle, tag, errMsg) {
       };
     }
     case PROGRESS_RESOLVE_FUTURES: {
-      const idsPtr = wasm2.monty_pending_future_call_ids(handle);
+      const idsPtr = api.pendingFutureCallIds(handle);
       const idsJson = readAndFreeCString(idsPtr);
       return {
         type: "result",
@@ -210,10 +242,10 @@ function readProgress(id, handle, tag, errMsg) {
       };
     }
     case PROGRESS_OS_CALL: {
-      const fnName = readAndFreeCString(wasm2.monty_os_call_fn_name(handle));
-      const argsJson = readAndFreeCString(wasm2.monty_os_call_args_json(handle));
-      const kwargsJson = readAndFreeCString(wasm2.monty_os_call_kwargs_json(handle));
-      const callId = wasm2.monty_os_call_id(handle);
+      const fnName = readAndFreeCString(api.osCallFnName(handle));
+      const argsJson = readAndFreeCString(api.osCallArgsJson(handle));
+      const kwargsJson = readAndFreeCString(api.osCallKwargsJson(handle));
+      const callId = api.osCallId(handle);
       return {
         type: "result",
         id,
@@ -226,7 +258,16 @@ function readProgress(id, handle, tag, errMsg) {
       };
     }
     case PROGRESS_NAME_LOOKUP: {
-      const namePtr = wasm2.monty_name_lookup_name(handle);
+      if (!api.nameLookupName) {
+        return {
+          type: "result",
+          id,
+          ok: false,
+          error: "Unexpected PROGRESS_NAME_LOOKUP for REPL handle",
+          errorType: "InternalError"
+        };
+      }
+      const namePtr = api.nameLookupName(handle);
       const variableName = readAndFreeCString(namePtr);
       return {
         type: "result",
@@ -237,8 +278,8 @@ function readProgress(id, handle, tag, errMsg) {
       };
     }
     case PROGRESS_ERROR: {
-      const isErrState = wasm2.monty_complete_is_error(handle);
-      const errPtr2 = wasm2.monty_complete_result_json(handle);
+      const isErrState = api.completeIsError(handle);
+      const errPtr2 = api.completeResultJson(handle);
       const errJson = readAndFreeCString(errPtr2);
       if (errJson && isErrState === 1) {
         const adapted = adaptResultForDart(errJson, true);
@@ -417,7 +458,7 @@ function handleStart(id, code, extFns, limits, scriptName) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, handle, tag, errMsg);
+    msg = readProgress(id, handle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     activeHandle = null;
     wasm2.monty_free(handle);
@@ -467,7 +508,7 @@ function handleResume(id, value) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -517,7 +558,7 @@ function handleResumeWithError(id, errorMessage) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -571,7 +612,7 @@ function handleResumeWithException(id, excType, errorMessage) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -616,7 +657,7 @@ function handleResumeAsFuture(id) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -670,7 +711,7 @@ function handleResolveFutures(id, resultsJson, errorsJson) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -783,6 +824,259 @@ function handleRestore(id, dataBase64) {
   activeHandle = handle;
   self.postMessage({ type: "result", id, ok: true });
 }
+function handleCompile(id, code, scriptName) {
+  let cCode = null;
+  let cName = null;
+  let outError = null;
+  let handle;
+  try {
+    outError = allocOutPtr();
+    cCode = allocCString(code);
+    cName = scriptName ? allocCString(scriptName) : null;
+    handle = wasm2.monty_create(cCode.ptr, 0, cName ? cName.ptr : 0, outError.ptr);
+  } catch (e) {
+    if (outError) outError.free();
+    throw e;
+  } finally {
+    if (cCode) wasm2.monty_dealloc(cCode.ptr, cCode.size);
+    if (cName) wasm2.monty_dealloc(cName.ptr, cName.size);
+  }
+  if (handle === 0) {
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errMsg || "monty_create failed",
+      errorType: "CompileError",
+      excType: excTypeFromMsg(errMsg)
+    });
+    return;
+  }
+  outError.free();
+  const outLen = allocOutPtr();
+  let ptr;
+  try {
+    ptr = wasm2.monty_snapshot(handle, outLen.ptr);
+  } catch (e) {
+    outLen.free();
+    wasm2.monty_free(handle);
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: e.message || String(e),
+      errorType: "Panic"
+    });
+    return;
+  }
+  wasm2.monty_free(handle);
+  if (ptr === 0) {
+    outLen.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: "monty_snapshot returned null after compile",
+      errorType: "StateError"
+    });
+    return;
+  }
+  const len = outLen.read();
+  outLen.free();
+  const wasmBytes = new Uint8Array(wasm2.memory.buffer, ptr, len);
+  let copy;
+  try {
+    copy = wasmBytes.slice();
+  } finally {
+    wasm2.monty_bytes_free(ptr, len);
+  }
+  self.postMessage(
+    { type: "result", id, ok: true, snapshotBuffer: copy.buffer },
+    [copy.buffer]
+  );
+}
+function handleRunPrecompiled(id, dataBase64, limits, scriptName) {
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const outError = allocOutPtr();
+  const ptr = wasm2.monty_alloc(bytes.length);
+  if (ptr === 0) {
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `monty_alloc(${bytes.length}) returned null \u2014 OOM`,
+      errorType: "MemoryError"
+    });
+    return;
+  }
+  new Uint8Array(wasm2.memory.buffer).set(bytes, ptr);
+  let handle;
+  try {
+    handle = wasm2.monty_restore(ptr, bytes.length, outError.ptr);
+  } catch (e) {
+    outError.free();
+    throw e;
+  } finally {
+    wasm2.monty_dealloc(ptr, bytes.length);
+  }
+  if (handle === 0) {
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errMsg || "monty_restore failed",
+      errorType: "RestoreError"
+    });
+    return;
+  }
+  outError.free();
+  if (limits) {
+    if (limits.memory_bytes != null) wasm2.monty_set_memory_limit(handle, limits.memory_bytes);
+    if (limits.timeout_ms != null) wasm2.monty_set_time_limit_ms(handle, BigInt(limits.timeout_ms));
+    if (limits.stack_depth != null) wasm2.monty_set_stack_limit(handle, limits.stack_depth);
+  }
+  let outResult = null;
+  let outErrMsg = null;
+  let resultTag;
+  try {
+    outResult = allocOutPtr();
+    outErrMsg = allocOutPtr();
+    resultTag = wasm2.monty_run(handle, outResult.ptr, outErrMsg.ptr);
+  } catch (e) {
+    if (outResult) outResult.free();
+    if (outErrMsg) outErrMsg.free();
+    wasm2.monty_free(handle);
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: e.message || String(e),
+      errorType: "Panic"
+    });
+    return;
+  }
+  const resultPtr = outResult.read();
+  const errorPtr = outErrMsg.read();
+  const resultJson = readAndFreeCString(resultPtr);
+  const errorMsg = readAndFreeCString(errorPtr);
+  outResult.free();
+  outErrMsg.free();
+  wasm2.monty_free(handle);
+  if (resultTag === RESULT_OK && resultJson) {
+    const adapted = adaptResultForDart(resultJson, false);
+    self.postMessage({ type: "result", id, ...adapted });
+  } else if (resultJson) {
+    const adapted = adaptResultForDart(resultJson, true);
+    self.postMessage({ type: "result", id, ...adapted });
+  } else {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errorMsg || "monty_run failed",
+      errorType: "MontyException"
+    });
+  }
+}
+function handleStartPrecompiled(id, dataBase64, limits, scriptName) {
+  if (activeHandle) {
+    wasm2.monty_free(activeHandle);
+    activeHandle = null;
+  }
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const outError = allocOutPtr();
+  const ptr = wasm2.monty_alloc(bytes.length);
+  if (ptr === 0) {
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `monty_alloc(${bytes.length}) returned null \u2014 OOM`,
+      errorType: "MemoryError"
+    });
+    return;
+  }
+  new Uint8Array(wasm2.memory.buffer).set(bytes, ptr);
+  let handle;
+  try {
+    handle = wasm2.monty_restore(ptr, bytes.length, outError.ptr);
+  } catch (e) {
+    outError.free();
+    throw e;
+  } finally {
+    wasm2.monty_dealloc(ptr, bytes.length);
+  }
+  if (handle === 0) {
+    const errPtr2 = outError.read();
+    const errMsg2 = readAndFreeCString(errPtr2);
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errMsg2 || "monty_restore failed",
+      errorType: "RestoreError"
+    });
+    return;
+  }
+  outError.free();
+  if (limits) {
+    if (limits.memory_bytes != null) wasm2.monty_set_memory_limit(handle, limits.memory_bytes);
+    if (limits.timeout_ms != null) wasm2.monty_set_time_limit_ms(handle, BigInt(limits.timeout_ms));
+    if (limits.stack_depth != null) wasm2.monty_set_stack_limit(handle, limits.stack_depth);
+  }
+  activeHandle = handle;
+  let outErr;
+  let tag;
+  try {
+    outErr = allocOutPtr();
+    tag = wasm2.monty_start(handle, outErr.ptr);
+  } catch (e) {
+    if (outErr) outErr.free();
+    activeHandle = null;
+    wasm2.monty_free(handle);
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: e.message || String(e),
+      errorType: "Panic"
+    });
+    return;
+  }
+  const errPtr = outErr.read();
+  const errMsg = readAndFreeCString(errPtr);
+  outErr.free();
+  let msg;
+  try {
+    msg = readProgress(id, handle, tag, errMsg, SESSION_PROGRESS);
+  } catch (e) {
+    activeHandle = null;
+    wasm2.monty_free(handle);
+    throw e;
+  }
+  if (tag === PROGRESS_COMPLETE || tag === PROGRESS_ERROR) {
+    activeHandle = null;
+    wasm2.monty_free(handle);
+  }
+  self.postMessage(msg);
+}
 function handleResumeNameLookupValue(id, valueJson) {
   if (!activeHandle) {
     self.postMessage({
@@ -821,7 +1115,7 @@ function handleResumeNameLookupValue(id, valueJson) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -866,7 +1160,7 @@ function handleResumeNameLookupUndefined(id) {
   outErr.free();
   let msg;
   try {
-    msg = readProgress(id, activeHandle, tag, errMsg);
+    msg = readProgress(id, activeHandle, tag, errMsg, SESSION_PROGRESS);
   } catch (e) {
     wasm2.monty_free(activeHandle);
     activeHandle = null;
@@ -885,6 +1179,315 @@ function handleDispose(id) {
   }
   self.postMessage({ type: "result", id, ok: true });
 }
+var replHandles = /* @__PURE__ */ new Map();
+function handleReplCreate(id, replId, scriptName) {
+  if (!replId) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: "replId is required for replCreate",
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cName = null;
+  let outError = null;
+  let handle;
+  try {
+    outError = allocOutPtr();
+    cName = scriptName ? allocCString(scriptName) : null;
+    handle = wasm2.monty_repl_create(cName ? cName.ptr : 0, outError.ptr);
+  } catch (e) {
+    if (outError) outError.free();
+    throw e;
+  } finally {
+    if (cName) wasm2.monty_dealloc(cName.ptr, cName.size);
+  }
+  if (handle === 0) {
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errMsg || "monty_repl_create failed",
+      errorType: "CompileError"
+    });
+    return;
+  }
+  outError.free();
+  replHandles.set(replId, handle);
+  self.postMessage({ type: "result", id, ok: true });
+}
+function handleReplFeedRun(id, replId, code) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cCode = null;
+  let outResult = null;
+  let outError = null;
+  try {
+    cCode = allocCString(code);
+    outResult = allocOutPtr();
+    outError = allocOutPtr();
+    const tag = wasm2.monty_repl_feed_run(handle, cCode.ptr, outResult.ptr, outError.ptr);
+    const resultPtr = outResult.read();
+    const errorPtr = outError.read();
+    const resultJson = readAndFreeCString(resultPtr);
+    const errorMsg = readAndFreeCString(errorPtr);
+    if (tag === RESULT_OK && resultJson) {
+      const adapted = adaptResultForDart(resultJson, false);
+      self.postMessage({ type: "result", id, ...adapted });
+    } else if (resultJson) {
+      const adapted = adaptResultForDart(resultJson, true);
+      self.postMessage({ type: "result", id, ...adapted });
+    } else {
+      self.postMessage({ type: "result", id, ok: false, error: errorMsg || "repl_feed_run failed", errorType: "MontyException" });
+    }
+  } finally {
+    if (cCode) wasm2.monty_dealloc(cCode.ptr, cCode.size);
+    if (outResult) outResult.free();
+    if (outError) outError.free();
+  }
+}
+function handleReplFeedStart(id, replId, code) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cCode = null;
+  let outError = null;
+  try {
+    cCode = allocCString(code);
+    outError = allocOutPtr();
+    const tag = wasm2.monty_repl_feed_start(handle, cCode.ptr, outError.ptr);
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    self.postMessage(readProgress(id, handle, tag, errMsg, REPL_PROGRESS));
+  } finally {
+    if (cCode) wasm2.monty_dealloc(cCode.ptr, cCode.size);
+    if (outError) outError.free();
+  }
+}
+function handleReplSetExtFns(id, replId, extFns) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cExtFns = null;
+  try {
+    cExtFns = extFns && extFns.length > 0 ? allocCString(extFns.join(",")) : null;
+    wasm2.monty_repl_set_ext_fns(handle, cExtFns ? cExtFns.ptr : 0);
+    self.postMessage({ type: "result", id, ok: true });
+  } finally {
+    if (cExtFns) wasm2.monty_dealloc(cExtFns.ptr, cExtFns.size);
+  }
+}
+function handleReplResume(id, replId, value) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cVal = null;
+  let outError = null;
+  try {
+    cVal = allocCString(JSON.stringify(value));
+    outError = allocOutPtr();
+    const tag = wasm2.monty_repl_resume(handle, cVal.ptr, outError.ptr);
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    self.postMessage(readProgress(id, handle, tag, errMsg, REPL_PROGRESS));
+  } finally {
+    if (cVal) wasm2.monty_dealloc(cVal.ptr, cVal.size);
+    if (outError) outError.free();
+  }
+}
+function handleReplResumeWithError(id, replId, errorMessage) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  let cErr = null;
+  let outError = null;
+  try {
+    cErr = allocCString(errorMessage);
+    outError = allocOutPtr();
+    const tag = wasm2.monty_repl_resume_with_error(handle, cErr.ptr, outError.ptr);
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    self.postMessage(readProgress(id, handle, tag, errMsg, REPL_PROGRESS));
+  } finally {
+    if (cErr) wasm2.monty_dealloc(cErr.ptr, cErr.size);
+    if (outError) outError.free();
+  }
+}
+function handleReplDetectContinuation(id, source) {
+  let cSource = null;
+  try {
+    cSource = allocCString(source);
+    const mode = wasm2.monty_repl_detect_continuation(cSource.ptr);
+    self.postMessage({ type: "result", id, ok: true, value: mode });
+  } finally {
+    if (cSource) wasm2.monty_dealloc(cSource.ptr, cSource.size);
+  }
+}
+function handleReplDispose(id, replId) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  wasm2.monty_repl_free(handle);
+  replHandles.delete(replId);
+  self.postMessage({ type: "result", id, ok: true });
+}
+function handleReplSnapshot(id, replId) {
+  const handle = replHandles.get(replId);
+  if (!handle) {
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `No REPL session for replId: ${replId}`,
+      errorType: "StateError"
+    });
+    return;
+  }
+  const outLen = allocOutPtr();
+  let ptr;
+  try {
+    ptr = wasm2.monty_repl_snapshot(handle, outLen.ptr);
+  } catch (e) {
+    outLen.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: e.message || String(e),
+      errorType: "Panic"
+    });
+    return;
+  }
+  if (ptr === 0) {
+    outLen.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: "monty_repl_snapshot returned null \u2014 REPL may be mid-execution",
+      errorType: "StateError"
+    });
+    return;
+  }
+  const len = outLen.read();
+  outLen.free();
+  const wasmBytes = new Uint8Array(wasm2.memory.buffer, ptr, len);
+  let copy;
+  try {
+    copy = wasmBytes.slice();
+  } finally {
+    wasm2.monty_bytes_free(ptr, len);
+  }
+  self.postMessage(
+    { type: "result", id, ok: true, snapshotBuffer: copy.buffer },
+    [copy.buffer]
+  );
+}
+function handleReplRestore(id, replId, dataBase64) {
+  const existing = replHandles.get(replId);
+  if (existing) {
+    wasm2.monty_repl_free(existing);
+    replHandles.delete(replId);
+  }
+  const binary = atob(dataBase64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const outError = allocOutPtr();
+  const ptr = wasm2.monty_alloc(bytes.length);
+  if (ptr === 0) {
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: `monty_alloc(${bytes.length}) returned null \u2014 OOM`,
+      errorType: "MemoryError"
+    });
+    return;
+  }
+  new Uint8Array(wasm2.memory.buffer).set(bytes, ptr);
+  let handle;
+  try {
+    handle = wasm2.monty_repl_restore(ptr, bytes.length, outError.ptr);
+  } catch (e) {
+    outError.free();
+    throw e;
+  } finally {
+    wasm2.monty_dealloc(ptr, bytes.length);
+  }
+  if (handle === 0) {
+    const errPtr = outError.read();
+    const errMsg = readAndFreeCString(errPtr);
+    outError.free();
+    self.postMessage({
+      type: "result",
+      id,
+      ok: false,
+      error: errMsg || "monty_repl_restore failed",
+      errorType: "RestoreError"
+    });
+    return;
+  }
+  outError.free();
+  replHandles.set(replId, handle);
+  self.postMessage({ type: "result", id, ok: true });
+}
 self.onmessage = (e) => {
   const {
     type,
@@ -899,7 +1502,9 @@ self.onmessage = (e) => {
     scriptName,
     resultsJson,
     errorsJson,
-    valueJson
+    valueJson,
+    source,
+    replId
   } = e.data;
   try {
     switch (type) {
@@ -930,6 +1535,15 @@ self.onmessage = (e) => {
       case "restore":
         handleRestore(id, dataBase64);
         break;
+      case "compile":
+        handleCompile(id, code, scriptName);
+        break;
+      case "runPrecompiled":
+        handleRunPrecompiled(id, dataBase64, limits, scriptName);
+        break;
+      case "startPrecompiled":
+        handleStartPrecompiled(id, dataBase64, limits, scriptName);
+        break;
       case "resumeNameLookupValue":
         handleResumeNameLookupValue(id, valueJson);
         break;
@@ -938,6 +1552,36 @@ self.onmessage = (e) => {
         break;
       case "dispose":
         handleDispose(id);
+        break;
+      case "replCreate":
+        handleReplCreate(id, replId, scriptName);
+        break;
+      case "replFeedRun":
+        handleReplFeedRun(id, replId, code);
+        break;
+      case "replFeedStart":
+        handleReplFeedStart(id, replId, code);
+        break;
+      case "replSetExtFns":
+        handleReplSetExtFns(id, replId, extFns);
+        break;
+      case "replResume":
+        handleReplResume(id, replId, value);
+        break;
+      case "replResumeWithError":
+        handleReplResumeWithError(id, replId, errorMessage);
+        break;
+      case "replDetectContinuation":
+        handleReplDetectContinuation(id, source);
+        break;
+      case "replDispose":
+        handleReplDispose(id, replId);
+        break;
+      case "replSnapshot":
+        handleReplSnapshot(id, replId);
+        break;
+      case "replRestore":
+        handleReplRestore(id, replId, dataBase64);
         break;
       default:
         self.postMessage({

@@ -211,6 +211,41 @@
     const result = await callWorker(sid, { type: "restore", dataBase64 }, session.timeoutMs);
     return JSON.stringify(result);
   }
+  async function compile(code, scriptName) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) {
+      return { ok: false, error: "Not initialized" };
+    }
+    const session = sessions.get(sid);
+    const msg = { type: "compile", code };
+    if (scriptName) msg.scriptName = scriptName;
+    const result = await callWorker(sid, msg, session.timeoutMs);
+    return result;
+  }
+  async function runPrecompiled(dataBase64, limitsJson, scriptName) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const hardTimeout = parseHardTimeout(limitsJson);
+    if (hardTimeout != null) session.timeoutMs = hardTimeout;
+    const limits = limitsJson ? JSON.parse(limitsJson) : null;
+    const msg = { type: "runPrecompiled", dataBase64, limits };
+    if (scriptName) msg.scriptName = scriptName;
+    const result = await callWorker(sid, msg, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function startPrecompiled(dataBase64, limitsJson, scriptName) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const hardTimeout = parseHardTimeout(limitsJson);
+    if (hardTimeout != null) session.timeoutMs = hardTimeout;
+    const limits = limitsJson ? JSON.parse(limitsJson) : null;
+    const msg = { type: "startPrecompiled", dataBase64, limits };
+    if (scriptName) msg.scriptName = scriptName;
+    const result = await callWorker(sid, msg, session.timeoutMs);
+    return JSON.stringify(result);
+  }
   async function resumeNameLookupValue(valueJson) {
     const sid = resolveSessionId(null);
     if (sid == null || !sessions.has(sid)) return notInitializedError();
@@ -268,6 +303,85 @@
     disposeSession(sid);
     return JSON.stringify({ ok: true });
   }
+  async function replCreate(replId, scriptName) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replCreate", replId, scriptName }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replFeedRun(replId, code) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replFeedRun", replId, code }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replFeedStart(replId, code) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replFeedStart", replId, code }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replSetExtFns(replId, extFnsJson) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const extFns = JSON.parse(extFnsJson);
+    const result = await callWorker(sid, { type: "replSetExtFns", replId, extFns }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replResume(replId, valueJson) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const value = JSON.parse(valueJson);
+    const result = await callWorker(sid, { type: "replResume", replId, value }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replResumeWithError(replId, errorJson) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const errorMessage = JSON.parse(errorJson);
+    const result = await callWorker(sid, { type: "replResumeWithError", replId, errorMessage }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replDetectContinuation(source) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replDetectContinuation", source }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replDispose(replId) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replDispose", replId }, session.timeoutMs);
+    return JSON.stringify(result);
+  }
+  async function replSnapshot(replId) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) {
+      return { ok: false, error: "Not initialized" };
+    }
+    const session = sessions.get(sid);
+    const result = await callWorker(sid, { type: "replSnapshot", replId }, session.timeoutMs);
+    return result;
+  }
+  async function replRestore(replId, dataBase64) {
+    const sid = resolveSessionId(null);
+    if (sid == null || !sessions.has(sid)) return notInitializedError();
+    const session = sessions.get(sid);
+    const result = await callWorker(
+      sid,
+      { type: "replRestore", replId, dataBase64 },
+      session.timeoutMs
+    );
+    return JSON.stringify(result);
+  }
   window.DartMontyBridge = {
     init,
     run,
@@ -281,13 +395,27 @@
     resumeNameLookupUndefined,
     snapshot,
     restore,
+    compile,
+    runPrecompiled,
+    startPrecompiled,
     discover,
     cancel,
     dispose,
     // Phase 2 multi-session API
     createSession,
     disposeSession,
-    getDefaultSessionId: () => defaultSessionId
+    getDefaultSessionId: () => defaultSessionId,
+    // REPL API
+    replCreate,
+    replFeedRun,
+    replFeedStart,
+    replSetExtFns,
+    replResume,
+    replResumeWithError,
+    replDetectContinuation,
+    replDispose,
+    replSnapshot,
+    replRestore
   };
   console.log("[DartMontyBridge] Registered on window (Worker pool architecture)");
 })();
