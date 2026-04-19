@@ -4,3 +4,4 @@ export 'src/room_environment_registry.dart';
 export 'src/soliplex_connection.dart';
 export 'src/soliplex_tool.dart';
 export 'src/soliplex_tools.dart';
+export 'src/tool_acl.dart';

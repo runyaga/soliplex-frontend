@@ -12,5 +12,11 @@ Future<void> main() async {
   await DartMontyFlutter.ensureInitialized();
   final callbackParams = CallbackParamsCapture.captureNow();
   clearCallbackUrl();
-  runSoliplexShell(await standard(callbackParams: callbackParams));
+  runSoliplexShell(
+    await standard(
+      callbackParams: callbackParams,
+      toolPredicate: (toolName, ctx) =>
+          !(toolName == 'execute_python' && ctx.roomId.contains('bwrap')),
+    ),
+  );
 }

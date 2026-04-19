@@ -15,6 +15,7 @@ import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
 import 'package:soliplex_monty_plugin/src/soliplex_tool.dart';
+import 'package:soliplex_monty_plugin/src/tool_acl.dart';
 
 final Logger _log = LogManager.instance.getLogger('MontyScriptEnvironment');
 
@@ -27,15 +28,19 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   ///
   /// [os] is an optional OS call handler for the Python interpreter.
   /// [executionTimeout] caps each Python execution; defaults to 30 s.
+  /// [toolAcl] enables runtime tool visibility control via Python host
+  /// functions `acl_list`, `acl_deny`, `acl_allow`, and `acl_reset`.
   MontyScriptEnvironment({
     required List<SoliplexTool> tools,
     List<MontyPlugin> plugins = const [],
     dm.OsCallHandler? os,
     Duration executionTimeout = const Duration(seconds: 30),
+    ToolAcl? toolAcl,
   })  : _tools = List.unmodifiable(tools),
         _plugins = List.unmodifiable(plugins),
         _montySession = dm.AgentSession(os: os),
-        _executionTimeout = executionTimeout {
+        _executionTimeout = executionTimeout,
+        _toolAcl = toolAcl {
     _registerTools();
   }
 
@@ -48,16 +53,19 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     List<SoliplexTool> tools = const [],
     List<MontyPlugin> plugins = const [],
     Duration executionTimeout = const Duration(seconds: 2),
+    ToolAcl? toolAcl,
   })  : _tools = List.unmodifiable(tools),
         _plugins = List.unmodifiable(plugins),
         _montySession = session,
-        _executionTimeout = executionTimeout {
+        _executionTimeout = executionTimeout,
+        _toolAcl = toolAcl {
     _registerTools();
   }
 
   final List<SoliplexTool> _tools;
   final List<MontyPlugin> _plugins;
   final dm.AgentSession _montySession;
+  final ToolAcl? _toolAcl;
 
   final Signal<ScriptingState> _stateSignal = signal(ScriptingState.idle);
   bool _disposed = false;
@@ -164,6 +172,77 @@ class MontyScriptEnvironment implements ScriptEnvironment {
         _montySession.register(fn);
       }
     }
+
+    if (_toolAcl != null) {
+      _registerAclFunctions(_toolAcl);
+    }
+  }
+
+  void _registerAclFunctions(ToolAcl acl) {
+    _montySession
+      ..register(
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'acl_list',
+            description: 'Returns the list of currently denied client tools.',
+          ),
+          handler: (_) async {
+            final denied = acl.list();
+            return denied.isEmpty ? 'none' : denied.join(', ');
+          },
+        ),
+      )
+      ..register(
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'acl_deny',
+            description: 'Hides a client tool from the LLM.',
+            params: [
+              HostParam(
+                name: 'tool_name',
+                type: HostParamType.string,
+                description: 'Name of the tool to deny.',
+              ),
+            ],
+          ),
+          handler: (args) async {
+            acl.deny((args['tool_name'] as String?)!);
+            return 'OK';
+          },
+        ),
+      )
+      ..register(
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'acl_allow',
+            description: 'Makes a client tool visible to the LLM again.',
+            params: [
+              HostParam(
+                name: 'tool_name',
+                type: HostParamType.string,
+                description: 'Name of the tool to allow.',
+              ),
+            ],
+          ),
+          handler: (args) async {
+            acl.allow((args['tool_name'] as String?)!);
+            return 'OK';
+          },
+        ),
+      )
+      ..register(
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'acl_reset',
+            description:
+                'Clears all denials — all client tools become visible.',
+          ),
+          handler: (_) async {
+            acl.reset();
+            return 'OK';
+          },
+        ),
+      );
   }
 
   HostFunction _toHostFunction(SoliplexTool tool) {
@@ -211,8 +290,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     return ClientTool(
       definition: const Tool(
         name: 'execute_python',
-        description:
-            'Run a Python snippet in the persistent REPL. Variables, '
+        description: 'Run a Python snippet in the persistent REPL. Variables, '
             'functions, and state from previous calls remain in scope. '
             'Returns print() output and the last-expression value.\n\n'
             'LIMITATIONS (Monty subset of Python):\n'
@@ -339,21 +417,58 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   }
 }
 
-/// A [ScriptEnvironment] decorator that filters the visible tools list.
+/// A [ScriptEnvironment] decorator that filters the visible client tools list.
+///
+/// Use [ToolFilteredEnvironment.allow] to whitelist specific tool names, or
+/// [ToolFilteredEnvironment.deny] to blacklist them. Tools excluded from the
+/// client list are still registered on the dart_monty bridge — only their
+/// visibility to the LLM (via AG-UI) is suppressed.
+///
+/// ```dart
+/// // Disable execute_python for bwrap rooms:
+/// ToolFilteredEnvironment.deny(env, {'execute_python'})
+///
+/// // Allow only specific tools:
+/// ToolFilteredEnvironment.allow(env, {'soliplex_list_rooms'})
+/// ```
 class ToolFilteredEnvironment implements ScriptEnvironment {
-  /// Creates a [ToolFilteredEnvironment] wrapping the given environment.
-  ToolFilteredEnvironment(
-    this._env, {
-    required Set<String> allowedTools,
-  }) : _allowedTools = allowedTools;
+  ToolFilteredEnvironment._(this._env, this._predicate);
+
+  /// Keeps only tools whose names are in [allowedNames].
+  factory ToolFilteredEnvironment.allow(
+    ScriptEnvironment env,
+    Set<String> allowedNames,
+  ) =>
+      ToolFilteredEnvironment._(env, (name) => allowedNames.contains(name));
+
+  /// Removes tools whose names are in [deniedNames].
+  factory ToolFilteredEnvironment.deny(
+    ScriptEnvironment env,
+    Set<String> deniedNames,
+  ) =>
+      ToolFilteredEnvironment._(env, (name) => !deniedNames.contains(name));
+
+  /// Applies an arbitrary predicate — return `true` to keep the tool.
+  factory ToolFilteredEnvironment.where(
+    ScriptEnvironment env,
+    bool Function(String toolName) predicate,
+  ) =>
+      ToolFilteredEnvironment._(env, predicate);
+
+  /// Filters tools using a [ToolAcl] — re-evaluated on every [tools] read
+  /// so runtime changes to the ACL are reflected immediately.
+  factory ToolFilteredEnvironment.acl(ScriptEnvironment env, ToolAcl acl) =>
+      ToolFilteredEnvironment._(env, acl.isAllowed);
+
+  /// The wrapped environment.
+  ScriptEnvironment get inner => _env;
 
   final ScriptEnvironment _env;
-  final Set<String> _allowedTools;
+  final bool Function(String toolName) _predicate;
 
   @override
-  List<ClientTool> get tools => _env.tools
-      .where((t) => _allowedTools.contains(t.definition.name))
-      .toList();
+  List<ClientTool> get tools =>
+      _env.tools.where((t) => _predicate(t.definition.name)).toList();
 
   @override
   ReadonlySignal<ScriptingState> get scriptingState => _env.scriptingState;

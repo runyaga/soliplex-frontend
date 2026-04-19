@@ -85,6 +85,18 @@ Future<ShellConfig> standard({
   CallbackParams callbackParams = const NoCallbackParams(),
   ConsentNotice? consentNotice,
   Widget? logo,
+
+  /// Optional predicate to whitelist or blacklist client tools per room.
+  ///
+  /// Return `true` to expose the tool to the LLM, `false` to hide it.
+  /// When `null` (default) all tools are exposed.
+  ///
+  /// Example — disable `execute_python` for bwrap rooms:
+  /// ```dart
+  /// toolPredicate: (toolName, ctx) =>
+  ///     !(toolName == 'execute_python' && ctx.roomId.contains('bwrap')),
+  /// ```
+  bool Function(String toolName, SessionContext ctx)? toolPredicate,
 }) async {
   final navigatorKey = GlobalKey<NavigatorState>();
   final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -161,14 +173,26 @@ Future<ShellConfig> standard({
     final roomUiPlugin = kDebugMode
         ? UiPlugin(renderer: RoomScopedUiRenderer(uiRenderer, roomKey))
         : null;
-    return MontyScriptEnvironment(
+    final acl = ToolAcl();
+    final env = MontyScriptEnvironment(
       tools: buildSoliplexToolset(
         ctx,
         getConnections,
         onNotify: notifyController.add,
       ),
       plugins: roomUiPlugin != null ? [roomUiPlugin] : [],
+      toolAcl: acl,
     );
+    // Seed initial ACL state from static predicate (if provided).
+    // Called after env construction so env.tools reflects the full tool list.
+    if (toolPredicate != null) {
+      for (final tool in env.tools) {
+        if (!toolPredicate(tool.definition.name, ctx)) {
+          acl.deny(tool.definition.name);
+        }
+      }
+    }
+    return ToolFilteredEnvironment.acl(env, acl);
   }
 
   Future<String> replExecutor(
@@ -178,7 +202,8 @@ Future<ShellConfig> standard({
   ) async {
     final ctx = SessionContext(serverId: serverId, roomId: roomId);
     final env = await roomEnvRegistry.getOrCreate(ctx, buildEnv);
-    return (env as MontyScriptEnvironment).executeFormatted(code);
+    final raw = env is ToolFilteredEnvironment ? env.inner : env;
+    return (raw as MontyScriptEnvironment).executeFormatted(code);
   }
 
   final runtimeManager = AgentRuntimeManager(
