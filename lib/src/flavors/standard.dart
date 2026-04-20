@@ -1,8 +1,14 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:async' show StreamController, unawaited;
+import 'dart:developer' as developer;
+
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_client_native/soliplex_client_native.dart';
-import 'package:soliplex_logging/soliplex_logging.dart' show LoggerFactory;
+import 'package:soliplex_logging/soliplex_logging.dart';
+import 'package:soliplex_monty_plugin/soliplex_monty_plugin.dart';
+import 'package:ui_plugin/ui_plugin.dart';
+import 'package:ui_renderer_soliplex/ui_renderer_soliplex.dart';
 
 import '../design/design.dart';
 import '../core/shell_config.dart';
@@ -25,6 +31,8 @@ import '../modules/room/agent_runtime_manager.dart';
 import '../modules/room/room_module.dart';
 import '../modules/room/run_registry.dart';
 import '../modules/room/ui/markdown/markdown_theme_extension.dart';
+import '../modules/tools/get_clipboard_tool.dart';
+import '../modules/tools/get_device_info_tool.dart';
 
 const _defaultLogoAsset = 'assets/branding/soliplex/logo_1024.png';
 const _logoSize = 64.0;
@@ -78,6 +86,15 @@ Future<ShellConfig> standard({
   ConsentNotice? consentNotice,
   Widget? logo,
 }) async {
+  final navigatorKey = GlobalKey<NavigatorState>();
+  final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final uiRenderer = SoliplexUiRenderer(
+    navigatorKey: navigatorKey,
+    scaffoldMessengerKey: scaffoldMessengerKey,
+  );
+  LogManager.instance
+    ..minimumLevel = LogLevel.debug
+    ..addSink(StdoutSink());
   logo ??= Image.asset(_defaultLogoAsset, width: _logoSize, height: _logoSize);
   final inspector = NetworkInspector();
   final httpLogger = LogManager.instance.getLogger('http_stack');
@@ -128,15 +145,60 @@ Future<ShellConfig> standard({
   final authListenable = SignalListenable(serverManager.authState);
   final authFlow = createAuthFlow(redirectScheme: redirectScheme);
 
+  final roomEnvRegistry = RoomEnvironmentRegistry();
+  final notifyController = StreamController<NotifyEvent>.broadcast();
+
+  Future<ScriptEnvironment> buildEnv(SessionContext ctx) async {
+    Map<String, SoliplexConnection> getConnections() => {
+          for (final entry in serverManager.servers.value.values)
+            entry.serverId: SoliplexConnection.fromServerConnection(
+              entry.connection,
+              alias: entry.alias,
+              serverUrl: entry.serverUrl.toString(),
+            ),
+        };
+    final roomKey = '${ctx.serverId}:${ctx.roomId}';
+    final roomUiPlugin = kDebugMode
+        ? UiPlugin(renderer: RoomScopedUiRenderer(uiRenderer, roomKey))
+        : null;
+    return MontyScriptEnvironment(
+      tools: buildSoliplexToolset(
+        ctx,
+        getConnections,
+        onNotify: notifyController.add,
+      ),
+      extensions: roomUiPlugin != null ? [roomUiPlugin] : [],
+    );
+  }
+
+  Future<String> replExecutor(
+    String serverId,
+    String roomId,
+    String code,
+  ) async {
+    final ctx = SessionContext(serverId: serverId, roomId: roomId);
+    final env = await roomEnvRegistry.getOrCreate(ctx, buildEnv);
+    return (env as MontyScriptEnvironment).executeFormatted(code);
+  }
+
   final runtimeManager = AgentRuntimeManager(
     platform: kIsWeb
         ? const WebPlatformConstraints()
         : const NativePlatformConstraints(),
-    toolRegistryResolver: (_) async => const ToolRegistry(),
+    toolRegistryResolver: (_) async => const ToolRegistry()
+        .register(buildGetDeviceInfoTool())
+        .register(buildGetClipboardTool()),
     logger: LogManager.instance.getLogger('room'),
+    extensionFactoryBuilder: (connection) =>
+        toRoomSharedFactory(roomEnvRegistry, buildEnv),
   );
 
   final registry = RunRegistry();
+
+  unawaited(_probeMontyRuntime(
+    LogManager.instance.getLogger('monty'),
+    serverManager,
+  ));
 
   return ShellConfig(
     appName: appName,
@@ -145,6 +207,8 @@ Future<ShellConfig> standard({
     initialRoute: callbackParams is! NoCallbackParams
         ? '/auth/callback'
         : (serverManager.authState.value is Authenticated ? '/lobby' : '/'),
+    navigatorKey: navigatorKey,
+    scaffoldMessengerKey: scaffoldMessengerKey,
     refreshListenable: authListenable,
     onDispose: () {
       authListenable.dispose();
@@ -152,6 +216,8 @@ Future<ShellConfig> standard({
       plainClient.close();
       runtimeManager.dispose();
       registry.dispose();
+      roomEnvRegistry.dispose();
+      notifyController.close();
       inspector.dispose();
     },
     modules: [
@@ -162,6 +228,12 @@ Future<ShellConfig> standard({
         runtimeManager: runtimeManager,
         registry: registry,
         enableDocumentFilter: true,
+        injectedMessages: uiRenderer.messagesFor,
+        onRoomChanged: uiRenderer.clearAllMessages,
+        debugPanel: null,
+        notifyStream: notifyController.stream,
+        envRegistry: roomEnvRegistry,
+        replExecutor: replExecutor,
       ),
       quizModule(serverManager: serverManager),
       authModule(
@@ -176,4 +248,33 @@ Future<ShellConfig> standard({
       ),
     ],
   );
+}
+
+Future<void> _probeMontyRuntime(
+  Logger logger,
+  ServerManager serverManager,
+) async {
+  const name = 'MontyProbe';
+  final ctx = const SessionContext(serverId: 'probe', roomId: 'probe');
+  Map<String, SoliplexConnection> getConnections() => {
+        for (final entry in serverManager.servers.value.values)
+          entry.serverId: SoliplexConnection.fromServerConnection(
+            entry.connection,
+            alias: entry.alias,
+            serverUrl: entry.serverUrl.toString(),
+          ),
+      };
+  final env = MontyScriptEnvironment(
+    tools: buildSoliplexToolset(ctx, getConnections),
+  );
+  try {
+    await env.probe();
+    logger.info('Python runtime probe passed');
+    developer.log('Python runtime probe passed', name: name);
+  } on Object catch (e) {
+    logger.warning('Python runtime probe failed: $e');
+    developer.log('Python runtime probe FAILED: $e', name: name);
+  } finally {
+    env.dispose();
+  }
 }
