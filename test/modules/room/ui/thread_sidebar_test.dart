@@ -115,8 +115,7 @@ void main() {
     expect(backCalled, isTrue);
   });
 
-  testWidgets('shows Debug Console button that fires callback',
-      (tester) async {
+  testWidgets('shows Debug Console button that fires callback', (tester) async {
     bool consoleCalled = false;
 
     await tester.pumpWidget(MaterialApp(
