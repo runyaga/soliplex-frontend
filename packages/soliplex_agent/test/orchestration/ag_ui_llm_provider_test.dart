@@ -13,11 +13,7 @@ void main() {
   late MockAgUiStreamClient mockStreamClient;
   late AgUiLlmProvider provider;
 
-  const key = (
-    serverId: 'server-1',
-    roomId: 'room-1',
-    threadId: 'thread-1',
-  );
+  const key = (serverId: 'server-1', roomId: 'room-1', threadId: 'thread-1');
 
   setUpAll(() {
     registerFallbackValue(
@@ -43,9 +39,7 @@ void main() {
   group('AgUiLlmProvider', () {
     group('startRun', () {
       test('creates run via API when existingRunId is null', () async {
-        when(
-          () => mockApi.createRun('room-1', 'thread-1'),
-        ).thenAnswer(
+        when(() => mockApi.createRun('room-1', 'thread-1')).thenAnswer(
           (_) async => RunInfo(
             id: 'new-run-id',
             threadId: 'thread-1',

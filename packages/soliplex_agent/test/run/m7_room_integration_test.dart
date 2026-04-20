@@ -1016,7 +1016,11 @@ void main() {
       );
 
       final results = await runtime.waitAll(
-        [s1, s2, s3],
+        [
+          s1,
+          s2,
+          s3,
+        ],
         timeout: const Duration(seconds: 90),
       );
       expect(results.every((r) => r is AgentSuccess), isTrue);

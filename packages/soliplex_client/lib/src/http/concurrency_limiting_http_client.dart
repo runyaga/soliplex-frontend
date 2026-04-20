@@ -47,12 +47,7 @@ class ConcurrencyLimitingHttpClient implements SoliplexHttpClient {
         ),
         _semaphore = maxConcurrent >= 1
             ? _Semaphore(maxCount: maxConcurrent)
-            : throw RangeError.range(
-                maxConcurrent,
-                1,
-                null,
-                'maxConcurrent',
-              );
+            : throw RangeError.range(maxConcurrent, 1, null, 'maxConcurrent');
 
   final SoliplexHttpClient _inner;
   final List<ConcurrencyObserver> _observers;
@@ -424,9 +419,9 @@ class _Semaphore {
       });
     }
 
-    return completer.future.whenComplete(() => cancelSub?.cancel()).then(
-          (_) => _SlotHandle._(this, _AcquireOutcome.queued),
-        );
+    return completer.future
+        .whenComplete(() => cancelSub?.cancel())
+        .then((_) => _SlotHandle._(this, _AcquireOutcome.queued));
   }
 
   void _onSlotReleased() {

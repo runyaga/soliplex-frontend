@@ -42,9 +42,7 @@ void main() {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Intro to ML',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q1', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q1', type: FreeForm())],
     );
     await tester.pumpWidget(buildScreen());
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -58,7 +56,9 @@ void main() {
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();
     expect(
-        find.text('Something went wrong. Please try again.'), findsOneWidget);
+      find.text('Something went wrong. Please try again.'),
+      findsOneWidget,
+    );
     expect(find.text('Retry'), findsOneWidget);
   });
 
@@ -105,9 +105,7 @@ void main() {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Recovered Quiz',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q1', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q1', type: FreeForm())],
     );
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
@@ -149,8 +147,9 @@ void main() {
     expect(find.text('1 of 1 correct'), findsOneWidget);
   });
 
-  testWidgets('multiple choice flow: select, submit, see result',
-      (tester) async {
+  testWidgets('multiple choice flow: select, submit, see result', (
+    tester,
+  ) async {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'MC Quiz',
@@ -187,14 +186,13 @@ void main() {
     expect(find.text('100%'), findsOneWidget);
   });
 
-  testWidgets('submission error displays and clears on new input',
-      (tester) async {
+  testWidgets('submission error displays and clears on new input', (
+    tester,
+  ) async {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Test Quiz',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm())],
     );
     api.nextQuizAnswerError = Exception('server error');
     await tester.pumpWidget(buildScreen());
@@ -223,14 +221,13 @@ void main() {
     );
   });
 
-  testWidgets('returnRoute parameter navigates to custom route',
-      (tester) async {
+  testWidgets('returnRoute parameter navigates to custom route', (
+    tester,
+  ) async {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Test Quiz',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm())],
     );
     final entry = createTestServerEntry(api: api);
     final router = GoRouter(
@@ -268,9 +265,7 @@ void main() {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Test Quiz',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm())],
     );
     api.nextQuizAnswerResult = const CorrectAnswer();
     await tester.pumpWidget(buildScreen());
@@ -350,9 +345,7 @@ void main() {
     api.nextQuiz = Quiz(
       id: 'quiz-1',
       title: 'Test Quiz',
-      questions: const [
-        QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm()),
-      ],
+      questions: const [QuizQuestion(id: 'q1', text: 'Q?', type: FreeForm())],
     );
     await tester.pumpWidget(buildScreen());
     await tester.pumpAndSettle();

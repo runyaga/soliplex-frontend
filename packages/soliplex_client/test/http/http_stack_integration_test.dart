@@ -396,30 +396,28 @@ void main() {
     );
 
     test(
-      'connection error during requestStream emits both onStreamStart and '
-      'onStreamEnd(error)',
-      () async {
-        platform.nextStreamError = const NetworkException(
-          message: 'Stream setup failed',
-        );
+        'connection error during requestStream emits both onStreamStart and '
+        'onStreamEnd(error)', () async {
+      platform.nextStreamError = const NetworkException(
+        message: 'Stream setup failed',
+      );
 
-        try {
-          await transport.requestStream('GET', testUri);
-        } catch (_) {}
+      try {
+        await transport.requestStream('GET', testUri);
+      } catch (_) {}
 
-        final starts = observer.ofType<HttpStreamStartEvent>();
-        expect(starts, hasLength(1));
+      final starts = observer.ofType<HttpStreamStartEvent>();
+      expect(starts, hasLength(1));
 
-        final ends = observer.ofType<HttpStreamEndEvent>();
-        expect(
-          ends,
-          hasLength(1),
-          reason: 'onStreamEnd must fire even when the inner requestStream '
-              'throws, so observers do not see a dangling open request',
-        );
-        expect(ends.single.error, isA<NetworkException>());
-      },
-    );
+      final ends = observer.ofType<HttpStreamEndEvent>();
+      expect(
+        ends,
+        hasLength(1),
+        reason: 'onStreamEnd must fire even when the inner requestStream '
+            'throws, so observers do not see a dangling open request',
+      );
+      expect(ends.single.error, isA<NetworkException>());
+    });
   });
 
   group('Resource cleanup', () {
@@ -487,11 +485,7 @@ void main() {
 
       expect(
         mixedObserver.events.map((e) => e.runtimeType).toList(),
-        equals([
-          ConcurrencyWaitEvent,
-          HttpRequestEvent,
-          HttpResponseEvent,
-        ]),
+        equals([ConcurrencyWaitEvent, HttpRequestEvent, HttpResponseEvent]),
         reason: 'Concurrency acquisition must precede the HTTP request '
             'event, and the HTTP request must precede the response. '
             'Any other order breaks observer correlation.',

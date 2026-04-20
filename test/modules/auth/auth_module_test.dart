@@ -10,9 +10,7 @@ import 'package:soliplex_frontend/src/modules/auth/server_manager.dart';
 import '../../helpers/fakes.dart';
 
 ServerManager _createServerManager() => ServerManager(
-      authFactory: () => AuthSession(
-        refreshService: FakeTokenRefreshService(),
-      ),
+      authFactory: () => AuthSession(refreshService: FakeTokenRefreshService()),
       clientFactory: ({getToken, tokenRefresher}) => FakeHttpClient(),
       storage: InMemoryServerStorage(),
     );
@@ -76,10 +74,7 @@ void main() {
         initialLocation: '/',
         routes: [
           ...contribution.routes,
-          GoRoute(
-            path: '/chat',
-            builder: (_, __) => const Text('Chat'),
-          ),
+          GoRoute(path: '/chat', builder: (_, __) => const Text('Chat')),
         ],
         redirect: contribution.redirect,
       );

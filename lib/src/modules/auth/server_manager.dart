@@ -169,7 +169,10 @@ class ServerManager {
             alias: entry.value.alias,
           );
           if (entry.value
-              case AuthenticatedServer(:final provider, :final tokens)) {
+              case AuthenticatedServer(
+                :final provider,
+                :final tokens,
+              )) {
             server.auth.login(provider: provider, tokens: tokens);
           }
         } catch (e, st) {

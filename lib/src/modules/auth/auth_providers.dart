@@ -32,6 +32,4 @@ final callbackParamsProvider = Provider<CallbackParams>(
   (_) => const NoCallbackParams(),
 );
 
-final consentNoticeProvider = Provider<ConsentNotice?>(
-  (_) => null,
-);
+final consentNoticeProvider = Provider<ConsentNotice?>((_) => null);

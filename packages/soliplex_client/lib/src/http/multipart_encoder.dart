@@ -55,7 +55,9 @@ MultipartEncoded encodeMultipart({
 String _generateBoundary() {
   final random = Random();
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  final suffix =
-      List.generate(16, (_) => chars[random.nextInt(chars.length)]).join();
+  final suffix = List.generate(
+    16,
+    (_) => chars[random.nextInt(chars.length)],
+  ).join();
   return 'dart-multipart-$suffix';
 }

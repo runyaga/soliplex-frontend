@@ -31,8 +31,9 @@ class ThreadListState {
   CancelToken? _cancelToken;
   bool _isDisposed = false;
 
-  final Signal<ThreadListStatus> _threads =
-      Signal<ThreadListStatus>(ThreadsLoading());
+  final Signal<ThreadListStatus> _threads = Signal<ThreadListStatus>(
+    ThreadsLoading(),
+  );
   ReadonlySignal<ThreadListStatus> get threads => _threads;
 
   Future<void> refresh() => _fetch();
@@ -163,8 +164,10 @@ class ThreadListState {
     }
 
     try {
-      final threads =
-          await _connection.api.getThreads(_roomId, cancelToken: token);
+      final threads = await _connection.api.getThreads(
+        _roomId,
+        cancelToken: token,
+      );
       if (token.isCancelled) return;
       _cancelToken = null;
       final sorted = threads.toList()

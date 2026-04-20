@@ -126,10 +126,7 @@ class AgentRuntime {
   /// Call this when a thread is created outside of [spawn] (e.g. via
   /// a UI "new thread" button) so that the backend-provided initial
   /// state is available when [spawn] is later called with that threadId.
-  void seedThreadState(
-    String threadId,
-    Map<String, dynamic> aguiState,
-  ) {
+  void seedThreadState(String threadId, Map<String, dynamic> aguiState) {
     if (aguiState.isEmpty) return;
     _threadHistories[threadId] = ThreadHistory(
       messages: const [],
@@ -297,8 +294,9 @@ class AgentRuntime {
       final key = (serverId: serverId, roomId: roomId, threadId: threadId);
       return (key, null);
     }
-    final (threadInfo, initialAguiState) =
-        await _connection.api.createThread(roomId);
+    final (threadInfo, initialAguiState) = await _connection.api.createThread(
+      roomId,
+    );
     final key = (serverId: serverId, roomId: roomId, threadId: threadInfo.id);
     if (initialAguiState.isNotEmpty) {
       _threadHistories[key.threadId] = ThreadHistory(
@@ -322,7 +320,8 @@ class AgentRuntime {
     required int depth,
   }) async {
     var toolRegistry = await _toolRegistryResolver(roomId);
-    final extensions = await _createExtensions();
+    final ctx = SessionContext(serverId: serverId, roomId: roomId);
+    final extensions = await _createExtensions(ctx);
     for (final ext in extensions) {
       for (final tool in ext.tools) {
         toolRegistry = toolRegistry.register(tool);
@@ -346,9 +345,9 @@ class AgentRuntime {
     );
   }
 
-  Future<List<SessionExtension>> _createExtensions() async {
+  Future<List<SessionExtension>> _createExtensions(SessionContext ctx) async {
     if (_extensionFactory == null) return const [];
-    return _extensionFactory();
+    return _extensionFactory(ctx);
   }
 
   // ---------------------------------------------------------------------------

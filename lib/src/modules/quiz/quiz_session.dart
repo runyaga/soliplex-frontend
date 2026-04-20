@@ -185,11 +185,18 @@ class QuizInProgress extends QuizSession {
   }) : results = Map.unmodifiable(results) {
     if (!quiz.hasQuestions) {
       throw ArgumentError.value(
-          quiz, 'quiz', 'Quiz must have at least one question');
+        quiz,
+        'quiz',
+        'Quiz must have at least one question',
+      );
     }
     if (currentIndex < 0 || currentIndex >= quiz.questionCount) {
       throw RangeError.range(
-          currentIndex, 0, quiz.questionCount - 1, 'currentIndex');
+        currentIndex,
+        0,
+        quiz.questionCount - 1,
+        'currentIndex',
+      );
     }
   }
 
@@ -255,7 +262,10 @@ class QuizCompleted extends QuizSession {
   }) : results = Map.unmodifiable(results) {
     if (results.isEmpty) {
       throw ArgumentError.value(
-          results, 'results', 'Completed quiz must have at least one result');
+        results,
+        'results',
+        'Completed quiz must have at least one result',
+      );
     }
   }
 

@@ -160,9 +160,7 @@ class _RequestDetailViewState extends State<RequestDetailView>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant),
-        ),
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
       child: Row(
         children: [
@@ -202,10 +200,7 @@ class _RequestDetailViewState extends State<RequestDetailView>
             },
             items: [
               for (final scope in SearchScope.values)
-                DropdownMenuItem(
-                  value: scope,
-                  child: Text(scope.label),
-                ),
+                DropdownMenuItem(value: scope, child: Text(scope.label)),
             ],
           ),
           if (_searchController.text.isNotEmpty && _totalMatches > 0) ...[
@@ -244,19 +239,14 @@ class _RequestDetailViewState extends State<RequestDetailView>
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
-        border: Border(
-          bottom: BorderSide(color: colorScheme.outlineVariant),
-        ),
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              _MethodBadge(
-                method: group.methodLabel,
-                isStream: group.isStream,
-              ),
+              _MethodBadge(method: group.methodLabel, isStream: group.isStream),
               const SizedBox(width: 8),
               Expanded(child: HttpStatusDisplay(group: group)),
               Text(
@@ -501,10 +491,7 @@ class _ResponseTab extends StatelessWidget {
           label: 'Duration',
           value: resp.duration.toHttpDurationString(),
         ),
-        _MetadataRow(
-          label: 'Size',
-          value: resp.bodySize.toHttpBytesString(),
-        ),
+        _MetadataRow(label: 'Size', value: resp.bodySize.toHttpBytesString()),
         if (resp.headers != null && resp.headers!.isNotEmpty) ...[
           const SizedBox(height: 16),
           _SectionHeader(
@@ -559,13 +546,13 @@ class _CurlTab extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                'curl command',
-                style: theme.textTheme.titleSmall,
-              ),
+              Text('curl command', style: theme.textTheme.titleSmall),
               const Spacer(),
               CopyButton(
-                  iconSize: 18, text: curl, tooltip: 'Copy to clipboard'),
+                iconSize: 18,
+                text: curl,
+                tooltip: 'Copy to clipboard',
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -632,18 +619,13 @@ class _HeadersTable extends StatelessWidget {
         children: [
           for (final (index, entry) in headers.entries.indexed)
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: index.isEven
                     ? colorScheme.surfaceContainerLow
                     : colorScheme.surface,
                 border: index > 0
-                    ? Border(
-                        top: BorderSide(color: colorScheme.outlineVariant),
-                      )
+                    ? Border(top: BorderSide(color: colorScheme.outlineVariant))
                     : null,
               ),
               child: Row(
@@ -696,9 +678,7 @@ class _BodyDisplay extends StatelessWidget {
       ),
       child: SelectableText(
         formattedBody,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontFamily: 'monospace',
-        ),
+        style: theme.textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
       ),
     );
   }
@@ -727,10 +707,7 @@ class _MetadataRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: theme.textTheme.bodyMedium,
-            ),
+            child: SelectableText(value, style: theme.textTheme.bodyMedium),
           ),
         ],
       ),

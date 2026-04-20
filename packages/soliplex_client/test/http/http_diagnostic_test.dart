@@ -5,31 +5,33 @@ import 'package:test/test.dart';
 
 void main() {
   group('safeDiagnosticHandler', () {
-    test('passes arguments through to the wrapped handler when it succeeds',
-        () {
-      Object? capturedError;
-      StackTrace? capturedStack;
-      String? capturedMessage;
-      void inner(
-        Object error,
-        StackTrace stackTrace, {
-        required String message,
-      }) {
-        capturedError = error;
-        capturedStack = stackTrace;
-        capturedMessage = message;
-      }
+    test(
+      'passes arguments through to the wrapped handler when it succeeds',
+      () {
+        Object? capturedError;
+        StackTrace? capturedStack;
+        String? capturedMessage;
+        void inner(
+          Object error,
+          StackTrace stackTrace, {
+          required String message,
+        }) {
+          capturedError = error;
+          capturedStack = stackTrace;
+          capturedMessage = message;
+        }
 
-      final safe = safeDiagnosticHandler(inner);
-      final error = StateError('the original error');
-      final stack = StackTrace.current;
+        final safe = safeDiagnosticHandler(inner);
+        final error = StateError('the original error');
+        final stack = StackTrace.current;
 
-      safe(error, stack, message: 'context');
+        safe(error, stack, message: 'context');
 
-      expect(capturedError, same(error));
-      expect(capturedStack, same(stack));
-      expect(capturedMessage, 'context');
-    });
+        expect(capturedError, same(error));
+        expect(capturedStack, same(stack));
+        expect(capturedMessage, 'context');
+      },
+    );
 
     test(
         'does not propagate when the wrapped handler throws synchronously — '
@@ -42,11 +44,7 @@ void main() {
 
       // If the wrapper re-threw, this expression would throw.
       expect(
-        () => safe(
-          StateError('anything'),
-          StackTrace.current,
-          message: 'ctx',
-        ),
+        () => safe(StateError('anything'), StackTrace.current, message: 'ctx'),
         returnsNormally,
         reason: 'Diagnostic handlers are the last line of defense. A throwing '
             'sink must not break the decorator contract that internal '
@@ -65,21 +63,20 @@ void main() {
 
       final safe = safeDiagnosticHandler(asyncThrowing);
 
-      await runZonedGuarded(() async {
-        safe(
-          StateError('anything'),
-          StackTrace.current,
-          message: 'ctx',
-        );
-        // Give the microtask a chance to run. If the wrapper failed to
-        // contain the async error, it would surface in this outer zone.
-        await Future<void>.delayed(Duration.zero);
-      }, (error, stack) {
-        fail(
-          'Async error from a misbehaving diagnostic handler leaked '
-          'into the caller zone: $error',
-        );
-      });
+      await runZonedGuarded(
+        () async {
+          safe(StateError('anything'), StackTrace.current, message: 'ctx');
+          // Give the microtask a chance to run. If the wrapper failed to
+          // contain the async error, it would surface in this outer zone.
+          await Future<void>.delayed(Duration.zero);
+        },
+        (error, stack) {
+          fail(
+            'Async error from a misbehaving diagnostic handler leaked '
+            'into the caller zone: $error',
+          );
+        },
+      );
     });
   });
 }

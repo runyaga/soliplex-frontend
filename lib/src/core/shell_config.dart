@@ -25,6 +25,8 @@ class ShellConfig {
   final List<ModuleContribution> modules;
   final Listenable? refreshListenable;
   final VoidCallback? onDispose;
+  final GlobalKey<NavigatorState>? navigatorKey;
+  final GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey;
 
   ShellConfig({
     required this.appName,
@@ -34,6 +36,8 @@ class ShellConfig {
     List<ModuleContribution> modules = const [],
     this.refreshListenable,
     this.onDispose,
+    this.navigatorKey,
+    this.scaffoldMessengerKey,
   }) : modules = List.unmodifiable(modules);
 
   List<RouteBase> get routes => modules.expand((m) => m.routes).toList();
@@ -43,8 +47,6 @@ class ShellConfig {
   List<GoRouterRedirect> get redirects =>
       modules.map((m) => m.redirect).nonNulls.toList();
 
-  List<String> validate() => validateRoutes(
-        routes: routes,
-        initialRoute: initialRoute,
-      );
+  List<String> validate() =>
+      validateRoutes(routes: routes, initialRoute: initialRoute);
 }

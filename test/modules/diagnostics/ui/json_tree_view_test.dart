@@ -24,8 +24,9 @@ void main() {
       expect(find.textContaining('Alice'), findsOneWidget);
     });
 
-    testWidgets('object node starts expanded and can be collapsed',
-        (tester) async {
+    testWidgets('object node starts expanded and can be collapsed', (
+      tester,
+    ) async {
       final nodes = [
         ObjectNode(
           key: 'user',
@@ -49,8 +50,9 @@ void main() {
       expect(find.textContaining('1'), findsNothing);
     });
 
-    testWidgets('array node shows item count in collapsed label',
-        (tester) async {
+    testWidgets('array node shows item count in collapsed label', (
+      tester,
+    ) async {
       final nodes = [
         ArrayNode(
           key: 'items',

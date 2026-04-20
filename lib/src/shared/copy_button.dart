@@ -62,7 +62,7 @@ class _CopyButtonState extends State<CopyButton> {
       _CopyFeedback.idle => (Icons.copy, theme.colorScheme.onSurfaceVariant),
       _CopyFeedback.success => (
           Icons.check,
-          theme.colorScheme.onSurfaceVariant
+          theme.colorScheme.onSurfaceVariant,
         ),
       _CopyFeedback.error => (Icons.error_outline, theme.colorScheme.error),
     };

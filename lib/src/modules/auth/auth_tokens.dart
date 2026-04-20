@@ -1,9 +1,6 @@
 /// OIDC provider identity for a server connection.
 class OidcProvider {
-  const OidcProvider({
-    required this.discoveryUrl,
-    required this.clientId,
-  });
+  const OidcProvider({required this.discoveryUrl, required this.clientId});
 
   factory OidcProvider.fromJson(Map<String, dynamic> json) {
     return OidcProvider(
@@ -66,10 +63,7 @@ final class NoSession extends SessionState {
 }
 
 final class ActiveSession extends SessionState {
-  const ActiveSession({
-    required this.provider,
-    required this.tokens,
-  });
+  const ActiveSession({required this.provider, required this.tokens});
 
   final OidcProvider provider;
   final AuthTokens tokens;

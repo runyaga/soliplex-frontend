@@ -82,8 +82,11 @@ class RoomWelcome extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.quiz,
-                            size: 20, color: theme.colorScheme.primary),
+                        Icon(
+                          Icons.quiz,
+                          size: 20,
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           currentRoom.quizzes.length == 1

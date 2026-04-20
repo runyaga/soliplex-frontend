@@ -113,21 +113,26 @@ class ConnectFlow {
           }
           _proceedAfterProbe(result, result.providers);
         case ConnectionFailure(:final error, :final attemptedUrls):
-          state.value =
-              UrlInput(error: describeConnectionError(error, attemptedUrls));
+          state.value = UrlInput(
+            error: describeConnectionError(error, attemptedUrls),
+          );
       }
     } catch (e, st) {
       debugPrint('ConnectFlow.connect: $e\n$st');
       if (!_isCancelled(gen)) {
-        state.value =
-            UrlInput(error: 'Unexpected error connecting to $url: $e');
+        state.value = UrlInput(
+          error: 'Unexpected error connecting to $url: $e',
+        );
       }
     }
   }
 
   void acceptInsecure() {
     if (state.value
-        case InsecureWarning(:final probeResult, :final providers)) {
+        case InsecureWarning(
+          :final probeResult,
+          :final providers,
+        )) {
       _proceedAfterProbe(probeResult, providers);
     }
   }
@@ -205,13 +210,15 @@ class ConnectFlow {
     final discoveryUrl =
         '${provider.serverUrl}/.well-known/openid-configuration';
 
-    await PreAuthStateStorage.save(PreAuthState(
-      serverUrl: probeResult.serverUrl,
-      providerId: provider.id,
-      discoveryUrl: discoveryUrl,
-      clientId: provider.clientId,
-      createdAt: DateTime.timestamp(),
-    ));
+    await PreAuthStateStorage.save(
+      PreAuthState(
+        serverUrl: probeResult.serverUrl,
+        providerId: provider.id,
+        discoveryUrl: discoveryUrl,
+        clientId: provider.clientId,
+        createdAt: DateTime.timestamp(),
+      ),
+    );
 
     if (_isCancelled(gen)) return;
 

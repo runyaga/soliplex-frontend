@@ -32,10 +32,7 @@ class SkillContentColumn extends StatelessWidget {
         children: [
           Text(label, style: labelStyle),
           const SizedBox(height: 2),
-          Text(
-            isNone ? 'None' : value,
-            style: isNone ? noneStyle : valueStyle,
-          ),
+          Text(isNone ? 'None' : value, style: isNone ? noneStyle : valueStyle),
         ],
       );
     }
@@ -111,10 +108,7 @@ class SkillDetailDialog extends StatelessWidget {
                       children: [
                         Text(entry.key, style: labelStyle),
                         const SizedBox(height: 2),
-                        formatDynamicValue(
-                          entry.value,
-                          style: valueStyle,
-                        ),
+                        formatDynamicValue(entry.value, style: valueStyle),
                       ],
                     ),
                   ),
@@ -127,11 +121,7 @@ class SkillDetailDialog extends StatelessWidget {
     }
 
     return AlertDialog(
-      title: Text(
-        skill.name,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-      ),
+      title: Text(skill.name, overflow: TextOverflow.ellipsis, maxLines: 1),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(

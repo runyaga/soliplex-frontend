@@ -66,14 +66,19 @@ EventProcessingResult processEvent(
     ReasoningStartEvent() ||
     ThinkingTextMessageStartEvent() ||
     ReasoningMessageStartEvent() =>
-      _processThinkingStart(conversation, streaming),
+      _processThinkingStart(
+        conversation,
+        streaming,
+      ),
     ThinkingEndEvent() ||
     ReasoningEndEvent() ||
     ThinkingTextMessageEndEvent() ||
     ReasoningMessageEndEvent() =>
       _processThinkingEnd(conversation, streaming),
     ThinkingTextMessageContentEvent(:final delta) ||
-    ReasoningMessageContentEvent(:final delta) =>
+    ReasoningMessageContentEvent(
+      :final delta,
+    ) =>
       _processThinkingContent(conversation, streaming, delta),
 
     // Text message streaming events

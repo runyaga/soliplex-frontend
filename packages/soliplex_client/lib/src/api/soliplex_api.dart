@@ -709,11 +709,7 @@ class SoliplexApi {
 
     return [
       {'type': 'TEXT_MESSAGE_START', 'messageId': id, 'role': 'user'},
-      {
-        'type': 'TEXT_MESSAGE_CONTENT',
-        'messageId': id,
-        'delta': content,
-      },
+      {'type': 'TEXT_MESSAGE_CONTENT', 'messageId': id, 'delta': content},
       {'type': 'TEXT_MESSAGE_END', 'messageId': id},
     ];
   }

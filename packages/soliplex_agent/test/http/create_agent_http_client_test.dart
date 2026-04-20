@@ -233,32 +233,34 @@ void main() {
       verify(inner.close).called(1);
     });
 
-    test('enforces concurrency limit via ConcurrencyLimitingHttpClient layer',
-        () async {
-      final inner = _ConcurrencyTrackingInner();
-      final client = createAgentHttpClient(
-        innerClient: inner,
-        maxConcurrent: 2,
-      );
+    test(
+      'enforces concurrency limit via ConcurrencyLimitingHttpClient layer',
+      () async {
+        final inner = _ConcurrencyTrackingInner();
+        final client = createAgentHttpClient(
+          innerClient: inner,
+          maxConcurrent: 2,
+        );
 
-      final futures = [
-        client.request('GET', Uri.parse('https://api/1')),
-        client.request('GET', Uri.parse('https://api/2')),
-        client.request('GET', Uri.parse('https://api/3')),
-        client.request('GET', Uri.parse('https://api/4')),
-      ];
+        final futures = [
+          client.request('GET', Uri.parse('https://api/1')),
+          client.request('GET', Uri.parse('https://api/2')),
+          client.request('GET', Uri.parse('https://api/3')),
+          client.request('GET', Uri.parse('https://api/4')),
+        ];
 
-      await _pumpEventQueue();
+        await _pumpEventQueue();
 
-      expect(
-        inner.maxInFlight,
-        lessThanOrEqualTo(2),
-        reason: 'maxConcurrent=2 must cap in-flight to 2',
-      );
+        expect(
+          inner.maxInFlight,
+          lessThanOrEqualTo(2),
+          reason: 'maxConcurrent=2 must cap in-flight to 2',
+        );
 
-      inner.releaseAll();
-      await Future.wait<void>(futures);
-    });
+        inner.releaseAll();
+        await Future.wait<void>(futures);
+      },
+    );
 
     test('default maxConcurrent caps in-flight at 6', () async {
       final inner = _ConcurrencyTrackingInner();
@@ -423,58 +425,56 @@ void main() {
 
     group('decorator composition invariants', () {
       test(
-        'refresh via a separate client does not deadlock when the authed '
-        "client's pool is exhausted",
-        () async {
-          // `standard.dart` creates per-server authed clients via
-          // createAgentHttpClient and a refresh-service client via a
-          // separate createAgentHttpClient call. Each call returns a
-          // client with its OWN limiter — the refresher does not
-          // contend for the authed client's slot.
-          //
-          // If a future refactor hoists the limiter to a shared
-          // instance, the refresh path (triggered by 401) would try to
-          // acquire a slot from the same pool the authed request is
-          // holding → deadlock. This test would then hang and time
-          // out, which is precisely the signal we want.
-          final refresherInner = _OrderedInner(
-            uri401: Uri.parse('https://never.fires'),
-          );
-          final plainClient = createAgentHttpClient(
-            innerClient: refresherInner,
-            maxConcurrent: 1,
-          );
-          addTearDown(plainClient.close);
+          'refresh via a separate client does not deadlock when the authed '
+          "client's pool is exhausted", () async {
+        // `standard.dart` creates per-server authed clients via
+        // createAgentHttpClient and a refresh-service client via a
+        // separate createAgentHttpClient call. Each call returns a
+        // client with its OWN limiter — the refresher does not
+        // contend for the authed client's slot.
+        //
+        // If a future refactor hoists the limiter to a shared
+        // instance, the refresh path (triggered by 401) would try to
+        // acquire a slot from the same pool the authed request is
+        // holding → deadlock. This test would then hang and time
+        // out, which is precisely the signal we want.
+        final refresherInner = _OrderedInner(
+          uri401: Uri.parse('https://never.fires'),
+        );
+        final plainClient = createAgentHttpClient(
+          innerClient: refresherInner,
+          maxConcurrent: 1,
+        );
+        addTearDown(plainClient.close);
 
-          final authedInner = _OrderedInner(
-            uri401: Uri.parse('https://api/work'),
-          );
-          final refresher = _RefresherViaClient(plainClient);
-          final authedClient = createAgentHttpClient(
-            innerClient: authedInner,
-            maxConcurrent: 1,
-            getToken: () => 'token',
-            tokenRefresher: refresher,
-          );
-          addTearDown(authedClient.close);
+        final authedInner = _OrderedInner(
+          uri401: Uri.parse('https://api/work'),
+        );
+        final refresher = _RefresherViaClient(plainClient);
+        final authedClient = createAgentHttpClient(
+          innerClient: authedInner,
+          maxConcurrent: 1,
+          getToken: () => 'token',
+          tokenRefresher: refresher,
+        );
+        addTearDown(authedClient.close);
 
-          final response = await authedClient
-              .request('GET', Uri.parse('https://api/work'))
-              .timeout(
-                const Duration(seconds: 2),
-                onTimeout: () => throw TimeoutException(
-                  'refresh deadlocked — the refresher is contending for '
-                  "the authed client's concurrency slot. The decorator "
-                  'factory must mint an independent limiter per call; '
-                  'if you refactored to share limiters across clients, '
-                  'that change re-introduces the original 429 deadlock.',
-                ),
-              );
+        final response = await authedClient
+            .request('GET', Uri.parse('https://api/work'))
+            .timeout(
+              const Duration(seconds: 2),
+              onTimeout: () => throw TimeoutException(
+                'refresh deadlocked — the refresher is contending for '
+                "the authed client's concurrency slot. The decorator "
+                'factory must mint an independent limiter per call; '
+                'if you refactored to share limiters across clients, '
+                'that change re-introduces the original 429 deadlock.',
+              ),
+            );
 
-          expect(response.statusCode, 200);
-          expect(refresher.refreshCalls, 1);
-        },
-      );
+        expect(response.statusCode, 200);
+        expect(refresher.refreshCalls, 1);
+      });
 
       test(
         'decorator order: concurrency wraps refreshing '
@@ -503,9 +503,7 @@ void main() {
           );
           addTearDown(plainClient.close);
 
-          final authedInner = _OrderedInner(
-            uri401: Uri.parse('https://api/A'),
-          );
+          final authedInner = _OrderedInner(uri401: Uri.parse('https://api/A'));
           final authedClient = createAgentHttpClient(
             innerClient: authedInner,
             maxConcurrent: 1,

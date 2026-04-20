@@ -133,9 +133,7 @@ class QuizQuestionView extends StatelessWidget {
         ),
       Answered() => FilledButton(
           onPressed: onNext,
-          child: Text(
-            session.isLastQuestion ? 'See Results' : 'Next Question',
-          ),
+          child: Text(session.isLastQuestion ? 'See Results' : 'Next Question'),
         ),
     };
   }

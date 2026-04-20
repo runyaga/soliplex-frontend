@@ -31,10 +31,7 @@ void main() {
       ),
     ];
     final messageStates = {
-      'user-1': MessageState(
-        userMessageId: 'user-1',
-        sourceReferences: refs,
-      ),
+      'user-1': MessageState(userMessageId: 'user-1', sourceReferences: refs),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);
@@ -57,11 +54,7 @@ void main() {
         createdAt: _time,
         text: 'First response',
       ),
-      ToolCallMessage(
-        id: 'tool-1',
-        createdAt: _time,
-        toolCalls: const [],
-      ),
+      ToolCallMessage(id: 'tool-1', createdAt: _time, toolCalls: const []),
       TextMessage(
         id: 'asst-2',
         user: ChatUser.assistant,
@@ -70,10 +63,7 @@ void main() {
       ),
     ];
     final messageStates = {
-      'user-1': MessageState(
-        userMessageId: 'user-1',
-        sourceReferences: refs,
-      ),
+      'user-1': MessageState(userMessageId: 'user-1', sourceReferences: refs),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);
@@ -90,11 +80,7 @@ void main() {
         createdAt: _time,
         text: 'Question',
       ),
-      ToolCallMessage(
-        id: 'tool-1',
-        createdAt: _time,
-        toolCalls: const [],
-      ),
+      ToolCallMessage(id: 'tool-1', createdAt: _time, toolCalls: const []),
       TextMessage(
         id: 'asst-1',
         user: ChatUser.assistant,
@@ -103,10 +89,7 @@ void main() {
       ),
     ];
     final messageStates = {
-      'user-1': MessageState(
-        userMessageId: 'user-1',
-        sourceReferences: refs,
-      ),
+      'user-1': MessageState(userMessageId: 'user-1', sourceReferences: refs),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);
@@ -143,14 +126,8 @@ void main() {
       ),
     ];
     final messageStates = {
-      'user-1': MessageState(
-        userMessageId: 'user-1',
-        sourceReferences: refs1,
-      ),
-      'user-2': MessageState(
-        userMessageId: 'user-2',
-        sourceReferences: refs2,
-      ),
+      'user-1': MessageState(userMessageId: 'user-1', sourceReferences: refs1),
+      'user-2': MessageState(userMessageId: 'user-2', sourceReferences: refs2),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);
@@ -181,10 +158,7 @@ void main() {
       ),
     ];
     final messageStates = {
-      'user-2': MessageState(
-        userMessageId: 'user-2',
-        sourceReferences: refs,
-      ),
+      'user-2': MessageState(userMessageId: 'user-2', sourceReferences: refs),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);
@@ -214,17 +188,10 @@ void main() {
         createdAt: _time,
         text: 'Do something',
       ),
-      ToolCallMessage(
-        id: 'tool-1',
-        createdAt: _time,
-        toolCalls: const [],
-      ),
+      ToolCallMessage(id: 'tool-1', createdAt: _time, toolCalls: const []),
     ];
     final messageStates = {
-      'user-1': MessageState(
-        userMessageId: 'user-1',
-        sourceReferences: refs,
-      ),
+      'user-1': MessageState(userMessageId: 'user-1', sourceReferences: refs),
     };
 
     final map = buildSourceReferencesMap(messages, messageStates);

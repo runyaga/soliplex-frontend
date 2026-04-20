@@ -106,8 +106,11 @@ class _ThreadTileState extends State<ThreadTile> {
           value: _ThreadAction.delete,
           child: Row(
             children: [
-              Icon(Icons.delete_outline,
-                  size: 18, color: theme.colorScheme.error),
+              Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: theme.colorScheme.error,
+              ),
               SizedBox(width: 12),
               Text('Delete', style: TextStyle(color: theme.colorScheme.error)),
             ],

@@ -141,12 +141,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ...switch (_flow.state.value) {
                 UrlInput() => _buildUrlInput(context),
                 Probing() => _buildProbing(context),
-                InsecureWarning(:final probeResult) =>
-                  _buildInsecureWarning(context, probeResult),
+                InsecureWarning(:final probeResult) => _buildInsecureWarning(
+                    context,
+                    probeResult,
+                  ),
                 Consent(:final notice, :final probeResult, :final providers) =>
                   _buildConsent(context, notice, probeResult, providers),
-                ProviderSelection(:final providers) =>
-                  _buildProviderSelection(context, providers),
+                ProviderSelection(:final providers) => _buildProviderSelection(
+                    context,
+                    providers,
+                  ),
                 Authenticating() => _buildAuthenticating(context),
                 Connected() => _buildAuthenticating(context),
               },
@@ -243,9 +247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Expanded(
                 child: Text(
                   error,
-                  style: TextStyle(
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
+                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
                 ),
               ),
             ],
@@ -288,10 +290,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          OutlinedButton(
-            onPressed: _flow.reset,
-            child: const Text('Cancel'),
-          ),
+          OutlinedButton(onPressed: _flow.reset, child: const Text('Cancel')),
           const SizedBox(width: 16),
           FilledButton(
             onPressed: _flow.acceptInsecure,
@@ -317,10 +316,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          OutlinedButton(
-            onPressed: _flow.reset,
-            child: const Text('Cancel'),
-          ),
+          OutlinedButton(onPressed: _flow.reset, child: const Text('Cancel')),
           const SizedBox(width: 16),
           FilledButton(
             onPressed: _flow.acknowledgeConsent,
@@ -351,10 +347,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
       const SizedBox(height: 8),
-      TextButton(
-        onPressed: _flow.reset,
-        child: const Text('Change server'),
-      ),
+      TextButton(onPressed: _flow.reset, child: const Text('Change server')),
     ];
   }
 

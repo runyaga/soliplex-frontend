@@ -85,9 +85,9 @@ class ChunkVisualizationPage extends StatefulWidget {
       );
     }
 
-    return Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => child),
-    );
+    return Navigator.of(
+      context,
+    ).push<void>(MaterialPageRoute(builder: (_) => child));
   }
 
   @override
@@ -113,13 +113,14 @@ class _ChunkVisualizationPageState extends State<ChunkVisualizationPage> {
   }
 
   void _loadVisualization() {
-    _future = widget.api
-        .getChunkVisualization(widget.roomId, widget.chunkId)
-        .then((viz) => viz.imagesBase64.map((b64) {
-              final bytes = base64Decode(b64);
-              final (w, h) = readPngDimensions(bytes);
-              return PageImage(bytes, w, h);
-            }).toList());
+    _future =
+        widget.api.getChunkVisualization(widget.roomId, widget.chunkId).then(
+              (viz) => viz.imagesBase64.map((b64) {
+                final bytes = base64Decode(b64);
+                final (w, h) = readPngDimensions(bytes);
+                return PageImage(bytes, w, h);
+              }).toList(),
+            );
   }
 
   void _retry() {
@@ -253,11 +254,7 @@ class _ChunkVisualizationPageState extends State<ChunkVisualizationPage> {
 
     if (!page.hasDimensions) {
       return Center(
-        child: InteractiveViewer(
-          minScale: 1.0,
-          maxScale: 4.0,
-          child: image,
-        ),
+        child: InteractiveViewer(minScale: 1.0, maxScale: 4.0, child: image),
       );
     }
 

@@ -5,10 +5,7 @@ import 'http_event_tile.dart';
 import 'request_detail_view.dart';
 
 class RunHttpDetailPage extends StatelessWidget {
-  const RunHttpDetailPage({
-    required this.groups,
-    super.key,
-  });
+  const RunHttpDetailPage({required this.groups, super.key});
 
   final List<HttpEventGroup> groups;
 
