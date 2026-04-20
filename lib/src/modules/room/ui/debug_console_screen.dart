@@ -302,15 +302,17 @@ const _kSnippets = <_Snippet>[
     label: 'modal',
     code: "ui_show_modal(title='Info', body='This is a modal.', actions=['OK'])"
   ),
-  (label: 'inject', code: 'ui_inject_message(content="**Hello** from Python!")'),
+  (
+    label: 'inject',
+    code: 'ui_inject_message(content="**Hello** from Python!")'
+  ),
   (
     label: 'confirm',
     code: "ui_request_confirm(verb='delete', message='Delete this item?')"
   ),
   (
     label: 'form',
-    code:
-        "ui_show_form(schema={'properties':{'name':{'type':'string'}}})"
+    code: "ui_show_form(schema={'properties':{'name':{'type':'string'}}})"
   ),
   (label: 'list_servers', code: 'soliplex_list_servers()'),
   (label: 'list_rooms', code: "soliplex_list_rooms(server='<id>')"),
