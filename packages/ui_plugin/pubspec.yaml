@@ -11,10 +11,11 @@ dependencies:
   dart_monty:
     git:
       url: https://github.com/runyaga/dart_monty.git
-      ref: feat/repl-platform
+      ref: feat/power-up
   meta: ^1.9.0
   signals_core: ^6.2.0
 
 dev_dependencies:
+  mocktail: ^1.0.0
   test: ^1.24.0
   very_good_analysis: ^10.0.0

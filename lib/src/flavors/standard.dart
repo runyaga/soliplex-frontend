@@ -167,7 +167,7 @@ Future<ShellConfig> standard({
         getConnections,
         onNotify: notifyController.add,
       ),
-      plugins: roomUiPlugin != null ? [roomUiPlugin] : [],
+      extensions: roomUiPlugin != null ? [roomUiPlugin] : [],
     );
   }
 

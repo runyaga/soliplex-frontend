@@ -132,7 +132,7 @@ const _uiRequestConfirmSchema = HostFunctionSchema(
 ///
 /// Renderer errors are caught, state is reset to [UiIdle], and the error is
 /// returned as a string to Python — never thrown across the bridge boundary.
-class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
+class UiPlugin extends MontyExtension with StatefulExtension<UiSessionState> {
   /// Creates a [UiPlugin] backed by [renderer].
   ///
   /// [renderer] is required — there is no null renderer path at runtime.
@@ -173,7 +173,8 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
   // Handlers
   // ---------------------------------------------------------------------------
 
-  Future<Object?> _handleNotify(Map<String, Object?> args) async {
+  Future<Object?> _handleNotify(
+      Map<String, Object?> args, HostContext _) async {
     try {
       _renderer.notify(
         kind: args.str('kind'),
@@ -186,7 +187,8 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
     return null;
   }
 
-  Future<Object?> _handleShowModal(Map<String, Object?> args) async {
+  Future<Object?> _handleShowModal(
+      Map<String, Object?> args, HostContext _) async {
     final title = args.str('title');
     state = UiModalOpen(title: title);
     try {
@@ -203,7 +205,8 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
     }
   }
 
-  Future<Object?> _handleShowForm(Map<String, Object?> args) async {
+  Future<Object?> _handleShowForm(
+      Map<String, Object?> args, HostContext _) async {
     final schema = args.mapArg('schema');
     state = UiFormOpen(schemaKey: schema.hashCode.toString());
     try {
@@ -216,7 +219,8 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
     }
   }
 
-  Future<Object?> _handleInjectMessage(Map<String, Object?> args) async {
+  Future<Object?> _handleInjectMessage(
+      Map<String, Object?> args, HostContext _) async {
     try {
       _renderer.injectMessage(
         content: args.str('content'),
@@ -228,7 +232,8 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
     return null;
   }
 
-  Future<Object?> _handleRequestConfirm(Map<String, Object?> args) async {
+  Future<Object?> _handleRequestConfirm(
+      Map<String, Object?> args, HostContext _) async {
     // Serialise: if a confirm is already pending, await it first.
     final existing = _pendingConfirm;
     if (existing != null) await existing.catchError((_) => false);

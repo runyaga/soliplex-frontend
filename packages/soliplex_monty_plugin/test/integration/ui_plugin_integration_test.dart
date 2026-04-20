@@ -116,7 +116,7 @@ void main() {
     renderer = _CaptureRenderer();
     env = MontyScriptEnvironment(
       tools: const [],
-      plugins: [UiPlugin(renderer: renderer)],
+      extensions: [UiPlugin(renderer: renderer)],
     );
   });
 

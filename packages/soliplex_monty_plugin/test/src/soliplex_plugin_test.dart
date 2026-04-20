@@ -11,7 +11,7 @@ class MockSoliplexApi extends Mock implements SoliplexApi {}
 
 class MockAgUiStreamClient extends Mock implements AgUiStreamClient {}
 
-class MockAgentSession extends Mock implements dm.AgentSession {}
+class MockAgentSession extends Mock implements dm.MontyRuntime {}
 
 // -- Fixtures ----------------------------------------------------------------
 
@@ -81,7 +81,7 @@ void main() {
     registerFallbackValue(
       HostFunction(
         schema: const HostFunctionSchema(name: '_fallback', description: ''),
-        handler: (_) async => null,
+        handler: (_, __) async => null,
       ),
     );
   });

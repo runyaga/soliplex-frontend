@@ -8,7 +8,7 @@ import 'package:dart_monty/dart_monty_bridge.dart'
         HostFunctionSchema,
         HostParam,
         HostParamType,
-        MontyPlugin;
+        MontyExtension;
 import 'package:meta/meta.dart';
 import 'package:mutex/mutex.dart';
 import 'package:signals_core/signals_core.dart';
@@ -18,7 +18,7 @@ import 'package:soliplex_monty_plugin/src/soliplex_tool.dart';
 
 final Logger _log = LogManager.instance.getLogger('MontyScriptEnvironment');
 
-/// Concrete [ScriptEnvironment] backed by a `dm.AgentSession`.
+/// Concrete [ScriptEnvironment] backed by a `dm.MontyRuntime`.
 ///
 /// Registers each [SoliplexTool] as a `HostFunction` on the dart_monty bridge
 /// and also projects them as [ClientTool]s for the server-side LLM.
@@ -29,12 +29,12 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   /// [executionTimeout] caps each Python execution; defaults to 30 s.
   MontyScriptEnvironment({
     required List<SoliplexTool> tools,
-    List<MontyPlugin> plugins = const [],
+    List<MontyExtension> extensions = const [],
     dm.OsCallHandler? os,
     Duration executionTimeout = const Duration(seconds: 30),
   })  : _tools = List.unmodifiable(tools),
-        _plugins = List.unmodifiable(plugins),
-        _montySession = dm.AgentSession(os: os),
+        _extensions = List.unmodifiable(extensions),
+        _montySession = dm.MontyRuntime(os: os),
         _executionTimeout = executionTimeout {
     _registerTools();
   }
@@ -44,20 +44,20 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   /// Only for testing. Avoids loading the Python runtime.
   @visibleForTesting
   MontyScriptEnvironment.forTest(
-    dm.AgentSession session, {
+    dm.MontyRuntime session, {
     List<SoliplexTool> tools = const [],
-    List<MontyPlugin> plugins = const [],
+    List<MontyExtension> extensions = const [],
     Duration executionTimeout = const Duration(seconds: 2),
   })  : _tools = List.unmodifiable(tools),
-        _plugins = List.unmodifiable(plugins),
+        _extensions = List.unmodifiable(extensions),
         _montySession = session,
         _executionTimeout = executionTimeout {
     _registerTools();
   }
 
   final List<SoliplexTool> _tools;
-  final List<MontyPlugin> _plugins;
-  final dm.AgentSession _montySession;
+  final List<MontyExtension> _extensions;
+  final dm.MontyRuntime _montySession;
 
   final Signal<ScriptingState> _stateSignal = signal(ScriptingState.idle);
   bool _disposed = false;
@@ -81,7 +81,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
       if (_disposed) {
         throw StateError('MontyScriptEnvironment has been disposed');
       }
-      return _montySession.execute(code).timeout(_executionTimeout);
+      return _montySession.execute(code).result.timeout(_executionTimeout);
     });
   }
 
@@ -98,7 +98,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
         if (_disposed) {
           throw StateError('MontyScriptEnvironment has been disposed');
         }
-        return _montySession.execute(code).timeout(_executionTimeout);
+        return _montySession.execute(code).result.timeout(_executionTimeout);
       });
       return _formatResult(result);
     } on TimeoutException {
@@ -121,8 +121,8 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     _stateSignal
       ..set(ScriptingState.disposed)
       ..dispose();
-    for (final plugin in _plugins) {
-      unawaited(plugin.onDispose());
+    for (final ext in _extensions) {
+      unawaited(ext.onDispose());
     }
     unawaited(
       _executeMutex.protect(() async {
@@ -149,14 +149,14 @@ class MontyScriptEnvironment implements ScriptEnvironment {
       _montySession.register(_toHostFunction(tool));
     }
 
-    // Plugins register their host functions directly. PluginRegistry lifecycle
-    // (onRegister, sibling lookups) is not used here — plugins must not call
-    // sibling() or access registry in their handlers.
-    for (final plugin in _plugins) {
-      for (final fn in plugin.functions) {
+    // Extensions register their host functions directly. ExtensionCoordinator
+    // lifecycle (onAttach, sibling lookups) is not used here — extensions must
+    // not call sibling() or access the coordinator in their handlers.
+    for (final ext in _extensions) {
+      for (final fn in ext.functions) {
         if (!registered.add(fn.schema.name)) {
           throw StateError(
-            'Plugin function "${fn.schema.name}" conflicts with an '
+            'Extension function "${fn.schema.name}" conflicts with an '
             'already-registered host function. Rename the function or '
             'remove the conflicting registration.',
           );
@@ -185,7 +185,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
           );
         }).toList(),
       ),
-      handler: tool.handler,
+      handler: (args, _) => tool.handler(args),
     );
   }
 
@@ -211,8 +211,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     return ClientTool(
       definition: const Tool(
         name: 'execute_python',
-        description:
-            'Run a Python snippet in the persistent REPL. Variables, '
+        description: 'Run a Python snippet in the persistent REPL. Variables, '
             'functions, and state from previous calls remain in scope. '
             'Returns print() output and the last-expression value.\n\n'
             'LIMITATIONS (Monty subset of Python):\n'
@@ -247,7 +246,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     if (_disposed) throw StateError('MontyScriptEnvironment has been disposed');
 
     final result = await _executeMutex.protect(
-      () => _montySession.execute('1 + 1').timeout(
+      () => _montySession.execute('1 + 1').result.timeout(
             _executionTimeout,
             onTimeout: () => throw TimeoutException(
               'Python runtime probe timed out after $_executionTimeout',
@@ -288,7 +287,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
         if (_disposed) {
           throw StateError('MontyScriptEnvironment has been disposed');
         }
-        return _montySession.execute(code).timeout(_executionTimeout);
+        return _montySession.execute(code).result.timeout(_executionTimeout);
       });
 
       if (result.error != null) {

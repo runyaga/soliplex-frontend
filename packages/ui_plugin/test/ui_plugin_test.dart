@@ -1,7 +1,11 @@
 import 'dart:async';
 
+import 'package:dart_monty/dart_monty_bridge.dart' show HostContext;
+import 'package:mocktail/mocktail.dart';
 import 'package:test/test.dart';
 import 'package:ui_plugin/ui_plugin.dart';
+
+class _MockHostContext extends Mock implements HostContext {}
 
 // ---------------------------------------------------------------------------
 // FakeUiRenderer
@@ -74,7 +78,7 @@ Future<Object?> _callHandler(
   Map<String, Object?> args,
 ) {
   final fn = plugin.functions.firstWhere((f) => f.schema.name == function);
-  return fn.handler(args);
+  return fn.handler!(args, _MockHostContext());
 }
 
 // ---------------------------------------------------------------------------
