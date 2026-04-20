@@ -174,8 +174,8 @@ packages:
     dependency: transitive
     description:
       path: "."
-      ref: "feat/power-up"
-      resolved-ref: "468cd42b0dcafba9d2e1165ae3f230a4bb760ac2"
+      ref: main
+      resolved-ref: "760319cc5eb5c9f8089e377be01dfe05fdcd889f"
       url: "https://github.com/runyaga/dart_monty.git"
     source: git
     version: "0.20.0"
