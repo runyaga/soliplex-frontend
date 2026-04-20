@@ -167,9 +167,10 @@ class ToolCallMessage extends ChatMessage {
       toolCalls.every(
         (tc) =>
             tc.status == ToolCallStatus.completed ||
-            tc.status == ToolCallStatus.failed,
+            tc.status == ToolCallStatus.failed ||
+            tc.status == ToolCallStatus.denied,
       ),
-      'All tool calls must have terminal status (completed or failed)',
+      'All tool calls must have terminal status (completed, failed, or denied)',
     );
     return ToolCallMessage(
       id: id,
@@ -220,6 +221,45 @@ class GenUiMessage extends ChatMessage {
   String toString() => 'GenUiMessage(id: $id, widget: $widgetName)';
 }
 
+/// A client-injected system info message.
+///
+/// Surfaces ephemeral notifications inline in the chat. Client-only — never
+/// persisted to the server.
+@immutable
+class SystemInfoMessage extends ChatMessage {
+  /// Creates a system info message with all properties.
+  const SystemInfoMessage({
+    required super.id,
+    required super.createdAt,
+    required this.text,
+    this.format = 'markdown',
+  }) : super(user: ChatUser.system);
+
+  /// Creates a system info message with the given ID and auto-generated
+  /// timestamp.
+  factory SystemInfoMessage.create({
+    required String id,
+    required String text,
+    String format = 'markdown',
+  }) {
+    return SystemInfoMessage(
+      id: id,
+      text: text,
+      format: format,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  /// The message text content.
+  final String text;
+
+  /// Content format hint: 'markdown' (default) or 'plain'.
+  final String format;
+
+  @override
+  String toString() => 'SystemInfoMessage(id: $id)';
+}
+
 /// A loading indicator message.
 @immutable
 class LoadingMessage extends ChatMessage {
@@ -246,6 +286,12 @@ enum ToolCallStatus {
 
   /// Tool call is currently executing.
   executing,
+
+  /// Tool call is awaiting human approval before executing.
+  awaitingApproval,
+
+  /// Tool call was denied by the user.
+  denied,
 
   /// Tool call completed successfully.
   completed,

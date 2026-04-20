@@ -410,6 +410,7 @@ void main() {
         return switch (m) {
           TextMessage() => 'text',
           ErrorMessage() => 'error',
+          SystemInfoMessage() => 'systemInfo',
           ToolCallMessage() => 'toolCall',
           GenUiMessage() => 'genUi',
           LoadingMessage() => 'loading',
@@ -600,9 +601,11 @@ void main() {
       expect(ToolCallStatus.values, contains(ToolCallStatus.streaming));
       expect(ToolCallStatus.values, contains(ToolCallStatus.pending));
       expect(ToolCallStatus.values, contains(ToolCallStatus.executing));
+      expect(ToolCallStatus.values, contains(ToolCallStatus.awaitingApproval));
+      expect(ToolCallStatus.values, contains(ToolCallStatus.denied));
       expect(ToolCallStatus.values, contains(ToolCallStatus.completed));
       expect(ToolCallStatus.values, contains(ToolCallStatus.failed));
-      expect(ToolCallStatus.values, hasLength(5));
+      expect(ToolCallStatus.values, hasLength(7));
     });
   });
 }

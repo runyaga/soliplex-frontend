@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:soliplex_monty_plugin/soliplex_monty_plugin.dart'
+    show NotifyEvent;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +21,7 @@ import '../room_state.dart';
 import '../run_registry.dart';
 import '../thread_list_state.dart';
 import '../thread_view_state.dart';
+import 'package:ui_plugin/ui_plugin.dart';
 import '../compute_display_messages.dart';
 import 'chat_input.dart';
 import 'chunk_visualization_page.dart';
@@ -54,6 +57,10 @@ class RoomScreen extends StatefulWidget {
     required this.registry,
     this.enableDocumentFilter = false,
     required this.documentSelections,
+    this.injectedMessages,
+    this.onRoomChanged,
+    this.debugPanel,
+    this.notifyStream,
   });
 
   final ServerEntry serverEntry;
@@ -63,6 +70,22 @@ class RoomScreen extends StatefulWidget {
   final RunRegistry registry;
   final bool enableDocumentFilter;
   final DocumentSelections documentSelections;
+  final Stream<NotifyEvent>? notifyStream;
+
+  /// Returns the reactive message list for the given room key.
+  ///
+  /// Called with `'$serverId:$roomId'` to retrieve messages scoped to this
+  /// room. Only messages injected into this room via [UiPlugin.ui_inject_message]
+  /// are shown — other rooms' messages are not visible here.
+  final ReadonlySignal<List<InjectedMessage>> Function(String roomKey)?
+      injectedMessages;
+
+  /// Called when the room changes so injected messages can be cleared.
+  final VoidCallback? onRoomChanged;
+
+  /// Optional debug panel mounted as a collapsible overlay. Only shown when
+  /// non-null (flavors gate this on [kDebugMode]).
+  final Widget? debugPanel;
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
@@ -71,9 +94,11 @@ class RoomScreen extends StatefulWidget {
 class _RoomScreenState extends State<RoomScreen> {
   late RoomState _state;
   void Function()? _autoSelectUnsub;
+  StreamSubscription<NotifyEvent>? _notifySub;
   final _chatController = TextEditingController();
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
+  bool _debugExpanded = false;
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -123,6 +148,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKey);
+    _notifySub = widget.notifyStream?.listen(_onNotify);
     _state = _createRoomState();
     if (widget.threadId != null) {
       _state.selectThread(widget.threadId!);
@@ -140,6 +166,7 @@ class _RoomScreenState extends State<RoomScreen> {
       _state.dispose();
       _chatController.clear();
       _state = _createRoomState();
+      widget.onRoomChanged?.call();
       if (widget.threadId != null) {
         _state.selectThread(widget.threadId!);
       } else {
@@ -204,11 +231,39 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void dispose() {
     _cancelAutoSelect();
+    _notifySub?.cancel();
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _state.dispose();
     _chatController.dispose();
     _chatFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onNotify(NotifyEvent event) {
+    if (!mounted) return;
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (event.kind) {
+      'error' => colorScheme.error,
+      'success' => colorScheme.primary,
+      _ => null,
+    };
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              event.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (event.body.isNotEmpty) Text(event.body),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   bool _handleKey(KeyEvent event) {
@@ -221,7 +276,9 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _onBackToLobby() => context.go('/lobby');
 
-  void _onNetworkInspector() => context.push('/diagnostics/network');
+  void _onDebugConsole() => context.push(
+        '/room/${widget.serverEntry.alias}/${widget.roomId}/debug',
+      );
 
   void _onRoomInfo() {
     context.push('/room/${widget.serverEntry.alias}/${widget.roomId}/info');
@@ -323,7 +380,7 @@ class _RoomScreenState extends State<RoomScreen> {
             onThreadSelected: _onThreadSelected,
             onBackToLobby: _onBackToLobby,
             onCreateThread: _state.createThread,
-            onNetworkInspector: _onNetworkInspector,
+            onDebugConsole: _onDebugConsole,
             onRoomInfo: _onRoomInfo,
             roomName: roomName,
             onRetryThreads: () => _state.threadList.refresh(),
@@ -371,9 +428,9 @@ class _RoomScreenState extends State<RoomScreen> {
                       Navigator.pop(drawerContext);
                       _state.createThread();
                     },
-                    onNetworkInspector: () {
+                    onDebugConsole: () {
                       Navigator.pop(drawerContext);
-                      _onNetworkInspector();
+                      _onDebugConsole();
                     },
                     onRoomInfo: () {
                       Navigator.pop(drawerContext);
@@ -426,7 +483,7 @@ class _RoomScreenState extends State<RoomScreen> {
             .watch(context)
         : <UploadEntry>[];
 
-    return Column(
+    final body = Column(
       children: [
         _buildRoomHeader(
           room,
@@ -440,6 +497,21 @@ class _RoomScreenState extends State<RoomScreen> {
               ? _buildNoThreadBody(room)
               : _buildThreadBody(threadView, room),
         ),
+      ],
+    );
+
+    if (widget.debugPanel == null) return body;
+
+    return Stack(
+      children: [
+        body,
+        if (_debugExpanded)
+          Positioned(
+            right: 8,
+            bottom: 8,
+            width: 320,
+            child: widget.debugPanel!,
+          ),
       ],
     );
   }
@@ -516,6 +588,27 @@ class _RoomScreenState extends State<RoomScreen> {
                         : theme.colorScheme.primary,
                   ),
                 ],
+              ),
+            ),
+          if (widget.debugPanel != null)
+            IconButton(
+              icon: Icon(
+                _debugExpanded ? Icons.terminal : Icons.terminal_outlined,
+                size: 20,
+              ),
+              tooltip: 'Toggle debug panel',
+              onPressed: () => setState(() => _debugExpanded = !_debugExpanded),
+            ),
+          if (widget.notifyStream != null)
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, size: 20),
+              tooltip: 'Test notify_show',
+              onPressed: () => _onNotify(
+                const NotifyEvent(
+                  kind: 'success',
+                  title: 'notify_show works',
+                  body: 'Python can call this tool to show SnackBars.',
+                ),
               ),
             ),
           if (attachEnabled && room != null)
@@ -691,6 +784,15 @@ class _RoomScreenState extends State<RoomScreen> {
     final status = threadView.messages.watch(context);
     final streaming = threadView.streamingState.watch(context);
     final sendError = threadView.lastSendError.watch(context);
+    // Key at thread level when a thread is selected, room level otherwise.
+    // Python injects at room level (env is per room), so room-level messages
+    // appear in all threads; thread-level messages appear only in that thread.
+    final tid = widget.threadId;
+    final scopeKey = tid != null
+        ? '${widget.serverEntry.serverId}:${widget.roomId}:$tid'
+        : '${widget.serverEntry.serverId}:${widget.roomId}';
+    final injected =
+        widget.injectedMessages?.call(scopeKey).watch(context) ?? const [];
     final attachEnabled = room?.enableAttachments ?? false;
 
     _restoreUnsentText(sendError?.unsentText);
@@ -708,7 +810,8 @@ class _RoomScreenState extends State<RoomScreen> {
                 onRetry: threadView.refresh,
               ),
             MessagesLoaded(:final messages, :final messageStates) =>
-              computeDisplayMessages(messages, streaming).isEmpty
+              computeDisplayMessages(messages, streaming, injected: injected)
+                      .isEmpty
                   ? RoomWelcome(
                       room: room,
                       onSuggestionTapped: (suggestion) =>
@@ -725,6 +828,7 @@ class _RoomScreenState extends State<RoomScreen> {
                       messages: messages,
                       messageStates: messageStates,
                       streamingState: streaming,
+                      injected: injected,
                       executionTrackers: threadView.executionTrackers,
                       onFeedbackSubmit: threadView.submitFeedback,
                       onInspect: (runId) {
@@ -766,6 +870,7 @@ class _RoomScreenState extends State<RoomScreen> {
           ),
           onCancel: threadView.cancelRun,
           sessionState: threadView.sessionState,
+          scriptingState: threadView.scriptingState,
           controller: _chatController,
           focusNode: _chatFocusNode,
           enabled: status is MessagesLoaded,

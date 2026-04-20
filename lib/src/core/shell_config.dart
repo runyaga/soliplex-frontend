@@ -26,6 +26,13 @@ class ShellConfig {
   final Listenable? refreshListenable;
   final VoidCallback? onDispose;
 
+  /// Optional navigator key forwarded to [MaterialApp.router].
+  ///
+  /// Provide this when a non-routing UI component (e.g. [RoomUiDelegate])
+  /// needs to push dialogs without a [BuildContext].
+  final GlobalKey<NavigatorState>? navigatorKey;
+  final GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey;
+
   ShellConfig({
     required this.appName,
     this.logo,
@@ -34,6 +41,8 @@ class ShellConfig {
     List<ModuleContribution> modules = const [],
     this.refreshListenable,
     this.onDispose,
+    this.navigatorKey,
+    this.scaffoldMessengerKey,
   }) : modules = List.unmodifiable(modules);
 
   List<RouteBase> get routes => modules.expand((m) => m.routes).toList();

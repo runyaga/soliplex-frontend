@@ -1,5 +1,6 @@
 import 'package:soliplex_agent/soliplex_agent.dart';
 
+import 'execution_activity.dart';
 import 'execution_step.dart';
 
 class ExecutionTracker {
@@ -19,17 +20,38 @@ class ExecutionTracker {
       Signal<List<ExecutionStep>>(const []);
   ReadonlySignal<List<ExecutionStep>> get steps => _steps;
 
-  final Signal<List<String>> _thinkingBlocks = Signal<List<String>>(const []);
-  ReadonlySignal<List<String>> get thinkingBlocks => _thinkingBlocks;
+  final Signal<List<ActivityEntry>> _activities =
+      Signal<List<ActivityEntry>>(const []);
+  ReadonlySignal<List<ActivityEntry>> get activities => _activities;
 
-  final Signal<bool> _isThinkingStreaming = Signal<bool>(false);
-  ReadonlySignal<bool> get isThinkingStreaming => _isThinkingStreaming;
+  final Signal<Map<String, dynamic>> _aguiState =
+      Signal<Map<String, dynamic>>(const {});
+  ReadonlySignal<Map<String, dynamic>> get aguiState => _aguiState;
+
+  final Map<String, ToolCallInfo> _toolCallsById = {};
+  final Signal<List<ToolCallInfo>> _toolCalls =
+      Signal<List<ToolCallInfo>>(const []);
+  ReadonlySignal<List<ToolCallInfo>> get toolCalls => _toolCalls;
+
+  final Signal<String?> _awaitingApprovalFor = Signal<String?>(null);
+
+  /// The tool call ID currently awaiting human approval, or null if none.
+  ReadonlySignal<String?> get awaitingApprovalFor => _awaitingApprovalFor;
+
+  void _flushToolCalls() {
+    _toolCalls.value = _toolCallsById.values.toList();
+  }
 
   void freeze() {
     _unsub?.call();
     _unsub = null;
     _stopwatch.stop();
     _isFrozen = true;
+    _awaitingApprovalFor.dispose();
+    _steps.dispose();
+    _activities.dispose();
+    _aguiState.dispose();
+    _toolCalls.dispose();
   }
 
   void _onEvent(ExecutionEvent? event) {
@@ -38,53 +60,111 @@ class ExecutionTracker {
     switch (event) {
       case ThinkingStarted():
         _completeActiveStep();
-        _addStep('Thinking', StepType.thinking);
-        _thinkingBlocks.value = [..._thinkingBlocks.value, ''];
-        _isThinkingStreaming.value = true;
-      case ThinkingContent(:final delta):
-        final blocks = _thinkingBlocks.value;
-        if (blocks.isNotEmpty) {
-          _thinkingBlocks.value = [
-            ...blocks.sublist(0, blocks.length - 1),
-            blocks.last + delta,
+      case ThinkingContent():
+        break;
+      case ServerToolCallStarted(:final toolName, :final toolCallId):
+        _completeActiveStep();
+        _addStep(toolName, toolCallId: toolCallId);
+        _toolCallsById[toolCallId] =
+            ToolCallInfo(id: toolCallId, name: toolName);
+        _flushToolCalls();
+      case ServerToolCallCompleted(:final toolCallId, :final result):
+        _completeActiveStep();
+        final existing = _toolCallsById[toolCallId];
+        if (existing != null) {
+          _toolCallsById[toolCallId] = existing.copyWith(
+            status: ToolCallStatus.completed,
+            result: result,
+          );
+          _flushToolCalls();
+        }
+        if (_awaitingApprovalFor.value == toolCallId) {
+          _awaitingApprovalFor.value = null;
+        }
+      case ServerToolCallArgsUpdated(:final toolCallId, :final argsDelta):
+        final steps = _steps.value;
+        final idx = steps.lastIndexWhere((s) => s.toolCallId == toolCallId);
+        if (idx != -1) {
+          final step = steps[idx];
+          _steps.value = [
+            ...steps.sublist(0, idx),
+            step.copyWith(args: (step.args ?? '') + argsDelta),
+            ...steps.sublist(idx + 1),
           ];
         }
-      case ServerToolCallStarted(:final toolName):
+        final existing = _toolCallsById[toolCallId];
+        if (existing != null) {
+          _toolCallsById[toolCallId] = existing.copyWith(
+            arguments: existing.arguments + argsDelta,
+          );
+          _flushToolCalls();
+        }
+      case ClientToolExecuting(:final toolName, :final toolCallId):
         _completeActiveStep();
-        _isThinkingStreaming.value = false;
-        _addStep(toolName, StepType.toolCall);
-      case ServerToolCallCompleted():
+        _addStep(toolName);
+        _toolCallsById[toolCallId] =
+            ToolCallInfo(id: toolCallId, name: toolName);
+        _flushToolCalls();
+      case ClientToolCompleted(:final toolCallId, :final result, :final status):
         _completeActiveStep();
-      case ClientToolExecuting(:final toolName):
-        _completeActiveStep();
-        _isThinkingStreaming.value = false;
-        _addStep(toolName, StepType.toolCall);
-      case ClientToolCompleted():
-        _completeActiveStep();
+        final existing = _toolCallsById[toolCallId];
+        if (existing != null) {
+          _toolCallsById[toolCallId] = existing.copyWith(
+            status: status,
+            result: result,
+          );
+          _flushToolCalls();
+        }
+        if (_awaitingApprovalFor.value == toolCallId) {
+          _awaitingApprovalFor.value = null;
+        }
+      case AwaitingApproval(:final toolCallId, :final toolName):
+        _awaitingApprovalFor.value = toolCallId;
+        final existing = _toolCallsById[toolCallId];
+        if (existing != null) {
+          _toolCallsById[toolCallId] = existing.copyWith(
+            status: ToolCallStatus.awaitingApproval,
+          );
+          _flushToolCalls();
+        } else {
+          // Tool not tracked yet — add it
+          _toolCallsById[toolCallId] = ToolCallInfo(
+            id: toolCallId,
+            name: toolName,
+            status: ToolCallStatus.awaitingApproval,
+          );
+          _flushToolCalls();
+        }
       case RunCompleted():
+        _awaitingApprovalFor.value = null;
         _completeAllSteps(StepStatus.completed);
-        _isThinkingStreaming.value = false;
       case RunFailed() || RunCancelled():
+        _awaitingApprovalFor.value = null;
         _completeAllSteps(StepStatus.failed);
-        _isThinkingStreaming.value = false;
-      case TextDelta() ||
-            StateUpdated() ||
-            StepProgress() ||
-            AwaitingApproval() ||
-            ActivitySnapshot() ||
-            CustomExecutionEvent():
+      case ActivitySnapshot(:final activityType, :final content):
+        _activities.value = [
+          ..._activities.value,
+          ActivityEntry(
+            activityType: activityType,
+            content: content,
+            timestamp: _stopwatch.elapsed,
+          ),
+        ];
+      case StateUpdated(:final aguiState):
+        _aguiState.value = aguiState;
+      case TextDelta() || StepProgress() || CustomExecutionEvent():
         break;
     }
   }
 
-  void _addStep(String label, StepType type) {
+  void _addStep(String label, {String? toolCallId}) {
     _steps.value = [
       ..._steps.value,
       ExecutionStep(
         label: label,
-        type: type,
         status: StepStatus.active,
         timestamp: _stopwatch.elapsed,
+        toolCallId: toolCallId,
       ),
     ];
   }
@@ -118,5 +198,10 @@ class ExecutionTracker {
     _unsub?.call();
     _unsub = null;
     _stopwatch.stop();
+    _awaitingApprovalFor.dispose();
+    _steps.dispose();
+    _activities.dispose();
+    _aguiState.dispose();
+    _toolCalls.dispose();
   }
 }
