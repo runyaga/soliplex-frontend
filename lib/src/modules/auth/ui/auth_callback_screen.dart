@@ -96,9 +96,7 @@ class _AuthCallbackScreenState extends ConsumerState<AuthCallbackScreen> {
   @override
   Widget build(BuildContext context) {
     if (_processing && _error == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(

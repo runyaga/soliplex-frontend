@@ -258,15 +258,18 @@ void main() {
 
     test('attribute value safety: non-primitive coerced to string', () async {
       final sink = createSink()
-        ..write(makeRecord(attributes: const {'count': 42, 'label': 'test'}));
+        ..write(
+          makeRecord(attributes: const {'count': 42, 'label': 'test'}),
+        );
       await sink.flush();
       await sink.close();
 
       final body =
           jsonDecode(capturedRequests.first.body) as Map<String, Object?>;
       final logs = body['logs']! as List;
-      final attrs = (logs[0] as Map<String, Object?>)['attributes']!
-          as Map<String, Object?>;
+      final attrs =
+          (logs[0] as Map<String, Object?>)['attributes']!
+              as Map<String, Object?>;
       expect(attrs['count'], 42);
       expect(attrs['label'], 'test');
     });
@@ -427,8 +430,9 @@ void main() {
       final body =
           jsonDecode(capturedRequests.first.body) as Map<String, Object?>;
       final logs = body['logs']! as List;
-      final attrs = (logs[0] as Map<String, Object?>)['attributes']!
-          as Map<String, Object?>;
+      final attrs =
+          (logs[0] as Map<String, Object?>)['attributes']!
+              as Map<String, Object?>;
       expect(attrs['tags'], ['a', 'b']);
       expect(attrs['meta'], {'nested': true});
     });
@@ -533,19 +537,20 @@ void main() {
     test('oversized record in middle of batch is skipped', () async {
       String? errorMessage;
       // Small batch limit so the big record exceeds it but small ones fit.
-      final sink = BackendLogSink(
-        endpoint: 'https://api.example.com/logs',
-        client: mockClient,
-        installId: 'i',
-        sessionId: 's',
-        diskQueue: diskQueue,
-        maxBatchBytes: 1024,
-        flushInterval: const Duration(hours: 1),
-        onError: (msg, _) => errorMessage = msg,
-      )
-        ..write(makeRecord(message: 'small-1'))
-        ..write(makeRecord(message: 'x' * 2000)) // oversized
-        ..write(makeRecord(message: 'small-2'));
+      final sink =
+          BackendLogSink(
+              endpoint: 'https://api.example.com/logs',
+              client: mockClient,
+              installId: 'i',
+              sessionId: 's',
+              diskQueue: diskQueue,
+              maxBatchBytes: 1024,
+              flushInterval: const Duration(hours: 1),
+              onError: (msg, _) => errorMessage = msg,
+            )
+            ..write(makeRecord(message: 'small-1'))
+            ..write(makeRecord(message: 'x' * 2000)) // oversized
+            ..write(makeRecord(message: 'small-2'));
       await sink.flush();
 
       // The oversized record should be dropped with an error.
@@ -556,8 +561,9 @@ void main() {
       final body =
           jsonDecode(capturedRequests.first.body) as Map<String, Object?>;
       final logs = body['logs']! as List;
-      final messages =
-          logs.map((l) => (l as Map<String, Object?>)['message']).toList();
+      final messages = logs
+          .map((l) => (l as Map<String, Object?>)['message'])
+          .toList();
       expect(messages, contains('small-1'));
       expect(messages, contains('small-2'));
       await sink.close();
@@ -848,7 +854,10 @@ void main() {
           .encode(
             jsonEncode({
               'logs': <Object>[],
-              'resource': {'service.name': 'test', 'service.version': '1.0.0'},
+              'resource': {
+                'service.name': 'test',
+                'service.version': '1.0.0',
+              },
             }),
           )
           .length;
@@ -874,22 +883,23 @@ void main() {
       // envelope + record + record == limit
       final limit = envelope + recordBytes * 2;
 
-      final sink = BackendLogSink(
-        endpoint: 'https://api.example.com/logs',
-        client: mockClient,
-        installId: 'install-001',
-        sessionId: 'session-001',
-        diskQueue: diskQueue2,
-        userId: 'user-001',
-        resourceAttributes: const {
-          'service.name': 'test',
-          'service.version': '1.0.0',
-        },
-        maxBatchBytes: limit,
-        flushInterval: const Duration(hours: 1),
-      )
-        ..write(makeRecord(message: 'msg'))
-        ..write(makeRecord(message: 'msg'));
+      final sink =
+          BackendLogSink(
+              endpoint: 'https://api.example.com/logs',
+              client: mockClient,
+              installId: 'install-001',
+              sessionId: 'session-001',
+              diskQueue: diskQueue2,
+              userId: 'user-001',
+              resourceAttributes: const {
+                'service.name': 'test',
+                'service.version': '1.0.0',
+              },
+              maxBatchBytes: limit,
+              flushInterval: const Duration(hours: 1),
+            )
+            ..write(makeRecord(message: 'msg'))
+            ..write(makeRecord(message: 'msg'));
       await sink.flush();
 
       final body =

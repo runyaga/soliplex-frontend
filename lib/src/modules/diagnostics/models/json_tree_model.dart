@@ -41,8 +41,9 @@ JsonNode _buildNode(String key, dynamic value) {
   if (value is Map) {
     return ObjectNode(
       key: key,
-      children:
-          value.entries.map((e) => _buildNode('${e.key}', e.value)).toList(),
+      children: value.entries
+          .map((e) => _buildNode('${e.key}', e.value))
+          .toList(),
     );
   }
   if (value is List) {

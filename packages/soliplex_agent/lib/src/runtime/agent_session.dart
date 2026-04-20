@@ -44,14 +44,15 @@ class AgentSession implements ToolExecutionContext {
     required Logger logger,
     List<SessionExtension> extensions = const [],
     AgentUiDelegate? uiDelegate,
-  })  : _runtime = runtime,
-        _orchestrator = orchestrator,
-        _toolRegistry = toolRegistry,
-        _extensions = extensions,
-        _uiDelegate = uiDelegate,
-        _logger = logger,
-        id = '${threadKey.threadId}-'
-            '${DateTime.now().microsecondsSinceEpoch}';
+  }) : _runtime = runtime,
+       _orchestrator = orchestrator,
+       _toolRegistry = toolRegistry,
+       _extensions = extensions,
+       _uiDelegate = uiDelegate,
+       _logger = logger,
+       id =
+           '${threadKey.threadId}-'
+           '${DateTime.now().microsecondsSinceEpoch}';
 
   /// Unique session identifier.
   final String id;
@@ -354,8 +355,9 @@ class AgentSession implements ToolExecutionContext {
       ClientToolExecuting(toolName: toolCall.name, toolCallId: toolCall.id),
     );
     try {
-      final result =
-          await _toolRegistry.execute(toolCall, this).timeout(_toolTimeout);
+      final result = await _toolRegistry
+          .execute(toolCall, this)
+          .timeout(_toolTimeout);
       emitEvent(
         ClientToolCompleted(
           toolCallId: toolCall.id,
@@ -482,11 +484,9 @@ ExecutionEvent? bridgeBaseEvent(BaseEvent event) {
   return switch (event) {
     TextMessageContentEvent(:final delta) => TextDelta(delta: delta),
     ThinkingTextMessageStartEvent() ||
-    ReasoningMessageStartEvent() =>
-      const ThinkingStarted(),
+    ReasoningMessageStartEvent() => const ThinkingStarted(),
     ThinkingTextMessageContentEvent(:final delta) ||
-    ReasoningMessageContentEvent(:final delta) =>
-      ThinkingContent(delta: delta),
+    ReasoningMessageContentEvent(:final delta) => ThinkingContent(delta: delta),
     ToolCallStartEvent(:final toolCallId, :final toolCallName) =>
       ServerToolCallStarted(toolCallId: toolCallId, toolName: toolCallName),
     ToolCallResultEvent(:final toolCallId, :final content) =>
@@ -520,7 +520,6 @@ ExecutionEvent? bridgeBaseEvent(BaseEvent event) {
     ReasoningMessageEndEvent() ||
     ReasoningMessageChunkEvent() ||
     ReasoningEncryptedValueEvent() ||
-    ActivityDeltaEvent() =>
-      null,
+    ActivityDeltaEvent() => null,
   };
 }

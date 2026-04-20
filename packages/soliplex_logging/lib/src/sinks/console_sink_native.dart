@@ -11,8 +11,9 @@ import 'package:soliplex_logging/src/sinks/log_format.dart';
 void writeToConsole(LogRecord record) {
   // Only pass stackTrace if non-empty to avoid "Stack:" with no content.
   final stackStr = record.stackTrace?.toString();
-  final stackTrace =
-      (stackStr != null && stackStr.isNotEmpty) ? record.stackTrace : null;
+  final stackTrace = (stackStr != null && stackStr.isNotEmpty)
+      ? record.stackTrace
+      : null;
 
   developer.log(
     formatLogMessage(record),

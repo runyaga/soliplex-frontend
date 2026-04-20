@@ -225,16 +225,15 @@ void main() {
 
       test('skips SSE messages with empty data', () async {
         // Build a stream with one empty-data message and one real event.
+        final runStarted = json.encode({
+          'type': 'RUN_STARTED',
+          'threadId': 't-1',
+          'runId': 'r-1',
+        });
         final sseBody = StringBuffer()
           ..writeln('data: ')
           ..writeln()
-          ..writeln(
-            'data: ${json.encode({
-                  'type': 'RUN_STARTED',
-                  'threadId': 't-1',
-                  'runId': 'r-1',
-                })}',
-          )
+          ..writeln('data: $runStarted')
           ..writeln();
 
         when(
@@ -363,16 +362,15 @@ void main() {
       });
 
       test('skips malformed JSON and continues streaming', () async {
+        final runStarted = json.encode({
+          'type': 'RUN_STARTED',
+          'threadId': 't-1',
+          'runId': 'r-1',
+        });
         final sseBody = StringBuffer()
           ..writeln('data: not valid json at all')
           ..writeln()
-          ..writeln(
-            'data: ${json.encode({
-                  'type': 'RUN_STARTED',
-                  'threadId': 't-1',
-                  'runId': 'r-1',
-                })}',
-          )
+          ..writeln('data: $runStarted')
           ..writeln();
 
         when(
@@ -426,8 +424,9 @@ void main() {
           ),
         );
 
-        final result =
-            await clientWithWarning.runAgent(endpoint, input).toList();
+        final result = await clientWithWarning
+            .runAgent(endpoint, input)
+            .toList();
 
         expect(result, hasLength(2));
         expect(warnings, hasLength(1));

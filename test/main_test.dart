@@ -12,7 +12,7 @@ void main() {
       modules: [
         ModuleContribution(
           routes: [
-            GoRoute(path: '/', builder: (_, __) => const Text('Soliplex')),
+            GoRoute(path: '/', builder: (_, _) => const Text('Soliplex')),
           ],
         ),
       ],

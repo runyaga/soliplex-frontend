@@ -9,11 +9,14 @@ void _logFromJsonDiagnostic(
   Object error,
   StackTrace stackTrace,
 ) {
-  final nullKeys =
-      json.entries.where((e) => e.value == null).map((e) => e.key).toList();
+  final nullKeys = json.entries
+      .where((e) => e.value == null)
+      .map((e) => e.key)
+      .toList();
   final presentKeys = json.keys.toList();
 
-  final message = '$className.fromJson failed ($error). '
+  final message =
+      '$className.fromJson failed ($error). '
       'Null keys: $nullKeys. Present keys: $presentKeys.';
 
   developer.log(
@@ -112,8 +115,9 @@ class CitationExtractor {
       );
     }
     // Treat non-Map previous as empty; citations may be re-extracted.
-    final previousData =
-        rawPrevious is Map<String, dynamic> ? rawPrevious : null;
+    final previousData = rawPrevious is Map<String, dynamic>
+        ? rawPrevious
+        : null;
 
     final previousLength = _getQaHistoryLength(previousData);
     final currentLength = _getQaHistoryLength(currentData);

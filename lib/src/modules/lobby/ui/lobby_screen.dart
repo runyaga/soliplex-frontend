@@ -265,30 +265,27 @@ class _ServerSection extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            heading,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          child: Text(heading, style: Theme.of(context).textTheme.titleMedium),
         ),
         switch (serverRooms) {
           RoomsLoading() => const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: LinearProgressIndicator(),
-            ),
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: LinearProgressIndicator(),
+          ),
           RoomsFailed(:final error) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text('Failed to load rooms: $error'),
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text('Failed to load rooms: $error'),
+          ),
           RoomsLoaded(:final rooms) => Column(
-              children: [
-                for (final room in rooms)
-                  RoomCard(
-                    room: room,
-                    onTap: () => onRoomTap(serverId, room.id),
-                    onInfoTap: () => onInfoTap(serverId, room.id),
-                  ),
-              ],
-            ),
+            children: [
+              for (final room in rooms)
+                RoomCard(
+                  room: room,
+                  onTap: () => onRoomTap(serverId, room.id),
+                  onInfoTap: () => onInfoTap(serverId, room.id),
+                ),
+            ],
+          ),
         },
       ],
     );

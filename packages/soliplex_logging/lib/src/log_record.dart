@@ -69,8 +69,9 @@ class LogRecord {
       timestamp: timestamp ?? this.timestamp,
       loggerName: loggerName ?? this.loggerName,
       error: error == _sentinel ? this.error : error,
-      stackTrace:
-          stackTrace == _sentinel ? this.stackTrace : stackTrace as StackTrace?,
+      stackTrace: stackTrace == _sentinel
+          ? this.stackTrace
+          : stackTrace as StackTrace?,
       spanId: spanId == _sentinel ? this.spanId : spanId as String?,
       traceId: traceId == _sentinel ? this.traceId : traceId as String?,
       attributes: attributes ?? this.attributes,

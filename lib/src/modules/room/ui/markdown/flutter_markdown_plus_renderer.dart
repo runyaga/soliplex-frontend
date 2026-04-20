@@ -36,9 +36,7 @@ class FlutterMarkdownPlusRenderer extends MarkdownRenderer {
     return MarkdownBody(
       data: sanitizeMarkdown(data),
       selectable: true,
-      styleSheet: markdownTheme?.toMarkdownStyleSheet(
-        codeFontStyle: monoStyle,
-      ),
+      styleSheet: markdownTheme?.toMarkdownStyleSheet(codeFontStyle: monoStyle),
       blockSyntaxes: [LatexBlockSyntax()],
       inlineSyntaxes: [LatexInlineSyntax()],
       onTapLink: onLinkTap == null

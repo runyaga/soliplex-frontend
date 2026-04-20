@@ -32,7 +32,8 @@ MultipartEncoded encodeMultipart({
       .replaceAll('\r', ' ')
       .replaceAll('\n', ' ');
 
-  final preamble = '--$boundary\r\n'
+  final preamble =
+      '--$boundary\r\n'
       'Content-Disposition: form-data; '
       'name="$fieldName"; '
       'filename="$escapedFilename"\r\n'
@@ -55,7 +56,9 @@ MultipartEncoded encodeMultipart({
 String _generateBoundary() {
   final random = Random();
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  final suffix =
-      List.generate(16, (_) => chars[random.nextInt(chars.length)]).join();
+  final suffix = List.generate(
+    16,
+    (_) => chars[random.nextInt(chars.length)],
+  ).join();
   return 'dart-multipart-$suffix';
 }

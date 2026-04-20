@@ -103,8 +103,8 @@ class _OptionTile extends StatelessWidget {
                   color: isDisabled
                       ? colorScheme.onSurface.withValues(alpha: 0.38)
                       : isSelected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
+                      ? colorScheme.primary
+                      : colorScheme.onSurfaceVariant,
                 ),
                 Expanded(child: Text(option)),
                 if (isCorrect)

@@ -55,13 +55,13 @@ ModuleContribution authModule({
       ),
       GoRoute(
         path: '/servers',
-        pageBuilder: (_, __) => NoTransitionPage(
+        pageBuilder: (_, _) => NoTransitionPage(
           child: ServerListScreen(serverManager: serverManager),
         ),
       ),
       GoRoute(
         path: '/auth/callback',
-        pageBuilder: (_, __) => NoTransitionPage(
+        pageBuilder: (_, _) => NoTransitionPage(
           child: AuthCallbackScreen(serverManager: serverManager),
         ),
       ),

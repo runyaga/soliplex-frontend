@@ -113,8 +113,9 @@ class _RoomScreenState extends State<RoomScreen> {
     final selected = _selectedDocuments;
     return {
       'rag': <String, dynamic>{
-        'document_filter':
-            selected.isEmpty ? null : buildDocumentFilter(selected.toList()),
+        'document_filter': selected.isEmpty
+            ? null
+            : buildDocumentFilter(selected.toList()),
       },
     };
   }
@@ -178,12 +179,12 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   RoomState _createRoomState() => RoomState(
-        connection: widget.serverEntry.connection,
-        roomId: widget.roomId,
-        runtimeManager: widget.runtimeManager,
-        registry: widget.registry,
-        onNavigateToThread: (id) => _navigateToThread(id),
-      );
+    connection: widget.serverEntry.connection,
+    roomId: widget.roomId,
+    runtimeManager: widget.runtimeManager,
+    registry: widget.registry,
+    onNavigateToThread: (id) => _navigateToThread(id),
+  );
 
   void _navigateToThread(String? threadId, {bool replace = false}) {
     if (!mounted) return;
@@ -407,8 +408,9 @@ class _RoomScreenState extends State<RoomScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _chatController.text = unsentText;
-      _chatController.selection =
-          TextSelection.collapsed(offset: _chatController.text.length);
+      _chatController.selection = TextSelection.collapsed(
+        offset: _chatController.text.length,
+      );
     });
   }
 
@@ -422,18 +424,13 @@ class _RoomScreenState extends State<RoomScreen> {
     final threadId = threadView?.threadId;
     final threadEntries = attachEnabled && threadId != null
         ? _state.uploadTracker
-            .threadUploads(widget.roomId, threadId)
-            .watch(context)
+              .threadUploads(widget.roomId, threadId)
+              .watch(context)
         : <UploadEntry>[];
 
     return Column(
       children: [
-        _buildRoomHeader(
-          room,
-          attachEnabled,
-          roomEntries,
-          threadEntries,
-        ),
+        _buildRoomHeader(room, attachEnabled, roomEntries, threadEntries),
         if (_filesExpanded) _buildFilePanel(roomEntries, threadEntries),
         Expanded(
           child: threadView == null
@@ -498,10 +495,7 @@ class _RoomScreenState extends State<RoomScreen> {
                     ),
                   const SizedBox(width: 4),
                   Text(
-                    _chipLabel(
-                      roomEntries.length,
-                      threadEntries.length,
-                    ),
+                    _chipLabel(roomEntries.length, threadEntries.length),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: anyFailed
                           ? theme.colorScheme.error
@@ -581,9 +575,9 @@ class _RoomScreenState extends State<RoomScreen> {
     final (icon, color) = switch (entry.status) {
       UploadUploading() => (null, theme.colorScheme.primary),
       UploadSuccess() => (
-          Icons.check_circle_outline,
-          theme.colorScheme.primary
-        ),
+        Icons.check_circle_outline,
+        theme.colorScheme.primary,
+      ),
       UploadError() => (Icons.error_outline, theme.colorScheme.error),
     };
 
@@ -597,10 +591,7 @@ class _RoomScreenState extends State<RoomScreen> {
             SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: color,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -651,23 +642,18 @@ class _RoomScreenState extends State<RoomScreen> {
             onSuggestionTapped: sessionState != null
                 ? null
                 : (suggestion) => _state.sendToNewThread(
-                      suggestion,
-                      stateOverlay: _buildStateOverlay(),
-                    ),
+                    suggestion,
+                    stateOverlay: _buildStateOverlay(),
+                  ),
             onQuizTapped: _onQuizTapped,
             fallback: const Center(child: Text('Select a thread')),
           ),
         ),
         if (roomError != null)
-          _SendErrorBanner(
-            error: roomError,
-            onDismiss: _state.clearError,
-          ),
+          _SendErrorBanner(error: roomError, onDismiss: _state.clearError),
         ChatInput(
-          onSend: (text) => _state.sendToNewThread(
-            text,
-            stateOverlay: _buildStateOverlay(),
-          ),
+          onSend: (text) =>
+              _state.sendToNewThread(text, stateOverlay: _buildStateOverlay()),
           onCancel: _state.cancelSpawn,
           sessionState: _state.sessionState,
           controller: _chatController,
@@ -675,9 +661,8 @@ class _RoomScreenState extends State<RoomScreen> {
           selectedDocuments: _selectedDocuments,
           onFilterTap: _filterEnabled ? _openDocumentPicker : null,
           onDocumentRemoved: _filterEnabled
-              ? (doc) => _updateSelection(
-                    Set.of(_selectedDocuments)..remove(doc),
-                  )
+              ? (doc) =>
+                    _updateSelection(Set.of(_selectedDocuments)..remove(doc))
               : null,
           onAttachFile: (room?.enableAttachments ?? false) && room != null
               ? () => _pickAndUploadToNewThread(room)
@@ -700,23 +685,23 @@ class _RoomScreenState extends State<RoomScreen> {
         Expanded(
           child: switch (status) {
             MessagesLoading() => const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: CircularProgressIndicator(),
+            ),
             MessagesFailed(:final error) => ErrorRetryPanel(
-                title: 'Failed to load messages',
-                error: error,
-                onRetry: threadView.refresh,
-              ),
+              title: 'Failed to load messages',
+              error: error,
+              onRetry: threadView.refresh,
+            ),
             MessagesLoaded(:final messages, :final messageStates) =>
               computeDisplayMessages(messages, streaming).isEmpty
                   ? RoomWelcome(
                       room: room,
                       onSuggestionTapped: (suggestion) =>
                           threadView.sendMessage(
-                        suggestion,
-                        _state.runtime,
-                        stateOverlay: _buildStateOverlay(),
-                      ),
+                            suggestion,
+                            _state.runtime,
+                            stateOverlay: _buildStateOverlay(),
+                          ),
                       onQuizTapped: _onQuizTapped,
                       fallback: _threadEmptyFallback(context),
                     )
@@ -728,8 +713,9 @@ class _RoomScreenState extends State<RoomScreen> {
                       executionTrackers: threadView.executionTrackers,
                       onFeedbackSubmit: threadView.submitFeedback,
                       onInspect: (runId) {
-                        final inspector = ProviderScope.containerOf(context)
-                            .read(networkInspectorProvider);
+                        final inspector = ProviderScope.containerOf(
+                          context,
+                        ).read(networkInspectorProvider);
                         final filtered = filterEventsByRunId(
                           inspector.events,
                           runId,
@@ -743,13 +729,13 @@ class _RoomScreenState extends State<RoomScreen> {
                       },
                       onShowChunkVisualization: (ref) =>
                           ChunkVisualizationPage.show(
-                        context: context,
-                        api: widget.serverEntry.connection.api,
-                        roomId: widget.roomId,
-                        chunkId: ref.chunkId,
-                        documentTitle: ref.displayTitle,
-                        pageNumbers: ref.pageNumbers,
-                      ),
+                            context: context,
+                            api: widget.serverEntry.connection.api,
+                            roomId: widget.roomId,
+                            chunkId: ref.chunkId,
+                            documentTitle: ref.displayTitle,
+                            pageNumbers: ref.pageNumbers,
+                          ),
                     ),
           },
         ),
@@ -772,9 +758,8 @@ class _RoomScreenState extends State<RoomScreen> {
           selectedDocuments: _selectedDocuments,
           onFilterTap: _filterEnabled ? _openDocumentPicker : null,
           onDocumentRemoved: _filterEnabled
-              ? (doc) => _updateSelection(
-                    Set.of(_selectedDocuments)..remove(doc),
-                  )
+              ? (doc) =>
+                    _updateSelection(Set.of(_selectedDocuments)..remove(doc))
               : null,
           onAttachFile: attachEnabled && room != null
               ? () => _pickAndUploadToThread(room, threadView.threadId)
@@ -790,9 +775,11 @@ class _RoomScreenState extends State<RoomScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.chat_bubble_outline,
-              size: 48,
-              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 48,
+            color: theme.colorScheme.outline.withValues(alpha: 0.3),
+          ),
           const SizedBox(height: 12),
           Text(
             'Type a message to get started',

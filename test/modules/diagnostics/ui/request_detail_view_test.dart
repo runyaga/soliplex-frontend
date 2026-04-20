@@ -15,7 +15,9 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       expect(find.text('Request'), findsOneWidget);
       expect(find.text('Response'), findsOneWidget);
@@ -30,14 +32,17 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       expect(find.byType(TextField), findsOneWidget);
       expect(find.widgetWithText(TextField, ''), findsOneWidget);
     });
 
-    testWidgets('request tab shows headers and body when present',
-        (tester) async {
+    testWidgets('request tab shows headers and body when present', (
+      tester,
+    ) async {
       final group = HttpEventGroup(
         requestId: 'req-1',
         request: createRequestEvent(
@@ -47,33 +52,41 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       expect(find.text('Headers'), findsOneWidget);
       expect(find.text('Body'), findsOneWidget);
     });
 
-    testWidgets('request tab shows empty state when no headers or body',
-        (tester) async {
+    testWidgets('request tab shows empty state when no headers or body', (
+      tester,
+    ) async {
       final group = HttpEventGroup(
         requestId: 'req-1',
         request: createRequestEvent(headers: {}, body: null),
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       expect(find.text('No request headers or body'), findsOneWidget);
     });
 
-    testWidgets('response tab shows waiting state when no response',
-        (tester) async {
+    testWidgets('response tab shows waiting state when no response', (
+      tester,
+    ) async {
       final group = HttpEventGroup(
         requestId: 'req-1',
         request: createRequestEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       // Navigate to Response tab
       await tester.tap(find.text('Response'));
@@ -82,8 +95,9 @@ void main() {
       expect(find.text('Waiting for response...'), findsOneWidget);
     });
 
-    testWidgets('response tab shows error display for network errors',
-        (tester) async {
+    testWidgets('response tab shows error display for network errors', (
+      tester,
+    ) async {
       final group = HttpEventGroup(
         requestId: 'req-1',
         error: createErrorEvent(
@@ -91,7 +105,9 @@ void main() {
         ),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       await tester.tap(find.text('Response'));
       await tester.pumpAndSettle();
@@ -104,7 +120,9 @@ void main() {
         streamStart: createStreamStartEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       await tester.tap(find.text('Response'));
       await tester.pump();
@@ -112,8 +130,9 @@ void main() {
       expect(find.text('Stream in progress...'), findsOneWidget);
     });
 
-    testWidgets('curl tab shows curl command when request data is present',
-        (tester) async {
+    testWidgets('curl tab shows curl command when request data is present', (
+      tester,
+    ) async {
       final group = HttpEventGroup(
         requestId: 'req-1',
         request: createRequestEvent(
@@ -123,7 +142,9 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       await tester.tap(find.text('curl'));
       await tester.pumpAndSettle();
@@ -131,8 +152,9 @@ void main() {
       expect(find.textContaining('curl'), findsWidgets);
     });
 
-    testWidgets('curl tab shows unavailable message when no request data',
-        (tester) async {
+    testWidgets('curl tab shows unavailable message when no request data', (
+      tester,
+    ) async {
       // Use an error event — group has method/uri for the summary header,
       // but toCurl() returns null because there is no request/streamStart.
       final group = HttpEventGroup(
@@ -140,7 +162,9 @@ void main() {
         error: createErrorEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: RequestDetailView(group: group))),
+        MaterialApp(
+          home: Scaffold(body: RequestDetailView(group: group)),
+        ),
       );
       await tester.tap(find.text('curl'));
       await tester.pump();

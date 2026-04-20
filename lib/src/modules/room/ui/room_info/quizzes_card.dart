@@ -28,8 +28,9 @@ class QuizzesCard extends StatelessWidget {
               leading: const Icon(Icons.quiz, size: 20),
               title: Text(entry.value),
               trailing: const Icon(Icons.chevron_right, size: 20),
-              onTap:
-                  onQuizTapped != null ? () => onQuizTapped!(entry.key) : null,
+              onTap: onQuizTapped != null
+                  ? () => onQuizTapped!(entry.key)
+                  : null,
               contentPadding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
             ),

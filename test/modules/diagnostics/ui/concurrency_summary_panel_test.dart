@@ -11,9 +11,7 @@ Future<void> _pump(
 ) async {
   await tester.pumpWidget(
     MaterialApp(
-      home: Scaffold(
-        body: ConcurrencySummaryPanel(events: events),
-      ),
+      home: Scaffold(body: ConcurrencySummaryPanel(events: events)),
     ),
   );
 }

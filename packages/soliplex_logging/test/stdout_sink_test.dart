@@ -179,17 +179,18 @@ void main() {
 
       test('stops capturing after close', () async {
         final captured = <(LogRecord, bool)>[];
-        final sink = StdoutSink(
-          testWriter: (record, {required useColors}) =>
-              captured.add((record, useColors)),
-        )..write(
-            LogRecord(
-              level: LogLevel.info,
-              message: 'before close',
-              timestamp: DateTime.now(),
-              loggerName: 'Test',
-            ),
-          );
+        final sink =
+            StdoutSink(
+              testWriter: (record, {required useColors}) =>
+                  captured.add((record, useColors)),
+            )..write(
+              LogRecord(
+                level: LogLevel.info,
+                message: 'before close',
+                timestamp: DateTime.now(),
+                loggerName: 'Test',
+              ),
+            );
 
         await sink.close();
 

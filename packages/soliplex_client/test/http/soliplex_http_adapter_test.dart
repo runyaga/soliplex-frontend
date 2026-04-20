@@ -23,10 +23,7 @@ void main() {
   });
 
   StreamedHttpResponse streamResponse() {
-    return const StreamedHttpResponse(
-      statusCode: 200,
-      body: Stream.empty(),
-    );
+    return const StreamedHttpResponse(statusCode: 200, body: Stream.empty());
   }
 
   group('SoliplexHttpAdapter', () {
@@ -65,10 +62,8 @@ void main() {
         ),
       ).thenAnswer((_) async => streamResponse());
 
-      final request = http.Request(
-        'POST',
-        Uri.parse('https://example.com/api'),
-      )..body = '{"key":"value"}';
+      final request = http.Request('POST', Uri.parse('https://example.com/api'))
+        ..body = '{"key":"value"}';
       await adapter.send(request);
 
       final captured = verify(

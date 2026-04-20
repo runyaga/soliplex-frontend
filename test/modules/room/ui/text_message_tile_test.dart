@@ -7,8 +7,9 @@ import 'package:soliplex_frontend/src/modules/room/ui/feedback_buttons.dart';
 import 'package:soliplex_frontend/src/modules/room/ui/text_message_tile.dart';
 
 void main() {
-  testWidgets('user message shows copy button but no feedback buttons',
-      (tester) async {
+  testWidgets('user message shows copy button but no feedback buttons', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -28,8 +29,9 @@ void main() {
     expect(find.byType(FeedbackButtons), findsNothing);
   });
 
-  testWidgets('assistant message shows copy button and feedback buttons',
-      (tester) async {
+  testWidgets('assistant message shows copy button and feedback buttons', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -41,7 +43,7 @@ void main() {
               text: 'Hi there',
             ),
             runId: 'run-1',
-            onFeedbackSubmit: (_, __) {},
+            onFeedbackSubmit: (_, _) {},
           ),
         ),
       ),
@@ -51,8 +53,9 @@ void main() {
     expect(find.byType(FeedbackButtons), findsOneWidget);
   });
 
-  testWidgets('assistant message without feedback callback shows only copy',
-      (tester) async {
+  testWidgets('assistant message without feedback callback shows only copy', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

@@ -47,12 +47,12 @@ class ObservableHttpClient implements SoliplexHttpClient {
     List<HttpObserver> observers = const [],
     String Function()? generateRequestId,
     HttpDiagnosticHandler? onDiagnostic,
-  })  : _client = client,
-        _observers = List.unmodifiable(observers),
-        _generateRequestId = generateRequestId ?? _defaultRequestIdGenerator,
-        _onDiagnostic = safeDiagnosticHandler(
-          onDiagnostic ?? defaultHttpDiagnosticHandler,
-        );
+  }) : _client = client,
+       _observers = List.unmodifiable(observers),
+       _generateRequestId = generateRequestId ?? _defaultRequestIdGenerator,
+       _onDiagnostic = safeDiagnosticHandler(
+         onDiagnostic ?? defaultHttpDiagnosticHandler,
+       );
 
   final SoliplexHttpClient _client;
   final List<HttpObserver> _observers;
@@ -198,12 +198,12 @@ class ObservableHttpClient implements SoliplexHttpClient {
       final soliplexError = error == null
           ? null
           : (error is SoliplexException
-              ? error
-              : NetworkException(
-                  message: HttpRedactor.redactString(error.toString(), uri),
-                  originalError: error,
-                  stackTrace: stackTrace,
-                ));
+                ? error
+                : NetworkException(
+                    message: HttpRedactor.redactString(error.toString(), uri),
+                    originalError: error,
+                    stackTrace: stackTrace,
+                  ));
       _notifyObservers((observer) {
         observer.onStreamEnd(
           HttpStreamEndEvent(

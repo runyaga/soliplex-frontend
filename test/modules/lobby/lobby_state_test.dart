@@ -12,10 +12,10 @@ import 'package:soliplex_frontend/src/modules/lobby/lobby_state.dart';
 import '../../helpers/fakes.dart';
 
 ServerManager _createManager() => ServerManager(
-      authFactory: () => AuthSession(refreshService: FakeTokenRefreshService()),
-      clientFactory: ({getToken, tokenRefresher}) => FakeHttpClient(),
-      storage: InMemoryServerStorage(),
-    );
+  authFactory: () => AuthSession(refreshService: FakeTokenRefreshService()),
+  clientFactory: ({getToken, tokenRefresher}) => FakeHttpClient(),
+  storage: InMemoryServerStorage(),
+);
 
 void main() {
   group('LobbyState', () {
@@ -293,9 +293,9 @@ void main() {
           'preferred_username': 'ada',
         });
         fakeClient.onRequest = (method, uri) async => HttpResponse(
-              statusCode: 200,
-              bodyBytes: Uint8List.fromList(utf8.encode(profileJson)),
-            );
+          statusCode: 200,
+          bodyBytes: Uint8List.fromList(utf8.encode(profileJson)),
+        );
 
         final state = LobbyState(
           serverManager: manager,
@@ -325,10 +325,8 @@ void main() {
         );
 
         final fakeClient = entry.httpClient as FakeHttpClient;
-        fakeClient.onRequest = (method, uri) async => HttpResponse(
-              statusCode: 404,
-              bodyBytes: Uint8List(0),
-            );
+        fakeClient.onRequest = (method, uri) async =>
+            HttpResponse(statusCode: 404, bodyBytes: Uint8List(0));
 
         final state = LobbyState(
           serverManager: manager,
@@ -354,16 +352,18 @@ void main() {
 
         final fakeClient = entry.httpClient as FakeHttpClient;
         fakeClient.onRequest = (method, uri) async => HttpResponse(
-              statusCode: 200,
-              bodyBytes: Uint8List.fromList(
-                utf8.encode(jsonEncode({
-                  'given_name': 'Ada',
-                  'family_name': 'Lovelace',
-                  'email': 'ada@example.com',
-                  'preferred_username': 'ada',
-                })),
-              ),
-            );
+          statusCode: 200,
+          bodyBytes: Uint8List.fromList(
+            utf8.encode(
+              jsonEncode({
+                'given_name': 'Ada',
+                'family_name': 'Lovelace',
+                'email': 'ada@example.com',
+                'preferred_username': 'ada',
+              }),
+            ),
+          ),
+        );
 
         final state = LobbyState(
           serverManager: manager,

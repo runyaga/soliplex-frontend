@@ -39,28 +39,28 @@ RunInfo _runInfo() =>
     RunInfo(id: _runId, threadId: _key.threadId, createdAt: DateTime(2026));
 
 List<BaseEvent> _happyPathEvents() => [
-      const RunStartedEvent(threadId: 'thread-1', runId: _runId),
-      const TextMessageStartEvent(messageId: 'msg-1'),
-      const TextMessageContentEvent(messageId: 'msg-1', delta: 'Hello world'),
-      const TextMessageEndEvent(messageId: 'msg-1'),
-      const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
-    ];
+  const RunStartedEvent(threadId: 'thread-1', runId: _runId),
+  const TextMessageStartEvent(messageId: 'msg-1'),
+  const TextMessageContentEvent(messageId: 'msg-1', delta: 'Hello world'),
+  const TextMessageEndEvent(messageId: 'msg-1'),
+  const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
+];
 
 List<BaseEvent> _toolCallEvents({String toolName = 'weather'}) => [
-      const RunStartedEvent(threadId: 'thread-1', runId: _runId),
-      ToolCallStartEvent(toolCallId: 'tc-1', toolCallName: toolName),
-      const ToolCallArgsEvent(toolCallId: 'tc-1', delta: '{"city":"NYC"}'),
-      const ToolCallEndEvent(toolCallId: 'tc-1'),
-      const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
-    ];
+  const RunStartedEvent(threadId: 'thread-1', runId: _runId),
+  ToolCallStartEvent(toolCallId: 'tc-1', toolCallName: toolName),
+  const ToolCallArgsEvent(toolCallId: 'tc-1', delta: '{"city":"NYC"}'),
+  const ToolCallEndEvent(toolCallId: 'tc-1'),
+  const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
+];
 
 List<BaseEvent> _resumeTextEvents() => [
-      const RunStartedEvent(threadId: 'thread-1', runId: _runId),
-      const TextMessageStartEvent(messageId: 'msg-2'),
-      const TextMessageContentEvent(messageId: 'msg-2', delta: 'Sunny'),
-      const TextMessageEndEvent(messageId: 'msg-2'),
-      const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
-    ];
+  const RunStartedEvent(threadId: 'thread-1', runId: _runId),
+  const TextMessageStartEvent(messageId: 'msg-2'),
+  const TextMessageContentEvent(messageId: 'msg-2', delta: 'Sunny'),
+  const TextMessageEndEvent(messageId: 'msg-2'),
+  const RunFinishedEvent(threadId: 'thread-1', runId: _runId),
+];
 
 ToolRegistry _registryWith({
   String toolName = 'weather',
@@ -69,7 +69,7 @@ ToolRegistry _registryWith({
   return const ToolRegistry().register(
     ClientTool(
       definition: Tool(name: toolName, description: 'A test tool'),
-      executor: executor ?? (_, __) async => '72°F, sunny',
+      executor: executor ?? (_, _) async => '72°F, sunny',
     ),
   );
 }
@@ -314,7 +314,7 @@ void main() {
 
     test('tool error → ToolCallStatus.failed, session continues', () async {
       final registry = _registryWith(
-        executor: (_, __) async => throw Exception('API down'),
+        executor: (_, _) async => throw Exception('API down'),
       );
       stubCreateRun();
 
@@ -606,7 +606,7 @@ void main() {
     test('extension tools merged into registry', () async {
       final tool = ClientTool(
         definition: const Tool(name: 'ext_tool', description: 'Extension tool'),
-        executor: (_, __) async => 'ext result',
+        executor: (_, _) async => 'ext result',
       );
       final ext = _TestExtensionWithTool(tool);
 
@@ -668,11 +668,11 @@ void main() {
       final parentExt = _TestExtension();
       final childExt = _TestExtension();
       createSession(
-        api: api,
-        agUiStreamClient: agUiStreamClient,
-        logger: logger,
-        extensions: [parentExt],
-      )
+          api: api,
+          agUiStreamClient: agUiStreamClient,
+          logger: logger,
+          extensions: [parentExt],
+        )
         ..addChild(
           createSession(
             api: api,
@@ -722,11 +722,11 @@ void main() {
     test('double dispose does not double-dispose extensions', () {
       final ext = _TestExtension();
       createSession(
-        api: api,
-        agUiStreamClient: agUiStreamClient,
-        logger: logger,
-        extensions: [ext],
-      )
+          api: api,
+          agUiStreamClient: agUiStreamClient,
+          logger: logger,
+          extensions: [ext],
+        )
         ..dispose()
         ..dispose();
 
@@ -809,7 +809,7 @@ void main() {
 
     test('executeSingle failure emits ClientToolCompleted(failed)', () async {
       final registry = _registryWith(
-        executor: (_, __) async => throw Exception('oops'),
+        executor: (_, _) async => throw Exception('oops'),
       );
       stubCreateRun();
 
@@ -851,8 +851,10 @@ void main() {
 
     test('tool timeout emits failed with timeout message (R2)', () async {
       final registry = _registryWith(
-        executor: (_, __) async =>
-            throw TimeoutException('timed out', const Duration(seconds: 60)),
+        executor: (_, _) async => throw TimeoutException(
+          'timed out',
+          const Duration(seconds: 60),
+        ),
       );
       stubCreateRun();
 
