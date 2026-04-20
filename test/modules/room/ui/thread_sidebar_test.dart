@@ -7,21 +7,23 @@ import 'package:soliplex_frontend/src/modules/room/ui/thread_sidebar.dart';
 
 void main() {
   testWidgets('shows loading indicator when loading', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoading(),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoading(),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
@@ -41,21 +43,23 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(threads),
-          selectedThreadId: 't-1',
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(threads),
+            selectedThreadId: 't-1',
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
 
     expect(find.text('First thread'), findsOneWidget);
     expect(find.text('Second thread'), findsOneWidget);
@@ -72,21 +76,23 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(threads),
-          selectedThreadId: null,
-          onThreadSelected: (id) => selectedId = id,
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(threads),
+            selectedThreadId: null,
+            onThreadSelected: (id) => selectedId = id,
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('Tappable thread'));
     expect(selectedId, 't-1');
@@ -95,45 +101,48 @@ void main() {
   testWidgets('shows back to lobby button', (tester) async {
     bool backCalled = false;
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(const []),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () => backCalled = true,
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(const []),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () => backCalled = true,
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('Lobby'));
     expect(backCalled, isTrue);
   });
 
-  testWidgets('shows Debug Console button that fires callback',
-      (tester) async {
+  testWidgets('shows Debug Console button that fires callback', (tester) async {
     bool consoleCalled = false;
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(const []),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () => consoleCalled = true,
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(const []),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () => consoleCalled = true,
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('Debug Console'));
     expect(consoleCalled, isTrue);
@@ -142,72 +151,81 @@ void main() {
   testWidgets('shows room name button that fires onRoomInfo', (tester) async {
     bool infoCalled = false;
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(const []),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () => infoCalled = true,
-          roomName: 'My Room',
-          onRetryThreads: () async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(const []),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () => infoCalled = true,
+            roomName: 'My Room',
+            onRetryThreads: () async {},
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('My Room'));
     expect(infoCalled, isTrue);
   });
 
-  testWidgets('wraps thread list with RefreshIndicator when callback provided',
-      (tester) async {
-    final threads = [
-      ThreadInfo(
-        id: 't-1',
-        roomId: 'room-1',
-        name: 'Thread',
-        createdAt: DateTime(2026, 3, 1),
-      ),
-    ];
+  testWidgets(
+    'wraps thread list with RefreshIndicator when callback provided',
+    (tester) async {
+      final threads = [
+        ThreadInfo(
+          id: 't-1',
+          roomId: 'room-1',
+          name: 'Thread',
+          createdAt: DateTime(2026, 3, 1),
+        ),
+      ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(threads),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ThreadSidebar(
+              threadListStatus: ThreadsLoaded(threads),
+              selectedThreadId: null,
+              onThreadSelected: (_) {},
+              onBackToLobby: () {},
+              onCreateThread: () {},
+              onDebugConsole: () {},
+              onRoomInfo: () {},
+              roomName: 'Test Room',
+              onRetryThreads: () async {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byType(RefreshIndicator), findsOneWidget);
+    },
+  );
+
+  testWidgets('no RefreshIndicator when onRetryThreads is null', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(const []),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+          ),
         ),
       ),
-    ));
-
-    expect(find.byType(RefreshIndicator), findsOneWidget);
-  });
-
-  testWidgets('no RefreshIndicator when onRetryThreads is null',
-      (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(const []),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-        ),
-      ),
-    ));
+    );
 
     expect(find.byType(RefreshIndicator), findsNothing);
   });
@@ -223,23 +241,25 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(threads),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
-          onRenameThread: (id, name) => renamedId = id,
-          onDeleteThread: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(threads),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+            onRenameThread: (id, name) => renamedId = id,
+            onDeleteThread: (_) {},
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();
@@ -260,23 +280,25 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ThreadSidebar(
-          threadListStatus: ThreadsLoaded(threads),
-          selectedThreadId: null,
-          onThreadSelected: (_) {},
-          onBackToLobby: () {},
-          onCreateThread: () {},
-          onDebugConsole: () {},
-          onRoomInfo: () {},
-          roomName: 'Test Room',
-          onRetryThreads: () async {},
-          onRenameThread: (_, __) {},
-          onDeleteThread: (id) => deletedId = id,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ThreadSidebar(
+            threadListStatus: ThreadsLoaded(threads),
+            selectedThreadId: null,
+            onThreadSelected: (_) {},
+            onBackToLobby: () {},
+            onCreateThread: () {},
+            onDebugConsole: () {},
+            onRoomInfo: () {},
+            roomName: 'Test Room',
+            onRetryThreads: () async {},
+            onRenameThread: (_, __) {},
+            onDeleteThread: (id) => deletedId = id,
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.tap(find.byIcon(Icons.more_vert));
     await tester.pumpAndSettle();

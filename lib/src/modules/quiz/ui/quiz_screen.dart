@@ -50,8 +50,10 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<Quiz> _fetchQuiz() async {
     try {
-      return await widget.serverEntry.connection.api
-          .getQuiz(widget.roomId, widget.quizId);
+      return await widget.serverEntry.connection.api.getQuiz(
+        widget.roomId,
+        widget.quizId,
+      );
     } catch (error, stackTrace) {
       _logger.error(
         'Failed to load quiz ${widget.quizId} '
@@ -128,10 +130,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     children: [
                       Text(message),
                       const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: action,
-                        child: Text(label),
-                      ),
+                      FilledButton(onPressed: action, child: Text(label)),
                     ],
                   ),
                 ),
@@ -159,7 +158,7 @@ class _QuizScreenState extends State<QuizScreen> {
       QuizInProgress(questionState: Composing(input: TextInput(:final text))) =>
         text,
       QuizInProgress(
-        questionState: Submitting(input: TextInput(:final text))
+        questionState: Submitting(input: TextInput(:final text)),
       ) =>
         text,
       QuizInProgress(questionState: Answered(input: TextInput(:final text))) =>

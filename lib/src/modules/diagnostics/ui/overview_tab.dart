@@ -116,16 +116,11 @@ class _StreamSection extends StatelessWidget {
                   value: _StreamView.conversation,
                   label: Text('Conversation'),
                 ),
-                ButtonSegment(
-                  value: _StreamView.events,
-                  label: Text('Events'),
-                ),
+                ButtonSegment(value: _StreamView.events, label: Text('Events')),
               ],
               selected: {view},
               onSelectionChanged: (s) => onViewChanged(s.first),
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-              ),
+              style: const ButtonStyle(visualDensity: VisualDensity.compact),
             ),
           ],
         ),
@@ -186,9 +181,7 @@ class _ConversationView extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final entry in run.entries) _RunEntryCard(entry: entry),
-      ],
+      children: [for (final entry in run.entries) _RunEntryCard(entry: entry)],
     );
   }
 
@@ -265,13 +258,13 @@ class _RunEntryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _RoleBadge(
-                label: label, color: badgeColor, textColor: badgeTextColor),
+              label: label,
+              color: badgeColor,
+              textColor: badgeTextColor,
+            ),
             if (content.isNotEmpty) ...[
               const SizedBox(height: 8),
-              SelectableText(
-                content,
-                style: theme.textTheme.bodySmall,
-              ),
+              SelectableText(content, style: theme.textTheme.bodySmall),
             ],
           ],
         ),
@@ -331,9 +324,7 @@ class _EventsView extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final event in events) _SseEventCard(event: event),
-      ],
+      children: [for (final event in events) _SseEventCard(event: event)],
     );
   }
 }

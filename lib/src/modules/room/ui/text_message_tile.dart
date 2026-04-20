@@ -67,9 +67,7 @@ class TextMessageTile extends StatelessWidget {
           child: isUser
               ? SelectableText(
                   message.text,
-                  style: TextStyle(
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
+                  style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
                 )
               : message.text.isEmpty
                   ? const Text('...')
@@ -129,11 +127,7 @@ class _ThinkingBlock extends StatelessWidget {
               ),
             ),
           ),
-          CopyButton(
-            text: text,
-            tooltip: 'Copy thinking',
-            iconSize: 16,
-          ),
+          CopyButton(text: text, tooltip: 'Copy thinking', iconSize: 16),
         ],
       ),
       dense: true,

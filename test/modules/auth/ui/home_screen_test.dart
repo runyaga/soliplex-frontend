@@ -26,9 +26,7 @@ const _testProvider = AuthProviderConfig(
 );
 
 ServerManager _createServerManager() => ServerManager(
-      authFactory: () => AuthSession(
-        refreshService: FakeTokenRefreshService(),
-      ),
+      authFactory: () => AuthSession(refreshService: FakeTokenRefreshService()),
       clientFactory: ({getToken, tokenRefresher}) => FakeHttpClient(),
       storage: InMemoryServerStorage(),
     );
@@ -98,15 +96,11 @@ Widget _buildApp({
       ),
       GoRoute(
         path: '/servers',
-        builder: (_, __) => const Scaffold(
-          body: Text('Server list'),
-        ),
+        builder: (_, __) => const Scaffold(body: Text('Server list')),
       ),
       GoRoute(
         path: '/lobby',
-        builder: (_, __) => const Scaffold(
-          body: Text('Lobby placeholder'),
-        ),
+        builder: (_, __) => const Scaffold(body: Text('Lobby placeholder')),
       ),
     ],
   );
@@ -116,9 +110,7 @@ Widget _buildApp({
       serverManagerProvider.overrideWithValue(serverManager),
       authFlowProvider.overrideWithValue(fakeAuthFlow),
       probeClientProvider.overrideWithValue(FakeHttpClient()),
-      discoverProvidersProvider.overrideWithValue(
-        discover ?? _noAuthDiscover,
-      ),
+      discoverProvidersProvider.overrideWithValue(discover ?? _noAuthDiscover),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -143,8 +135,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
   group('HomeScreen connection form', () {
-    testWidgets('shows URL input and connect button when no servers',
-        (tester) async {
+    testWidgets('shows URL input and connect button when no servers', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       await tester.pumpWidget(_buildApp(serverManager: serverManager));
       await tester.pumpAndSettle();
@@ -153,18 +146,14 @@ void main() {
       expect(find.byIcon(Icons.link), findsOneWidget);
       expect(find.text('Connect'), findsOneWidget);
       expect(find.text('Soliplex'), findsOneWidget);
-      expect(
-        find.text('Enter the URL of your backend server'),
-        findsOneWidget,
-      );
+      expect(find.text('Enter the URL of your backend server'), findsOneWidget);
     });
 
     testWidgets('shows custom app name', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        appName: 'MyApp',
-      ));
+      await tester.pumpWidget(
+        _buildApp(serverManager: serverManager, appName: 'MyApp'),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('MyApp'), findsOneWidget);
@@ -173,10 +162,12 @@ void main() {
 
     testWidgets('shows logo when provided', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        logo: const Icon(Icons.star, key: Key('test-logo')),
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          logo: const Icon(Icons.star, key: Key('test-logo')),
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('test-logo')), findsOneWidget);
@@ -192,10 +183,9 @@ void main() {
 
     testWidgets('probes connection and adds server on submit', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _noAuthDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(serverManager: serverManager, discover: _noAuthDiscover),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'api.example.com');
@@ -205,8 +195,9 @@ void main() {
       expect(serverManager.servers.value, isNotEmpty);
     });
 
-    testWidgets('navigates to lobby when server already exists',
-        (tester) async {
+    testWidgets('navigates to lobby when server already exists', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       final entry = serverManager.addServer(
         serverId: 'https://api.example.com',
@@ -214,14 +205,18 @@ void main() {
       );
       _loginEntry(entry);
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -230,8 +225,9 @@ void main() {
       expect(find.text('Choose authentication provider'), findsNothing);
     });
 
-    testWidgets('different ports are treated as different servers',
-        (tester) async {
+    testWidgets('different ports are treated as different servers', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'http://localhost:8000',
@@ -239,15 +235,16 @@ void main() {
         requiresAuth: false,
       );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _noAuthDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(serverManager: serverManager, discover: _noAuthDiscover),
+      );
       await tester.pumpAndSettle();
 
       // Connect to a different port on the same host (HTTP → insecure warning).
       await tester.enterText(
-          find.byType(TextFormField), 'http://localhost:9000');
+        find.byType(TextFormField),
+        'http://localhost:9000',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pump();
       await tester.pump();
@@ -260,13 +257,13 @@ void main() {
       expect(serverManager.servers.value, hasLength(2));
     });
 
-    testWidgets('shows network error message on connection failure',
-        (tester) async {
+    testWidgets('shows network error message on connection failure', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _failDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(serverManager: serverManager, discover: _failDiscover),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'api.example.com');
@@ -279,16 +276,20 @@ void main() {
 
     testWidgets('shows timeout error message', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: (_, __) async {
-          throw const NetworkException(message: 'timed out', isTimeout: true);
-        },
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: (_, __) async {
+            throw const NetworkException(message: 'timed out', isTimeout: true);
+          },
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -297,17 +298,23 @@ void main() {
 
     testWidgets('shows server error message for 500', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: (_, __) async {
-          throw const ApiException(
-              statusCode: 500, message: 'Internal Server Error');
-        },
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: (_, __) async {
+            throw const ApiException(
+              statusCode: 500,
+              message: 'Internal Server Error',
+            );
+          },
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -317,16 +324,20 @@ void main() {
 
     testWidgets('shows not found error message for 404', (tester) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: (_, __) async {
-          throw const NotFoundException(message: 'Not Found');
-        },
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: (_, __) async {
+            throw const NotFoundException(message: 'Not Found');
+          },
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -344,11 +355,13 @@ void main() {
           expiresAt: DateTime.now().add(const Duration(hours: 1)),
         );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        authFlow: authFlow,
-        discover: _httpOnlyDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          authFlow: authFlow,
+          discover: _httpOnlyDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(find.byType(TextFormField), 'api.example.com');
@@ -392,27 +405,31 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'ftp://api.example.com');
+        find.byType(TextFormField),
+        'ftp://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('Only http and https are supported'),
-        findsOneWidget,
-      );
+      expect(find.text('Only http and https are supported'), findsOneWidget);
     });
 
-    testWidgets('shows "Sign in to continue" on provider selection phase',
-        (tester) async {
+    testWidgets('shows "Sign in to continue" on provider selection phase', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -420,17 +437,22 @@ void main() {
       expect(find.text('Enter the URL of your backend server'), findsNothing);
     });
 
-    testWidgets('shows "Change server" button on provider selection phase',
-        (tester) async {
+    testWidgets('shows "Change server" button on provider selection phase', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -444,25 +466,30 @@ void main() {
       expect(find.text('Enter the URL of your backend server'), findsOneWidget);
     });
 
-    testWidgets('hides server section on provider selection phase',
-        (tester) async {
+    testWidgets('hides server section on provider selection phase', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'existing',
         serverUrl: Uri.parse('https://existing.example.com'),
       );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Server section visible on URL input phase.
       expect(find.text('Your servers'), findsOneWidget);
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -470,8 +497,9 @@ void main() {
       expect(find.text('Your servers'), findsNothing);
     });
 
-    testWidgets('resets to URL input after successful authentication',
-        (tester) async {
+    testWidgets('resets to URL input after successful authentication', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       final authFlow = FakeAuthFlow()
         ..nextResult = AuthResult(
@@ -481,16 +509,20 @@ void main() {
           expiresAt: DateTime.now().add(const Duration(hours: 1)),
         );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        authFlow: authFlow,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          authFlow: authFlow,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Connect — multiple providers, so we get provider selection phase.
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -508,15 +540,19 @@ void main() {
       final serverManager = _createServerManager();
       final authFlow = FakeAuthFlow()..throwRedirectInitiated = true;
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        authFlow: authFlow,
-        discover: _multiProviderDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          authFlow: authFlow,
+          discover: _multiProviderDiscover,
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.enterText(
-          find.byType(TextFormField), 'https://api.example.com');
+        find.byType(TextFormField),
+        'https://api.example.com',
+      );
       await tester.tap(find.text('Connect'));
       await tester.pumpAndSettle();
 
@@ -538,8 +574,9 @@ void main() {
   });
 
   group('HomeScreen server section', () {
-    testWidgets('shows server section with logged-out servers below form',
-        (tester) async {
+    testWidgets('shows server section with logged-out servers below form', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'test',
@@ -575,8 +612,9 @@ void main() {
       expect(find.text('https://api.example.com'), findsNothing);
     });
 
-    testWidgets('shows connected count link when authenticated servers exist',
-        (tester) async {
+    testWidgets('shows connected count link when authenticated servers exist', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       final entry1 = serverManager.addServer(
         serverId: 'test1',
@@ -592,10 +630,7 @@ void main() {
       await tester.pumpWidget(_buildApp(serverManager: serverManager));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('All servers (2 connected)'),
-        findsOneWidget,
-      );
+      expect(find.text('All servers (2 connected)'), findsOneWidget);
     });
 
     testWidgets('connected count link navigates to /servers', (tester) async {
@@ -615,35 +650,34 @@ void main() {
       expect(find.text('Server list'), findsOneWidget);
     });
 
-    testWidgets('shows All servers button when only disconnected servers exist',
-        (tester) async {
-      final serverManager = _createServerManager();
-      serverManager.addServer(
-        serverId: 'test',
-        serverUrl: Uri.parse('https://api.example.com'),
-      );
+    testWidgets(
+      'shows All servers button when only disconnected servers exist',
+      (tester) async {
+        final serverManager = _createServerManager();
+        serverManager.addServer(
+          serverId: 'test',
+          serverUrl: Uri.parse('https://api.example.com'),
+        );
 
-      await tester.pumpWidget(_buildApp(serverManager: serverManager));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(_buildApp(serverManager: serverManager));
+        await tester.pumpAndSettle();
 
-      expect(
-        find.text('All servers (0 connected)'),
-        findsOneWidget,
-      );
-    });
+        expect(find.text('All servers (0 connected)'), findsOneWidget);
+      },
+    );
 
-    testWidgets('tapping logged-out server connects and navigates to lobby',
-        (tester) async {
+    testWidgets('tapping logged-out server connects and navigates to lobby', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'staging',
         serverUrl: Uri.parse('https://staging.example.com'),
       );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _noAuthDiscover,
-      ));
+      await tester.pumpWidget(
+        _buildApp(serverManager: serverManager, discover: _noAuthDiscover),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('https://staging.example.com'));
@@ -652,8 +686,9 @@ void main() {
       expect(find.text('Lobby placeholder'), findsOneWidget);
     });
 
-    testWidgets('collapses after 5 entries with show-more button',
-        (tester) async {
+    testWidgets('collapses after 5 entries with show-more button', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       for (var i = 0; i < 7; i++) {
         serverManager.addServer(
@@ -727,8 +762,9 @@ void main() {
       expect(find.text('https://api.example.com'), findsOneWidget);
     });
 
-    testWidgets('no-auth server is hidden from logged-out list',
-        (tester) async {
+    testWidgets('no-auth server is hidden from logged-out list', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'local',
@@ -795,13 +831,16 @@ void main() {
       expect(find.text('Your servers'), findsNothing);
     });
 
-    testWidgets('pre-populates URL field from defaultBackendUrl',
-        (tester) async {
+    testWidgets('pre-populates URL field from defaultBackendUrl', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        defaultBackendUrl: 'https://api.example.com',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          defaultBackendUrl: 'https://api.example.com',
+        ),
+      );
       await tester.pumpAndSettle();
 
       final field = tester.widget<TextFormField>(find.byType(TextFormField));
@@ -815,10 +854,12 @@ void main() {
         serverUrl: Uri.parse('https://existing.example.com'),
       );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        defaultBackendUrl: 'https://api.example.com',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          defaultBackendUrl: 'https://api.example.com',
+        ),
+      );
       await tester.pumpAndSettle();
 
       final field = tester.widget<TextFormField>(find.byType(TextFormField));
@@ -829,48 +870,57 @@ void main() {
       final serverManager = _createServerManager();
       final encodedUrl = Uri.encodeComponent('https://api.example.com');
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _noAuthDiscover,
-        initialLocation: '/?url=$encodedUrl',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _noAuthDiscover,
+          initialLocation: '/?url=$encodedUrl',
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Should have auto-connected and navigated to lobby.
       expect(find.text('Lobby placeholder'), findsOneWidget);
     });
 
-    testWidgets('autoConnectUrl takes precedence over defaultBackendUrl',
-        (tester) async {
+    testWidgets('autoConnectUrl takes precedence over defaultBackendUrl', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       final encodedUrl = Uri.encodeComponent('https://auto.example.com');
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        discover: _noAuthDiscover,
-        defaultBackendUrl: 'https://default.example.com',
-        initialLocation: '/?url=$encodedUrl',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          discover: _noAuthDiscover,
+          defaultBackendUrl: 'https://default.example.com',
+          initialLocation: '/?url=$encodedUrl',
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Should auto-connect to the autoConnectUrl, not defaultBackendUrl.
       expect(
-          serverManager.servers.value.containsKey('https://auto.example.com'),
-          isTrue);
+        serverManager.servers.value.containsKey('https://auto.example.com'),
+        isTrue,
+      );
     });
 
-    testWidgets('re-fills URL field when last server is removed',
-        (tester) async {
+    testWidgets('re-fills URL field when last server is removed', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
       serverManager.addServer(
         serverId: 'test',
         serverUrl: Uri.parse('https://api.example.com'),
       );
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        defaultBackendUrl: 'http://localhost:8000',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          defaultBackendUrl: 'http://localhost:8000',
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Field is empty because servers exist.
@@ -885,14 +935,17 @@ void main() {
       expect(field.controller!.text, 'http://localhost:8000');
     });
 
-    testWidgets('defaultBackendUrl still works without autoConnectUrl',
-        (tester) async {
+    testWidgets('defaultBackendUrl still works without autoConnectUrl', (
+      tester,
+    ) async {
       final serverManager = _createServerManager();
 
-      await tester.pumpWidget(_buildApp(
-        serverManager: serverManager,
-        defaultBackendUrl: 'https://api.example.com',
-      ));
+      await tester.pumpWidget(
+        _buildApp(
+          serverManager: serverManager,
+          defaultBackendUrl: 'https://api.example.com',
+        ),
+      );
       await tester.pumpAndSettle();
 
       final field = tester.widget<TextFormField>(find.byType(TextFormField));

@@ -54,12 +54,14 @@ class _AsyncActionDialogState extends State<AsyncActionDialog> {
         });
       }
     } catch (e, st) {
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: e,
-        stack: st,
-        library: 'async_action_dialog',
-        context: ErrorDescription('during ${widget.title}'),
-      ));
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: e,
+          stack: st,
+          library: 'async_action_dialog',
+          context: ErrorDescription('during ${widget.title}'),
+        ),
+      );
       if (mounted) {
         setState(() {
           _busy = false;
@@ -78,9 +80,7 @@ class _AsyncActionDialogState extends State<AsyncActionDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          widget.contentBuilder(
-            widget.canSubmit && !_busy ? _run : null,
-          ),
+          widget.contentBuilder(widget.canSubmit && !_busy ? _run : null),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -111,9 +111,7 @@ class _AsyncActionDialogState extends State<AsyncActionDialog> {
           TextButton(
             onPressed: widget.canSubmit ? _run : null,
             style: widget.isDestructive
-                ? TextButton.styleFrom(
-                    foregroundColor: theme.colorScheme.error,
-                  )
+                ? TextButton.styleFrom(foregroundColor: theme.colorScheme.error)
                 : null,
             child: Text(widget.actionLabel),
           ),

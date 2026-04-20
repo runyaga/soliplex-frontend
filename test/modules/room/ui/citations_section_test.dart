@@ -27,30 +27,34 @@ Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('header shows source count', (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(sourceReferences: [_ref(index: 1), _ref(index: 2)]),
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(sourceReferences: [_ref(index: 1), _ref(index: 2)]),
+      ),
+    );
 
     expect(find.text('2 sources'), findsOneWidget);
   });
 
   testWidgets('header shows singular for one source', (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(sourceReferences: [_ref(index: 1)]),
-    ));
+    await tester.pumpWidget(
+      _wrap(CitationsSection(sourceReferences: [_ref(index: 1)])),
+    );
 
     expect(find.text('1 source'), findsOneWidget);
   });
 
   testWidgets('tapping header expands to show source titles', (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(
-        sourceReferences: [
-          _ref(index: 1, title: 'Alpha'),
-          _ref(index: 2, title: 'Beta'),
-        ],
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(
+          sourceReferences: [
+            _ref(index: 1, title: 'Alpha'),
+            _ref(index: 2, title: 'Beta'),
+          ],
+        ),
       ),
-    ));
+    );
 
     expect(find.text('Alpha'), findsNothing);
 
@@ -62,9 +66,11 @@ void main() {
   });
 
   testWidgets('tapping header again collapses section', (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(sourceReferences: [_ref(index: 1, title: 'Alpha')]),
-    ));
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(sourceReferences: [_ref(index: 1, title: 'Alpha')]),
+      ),
+    );
 
     await tester.tap(find.text('1 source'));
     await tester.pump();
@@ -75,11 +81,14 @@ void main() {
     expect(find.text('Alpha'), findsNothing);
   });
 
-  testWidgets('displays badge number from SourceReference.index',
-      (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(sourceReferences: [_ref(index: 4, title: 'Fourth')]),
-    ));
+  testWidgets('displays badge number from SourceReference.index', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(sourceReferences: [_ref(index: 4, title: 'Fourth')]),
+      ),
+    );
 
     await tester.tap(find.text('1 source'));
     await tester.pump();
@@ -87,20 +96,23 @@ void main() {
     expect(find.text('4'), findsOneWidget);
   });
 
-  testWidgets('tapping a row expands to show headings and content',
-      (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(
-        sourceReferences: [
-          _ref(
-            index: 1,
-            title: 'Doc',
-            headings: ['Chapter 1', 'Section 2'],
-            content: 'Preview text here',
-          ),
-        ],
+  testWidgets('tapping a row expands to show headings and content', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(
+          sourceReferences: [
+            _ref(
+              index: 1,
+              title: 'Doc',
+              headings: ['Chapter 1', 'Section 2'],
+              content: 'Preview text here',
+            ),
+          ],
+        ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('1 source'));
     await tester.pump();
@@ -115,13 +127,15 @@ void main() {
   });
 
   testWidgets('shows page numbers when present', (tester) async {
-    await tester.pumpWidget(_wrap(
-      CitationsSection(
-        sourceReferences: [
-          _ref(index: 1, pageNumbers: [5, 6])
-        ],
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(
+          sourceReferences: [
+            _ref(index: 1, pageNumbers: [5, 6]),
+          ],
+        ),
       ),
-    ));
+    );
 
     await tester.tap(find.text('1 source'));
     await tester.pump();
@@ -132,15 +146,17 @@ void main() {
   testWidgets('shows PDF button only for PDF sources', (tester) async {
     SourceReference? tappedRef;
 
-    await tester.pumpWidget(_wrap(
-      CitationsSection(
-        sourceReferences: [
-          _ref(index: 1, title: 'Text File', pdf: false),
-          _ref(index: 2, title: 'PDF File', pdf: true),
-        ],
-        onShowChunkVisualization: (ref) => tappedRef = ref,
+    await tester.pumpWidget(
+      _wrap(
+        CitationsSection(
+          sourceReferences: [
+            _ref(index: 1, title: 'Text File', pdf: false),
+            _ref(index: 2, title: 'PDF File', pdf: true),
+          ],
+          onShowChunkVisualization: (ref) => tappedRef = ref,
+        ),
       ),
-    ));
+    );
 
     // Expand section
     await tester.tap(find.text('2 sources'));

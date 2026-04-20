@@ -81,8 +81,10 @@ class _MessageTimelineState extends State<MessageTimeline> {
 
   void _recomputeMaps() {
     _runIdMap = buildRunIdMap(widget.messages, widget.messageStates);
-    _sourceReferencesMap =
-        buildSourceReferencesMap(widget.messages, widget.messageStates);
+    _sourceReferencesMap = buildSourceReferencesMap(
+      widget.messages,
+      widget.messageStates,
+    );
   }
 
   @override

@@ -233,9 +233,7 @@ void main() {
       };
       when(
         () => api.createThread(any()),
-      ).thenAnswer(
-        (_) async => (_threadInfo(), initialState),
-      );
+      ).thenAnswer((_) async => (_threadInfo(), initialState));
       stubCreateRun();
       stubDeleteThread();
 
@@ -252,10 +250,7 @@ void main() {
         return Stream.fromIterable(_happyPathEvents());
       });
 
-      final session = await runtime.spawn(
-        roomId: _roomId,
-        prompt: 'Hello',
-      );
+      final session = await runtime.spawn(roomId: _roomId, prompt: 'Hello');
       await session.result;
 
       expect(capturedInput, isNotNull);
@@ -327,9 +322,7 @@ void main() {
       };
       when(
         () => api.createThread(any()),
-      ).thenAnswer(
-        (_) async => (_threadInfo(), serverState),
-      );
+      ).thenAnswer((_) async => (_threadInfo(), serverState));
       stubCreateRun();
       stubDeleteThread();
 
@@ -350,9 +343,7 @@ void main() {
         roomId: _roomId,
         prompt: 'Hello',
         stateOverlay: {
-          'rag': <String, dynamic>{
-            'document_filter': "id = 'abc-123'",
-          },
+          'rag': <String, dynamic>{'document_filter': "id = 'abc-123'"},
         },
       );
       await session.result;
@@ -951,18 +942,10 @@ void main() {
 
       // Deliver partial events then error
       controller1
-        ..add(
-          const RunStartedEvent(
-            threadId: 'thread-fail',
-            runId: _runId,
-          ),
-        )
+        ..add(const RunStartedEvent(threadId: 'thread-fail', runId: _runId))
         ..add(const TextMessageStartEvent(messageId: 'msg-1'))
         ..add(
-          const TextMessageContentEvent(
-            messageId: 'msg-1',
-            delta: 'Partial',
-          ),
+          const TextMessageContentEvent(messageId: 'msg-1', delta: 'Partial'),
         )
         ..add(const TextMessageEndEvent(messageId: 'msg-1'))
         ..addError(Exception('network lost'));
@@ -983,14 +966,8 @@ void main() {
         capturedInput =
             invocation.positionalArguments[1] as SimpleRunAgentInput;
         return Stream.fromIterable([
-          const RunStartedEvent(
-            threadId: 'thread-fail',
-            runId: 'run-2',
-          ),
-          const RunFinishedEvent(
-            threadId: 'thread-fail',
-            runId: 'run-2',
-          ),
+          const RunStartedEvent(threadId: 'thread-fail', runId: 'run-2'),
+          const RunFinishedEvent(threadId: 'thread-fail', runId: 'run-2'),
         ]);
       });
 
@@ -1350,11 +1327,7 @@ void main() {
       expect(messages.length, greaterThanOrEqualTo(3));
       expect(
         messages.last,
-        isA<UserMessage>().having(
-          (m) => m.content,
-          'content',
-          'Follow up',
-        ),
+        isA<UserMessage>().having((m) => m.content, 'content', 'Follow up'),
       );
     });
 

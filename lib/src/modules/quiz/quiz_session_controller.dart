@@ -16,8 +16,9 @@ class QuizSessionController {
   final String _roomId;
   final Logger _logger;
 
-  final Signal<QuizSession> _session =
-      Signal<QuizSession>(const QuizNotStarted());
+  final Signal<QuizSession> _session = Signal<QuizSession>(
+    const QuizNotStarted(),
+  );
   ReadonlySignal<QuizSession> get session => _session;
 
   final Signal<String?> _submissionError = Signal<String?>(null);
@@ -103,15 +104,15 @@ class QuizSessionController {
         stackTrace: stackTrace,
       );
       _recoverFromSubmitError(
-        input,
-        switch (e) {
-          AuthException() => 'Your session has expired. Please sign in again.',
-          NotFoundException() => 'This question is no longer available.',
-          NetworkException() =>
-            'Could not reach the server. Check your connection and try again.',
-          _ => 'Could not submit your answer. Please try again.',
-        },
-      );
+          input,
+          switch (e) {
+            AuthException() =>
+              'Your session has expired. Please sign in again.',
+            NotFoundException() => 'This question is no longer available.',
+            NetworkException() =>
+              'Could not reach the server. Check your connection and try again.',
+            _ => 'Could not submit your answer. Please try again.',
+          });
     } catch (e, stackTrace) {
       _logger.error(
         'Unexpected error submitting answer for question '

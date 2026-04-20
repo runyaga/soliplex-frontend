@@ -9,10 +9,8 @@ import 'package:soliplex_monty_plugin/src/soliplex_tool.dart';
 
 /// Per-thread conversation state managed internally.
 class _ThreadState {
-  _ThreadState({
-    required this.threadId,
-    Object? state,
-  }) : state = state ?? <String, dynamic>{};
+  _ThreadState({required this.threadId, Object? state})
+      : state = state ?? <String, dynamic>{};
 
   final String threadId;
   final List<Message> messages = [];
@@ -97,13 +95,7 @@ List<SoliplexTool> buildSoliplexTools(
       parameters: {'type': 'object', 'properties': <String, dynamic>{}},
       handler: (args) async => getConnections()
           .values
-          .map(
-            (c) => {
-              'id': c.serverId,
-              'alias': c.alias,
-              'url': c.serverUrl,
-            },
-          )
+          .map((c) => {'id': c.serverId, 'alias': c.alias, 'url': c.serverUrl})
           .toList(),
     ),
 
@@ -123,15 +115,12 @@ List<SoliplexTool> buildSoliplexTools(
         'required': ['server'],
       },
       handler: (args) async {
-        final rooms =
-            await connection(args['server']! as String).api.getRooms();
+        final rooms = await connection(
+          args['server']! as String,
+        ).api.getRooms();
         return rooms
             .map(
-              (r) => {
-                'id': r.id,
-                'name': r.name,
-                'description': r.description,
-              },
+              (r) => {'id': r.id, 'name': r.name, 'description': r.description},
             )
             .toList();
       },
@@ -479,11 +468,7 @@ List<SoliplexTool> buildSoliplexTools(
           fileBytes: utf8.encode(content),
           mimeType: mimeType,
         );
-        return {
-          'uploaded': filename,
-          'room_id': roomId,
-          'thread_id': threadId,
-        };
+        return {'uploaded': filename, 'room_id': roomId, 'thread_id': threadId};
       },
     ),
   ];

@@ -109,11 +109,7 @@ class SoliplexUiRenderer implements UiRenderer {
   }) async {
     final ctx = _context;
     if (ctx == null) return null;
-    return UiFormDialog.show(
-      context: ctx,
-      title: 'Form',
-      schema: schema,
-    );
+    return UiFormDialog.show(context: ctx, title: 'Form', schema: schema);
   }
 
   @override
@@ -135,8 +131,10 @@ class SoliplexUiRenderer implements UiRenderer {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   Text(body),
                 ],
               )
@@ -217,11 +215,7 @@ class RoomScopedUiRenderer implements UiRenderer {
       _base.showForm(schema: schema);
 
   @override
-  void notify({
-    required String kind,
-    required String title,
-    String? body,
-  }) =>
+  void notify({required String kind, required String title, String? body}) =>
       _base.notify(kind: kind, title: title, body: body);
 
   @override

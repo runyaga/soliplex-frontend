@@ -63,8 +63,7 @@ class Rag {
                 (k, v) => MapEntry<String, List<SearchResult>>(
                   k,
                   List<SearchResult>.from(
-                    v.map((x) => SearchResult.fromJson(x)),
-                  ),
+                      v.map((x) => SearchResult.fromJson(x))),
                 ),
               ),
       );

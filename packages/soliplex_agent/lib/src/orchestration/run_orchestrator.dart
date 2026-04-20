@@ -178,8 +178,12 @@ class RunOrchestrator {
     _guardNotRunning();
     _toolDepth = 0;
     try {
-      final conversation =
-          _buildConversation(key, userMessage, cachedHistory, null);
+      final conversation = _buildConversation(
+        key,
+        userMessage,
+        cachedHistory,
+        null,
+      );
       final input = _buildInput(key, conversation);
       final handle = await _llmProvider.startRun(
         key: key,
@@ -326,8 +330,12 @@ class RunOrchestrator {
     ThreadHistory? cachedHistory,
     Map<String, dynamic>? stateOverlay,
   ) async {
-    final conversation =
-        _buildConversation(key, userMessage, cachedHistory, stateOverlay);
+    final conversation = _buildConversation(
+      key,
+      userMessage,
+      cachedHistory,
+      stateOverlay,
+    );
     final input = _buildInput(key, conversation);
     final handle = await _llmProvider.startRun(
       key: key,
@@ -607,10 +615,7 @@ class RunOrchestrator {
     );
   }
 
-  void _subscribeToStream(
-    Stream<BaseEvent> events,
-    RunningState initialState,
-  ) {
+  void _subscribeToStream(Stream<BaseEvent> events, RunningState initialState) {
     // Cancel stale subscription from the previous run.
     unawaited(_subscription?.cancel());
     _subscription = null;
@@ -652,8 +657,10 @@ class RunOrchestrator {
     if (event is RunErrorEvent) {
       _receivedTerminalEvent = true;
       _cleanup();
-      final withCitations =
-          _extractCitations(result.conversation, previous.runId);
+      final withCitations = _extractCitations(
+        result.conversation,
+        previous.runId,
+      );
       _setState(
         FailedState(
           threadKey: previous.threadKey,
@@ -746,8 +753,10 @@ class RunOrchestrator {
     if (running is! RunningState) return;
     _cleanup();
     _logger.warning('Stream ended without terminal event');
-    final withCitations =
-        _extractCitations(running.conversation, running.runId);
+    final withCitations = _extractCitations(
+      running.conversation,
+      running.runId,
+    );
     _setState(
       FailedState(
         threadKey: running.threadKey,
@@ -763,8 +772,10 @@ class RunOrchestrator {
     final running = _currentState;
     if (running is! RunningState) return;
     _cleanup();
-    final withCitations =
-        _extractCitations(running.conversation, running.runId);
+    final withCitations = _extractCitations(
+      running.conversation,
+      running.runId,
+    );
     if (error is CancellationError) {
       _setState(
         CancelledState(

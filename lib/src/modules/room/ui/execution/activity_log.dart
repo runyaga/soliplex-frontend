@@ -153,8 +153,9 @@ class _ActivityRowState extends State<_ActivityRow> {
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.w500,
-                            fontFamily:
-                                monospaceFont(Theme.of(context).platform),
+                            fontFamily: monospaceFont(
+                              Theme.of(context).platform,
+                            ),
                             fontFamilyFallback: const ['monospace'],
                           ),
                         ),

@@ -30,8 +30,12 @@ class UiConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDestructive =
-        const {'delete', 'clear', 'reset', 'remove'}.contains(verb);
+    final isDestructive = const {
+      'delete',
+      'clear',
+      'reset',
+      'remove',
+    }.contains(verb);
 
     return AlertDialog(
       title: Text(_capitalize(verb)),
@@ -59,9 +63,7 @@ class UiConfirmDialog extends StatelessWidget {
         TextButton(
           onPressed: () => Navigator.of(context).pop(true),
           style: isDestructive
-              ? TextButton.styleFrom(
-                  foregroundColor: theme.colorScheme.error,
-                )
+              ? TextButton.styleFrom(foregroundColor: theme.colorScheme.error)
               : null,
           child: Text(_capitalize(verb)),
         ),

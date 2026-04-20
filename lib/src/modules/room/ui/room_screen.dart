@@ -276,9 +276,8 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _onBackToLobby() => context.go('/lobby');
 
-  void _onDebugConsole() => context.push(
-        '/room/${widget.serverEntry.alias}/${widget.roomId}/debug',
-      );
+  void _onDebugConsole() =>
+      context.push('/room/${widget.serverEntry.alias}/${widget.roomId}/debug');
 
   void _onRoomInfo() {
     context.push('/room/${widget.serverEntry.alias}/${widget.roomId}/info');
@@ -464,8 +463,9 @@ class _RoomScreenState extends State<RoomScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _chatController.text = unsentText;
-      _chatController.selection =
-          TextSelection.collapsed(offset: _chatController.text.length);
+      _chatController.selection = TextSelection.collapsed(
+        offset: _chatController.text.length,
+      );
     });
   }
 
@@ -485,12 +485,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
     final body = Column(
       children: [
-        _buildRoomHeader(
-          room,
-          attachEnabled,
-          roomEntries,
-          threadEntries,
-        ),
+        _buildRoomHeader(room, attachEnabled, roomEntries, threadEntries),
         if (_filesExpanded) _buildFilePanel(roomEntries, threadEntries),
         Expanded(
           child: threadView == null
@@ -570,10 +565,7 @@ class _RoomScreenState extends State<RoomScreen> {
                     ),
                   const SizedBox(width: 4),
                   Text(
-                    _chipLabel(
-                      roomEntries.length,
-                      threadEntries.length,
-                    ),
+                    _chipLabel(roomEntries.length, threadEntries.length),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: anyFailed
                           ? theme.colorScheme.error
@@ -675,7 +667,7 @@ class _RoomScreenState extends State<RoomScreen> {
       UploadUploading() => (null, theme.colorScheme.primary),
       UploadSuccess() => (
           Icons.check_circle_outline,
-          theme.colorScheme.primary
+          theme.colorScheme.primary,
         ),
       UploadError() => (Icons.error_outline, theme.colorScheme.error),
     };
@@ -690,10 +682,7 @@ class _RoomScreenState extends State<RoomScreen> {
             SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: color,
-              ),
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
             ),
           const SizedBox(width: 8),
           Expanded(
@@ -752,15 +741,10 @@ class _RoomScreenState extends State<RoomScreen> {
           ),
         ),
         if (roomError != null)
-          _SendErrorBanner(
-            error: roomError,
-            onDismiss: _state.clearError,
-          ),
+          _SendErrorBanner(error: roomError, onDismiss: _state.clearError),
         ChatInput(
-          onSend: (text) => _state.sendToNewThread(
-            text,
-            stateOverlay: _buildStateOverlay(),
-          ),
+          onSend: (text) =>
+              _state.sendToNewThread(text, stateOverlay: _buildStateOverlay()),
           onCancel: _state.cancelSpawn,
           sessionState: _state.sessionState,
           controller: _chatController,
@@ -768,9 +752,8 @@ class _RoomScreenState extends State<RoomScreen> {
           selectedDocuments: _selectedDocuments,
           onFilterTap: _filterEnabled ? _openDocumentPicker : null,
           onDocumentRemoved: _filterEnabled
-              ? (doc) => _updateSelection(
-                    Set.of(_selectedDocuments)..remove(doc),
-                  )
+              ? (doc) =>
+                  _updateSelection(Set.of(_selectedDocuments)..remove(doc))
               : null,
           onAttachFile: (room?.enableAttachments ?? false) && room != null
               ? () => _pickAndUploadToNewThread(room)
@@ -810,8 +793,11 @@ class _RoomScreenState extends State<RoomScreen> {
                 onRetry: threadView.refresh,
               ),
             MessagesLoaded(:final messages, :final messageStates) =>
-              computeDisplayMessages(messages, streaming, injected: injected)
-                      .isEmpty
+              computeDisplayMessages(
+                messages,
+                streaming,
+                injected: injected,
+              ).isEmpty
                   ? RoomWelcome(
                       room: room,
                       onSuggestionTapped: (suggestion) =>
@@ -832,8 +818,9 @@ class _RoomScreenState extends State<RoomScreen> {
                       executionTrackers: threadView.executionTrackers,
                       onFeedbackSubmit: threadView.submitFeedback,
                       onInspect: (runId) {
-                        final inspector = ProviderScope.containerOf(context)
-                            .read(networkInspectorProvider);
+                        final inspector = ProviderScope.containerOf(
+                          context,
+                        ).read(networkInspectorProvider);
                         final filtered = filterEventsByRunId(
                           inspector.events,
                           runId,
@@ -877,9 +864,8 @@ class _RoomScreenState extends State<RoomScreen> {
           selectedDocuments: _selectedDocuments,
           onFilterTap: _filterEnabled ? _openDocumentPicker : null,
           onDocumentRemoved: _filterEnabled
-              ? (doc) => _updateSelection(
-                    Set.of(_selectedDocuments)..remove(doc),
-                  )
+              ? (doc) =>
+                  _updateSelection(Set.of(_selectedDocuments)..remove(doc))
               : null,
           onAttachFile: attachEnabled && room != null
               ? () => _pickAndUploadToThread(room, threadView.threadId)
@@ -895,9 +881,11 @@ class _RoomScreenState extends State<RoomScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.chat_bubble_outline,
-              size: 48,
-              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 48,
+            color: theme.colorScheme.outline.withValues(alpha: 0.3),
+          ),
           const SizedBox(height: 12),
           Text(
             'Type a message to get started',

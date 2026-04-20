@@ -183,8 +183,9 @@ class _ReplTabState extends State<_ReplTab> with AutomaticKeepAliveClientMixin {
               ? Center(
                   child: Text(
                     'Type Python code below and press Enter',
-                    style:
-                        theme.textTheme.bodySmall?.copyWith(color: cs.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.outline,
+                    ),
                   ),
                 )
               : ListView.builder(
@@ -228,10 +229,12 @@ class _ReplTabState extends State<_ReplTab> with AutomaticKeepAliveClientMixin {
                 ),
         ),
         const Divider(height: 1),
-        _SnippetBar(onSelected: (s) {
-          _controller.text = s;
-          _focusNode.requestFocus();
-        }),
+        _SnippetBar(
+          onSelected: (s) {
+            _controller.text = s;
+            _focusNode.requestFocus();
+          },
+        ),
         const Divider(height: 1),
         Padding(
           padding: const EdgeInsets.all(8),
@@ -296,21 +299,24 @@ const _kSnippets = <_Snippet>[
   (label: 'help', code: 'help()'),
   (
     label: 'notify',
-    code: "ui_notify(kind='success', title='Hello', body='from Python')"
+    code: "ui_notify(kind='success', title='Hello', body='from Python')",
   ),
   (
     label: 'modal',
-    code: "ui_show_modal(title='Info', body='This is a modal.', actions=['OK'])"
+    code:
+        "ui_show_modal(title='Info', body='This is a modal.', actions=['OK'])",
   ),
-  (label: 'inject', code: 'ui_inject_message(content="**Hello** from Python!")'),
+  (
+    label: 'inject',
+    code: 'ui_inject_message(content="**Hello** from Python!")',
+  ),
   (
     label: 'confirm',
-    code: "ui_request_confirm(verb='delete', message='Delete this item?')"
+    code: "ui_request_confirm(verb='delete', message='Delete this item?')",
   ),
   (
     label: 'form',
-    code:
-        "ui_show_form(schema={'properties':{'name':{'type':'string'}}})"
+    code: "ui_show_form(schema={'properties':{'name':{'type':'string'}}})",
   ),
   (label: 'list_servers', code: 'soliplex_list_servers()'),
   (label: 'list_rooms', code: "soliplex_list_rooms(server='<id>')"),
@@ -466,9 +472,7 @@ class _SessionsTabState extends State<_SessionsTab> {
                         : cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(8),
                     border: isCurrent
-                        ? Border.all(
-                            color: cs.primary.withValues(alpha: 0.4),
-                          )
+                        ? Border.all(color: cs.primary.withValues(alpha: 0.4))
                         : null,
                   ),
                   child: Row(

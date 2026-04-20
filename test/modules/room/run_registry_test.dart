@@ -12,17 +12,9 @@ ServerConnection _fakeConnection(FakeSoliplexApi api) => ServerConnection(
       agUiStreamClient: FakeAgUiStreamClient(),
     );
 
-const _key = (
-  serverId: 'test-server',
-  roomId: 'room-1',
-  threadId: 'thread-1',
-);
+const _key = (serverId: 'test-server', roomId: 'room-1', threadId: 'thread-1');
 
-const _key2 = (
-  serverId: 'test-server',
-  roomId: 'room-1',
-  threadId: 'thread-2',
-);
+const _key2 = (serverId: 'test-server', roomId: 'room-1', threadId: 'thread-2');
 
 void main() {
   late FakeSoliplexApi api;
@@ -48,14 +40,8 @@ void main() {
     await runtimeManager.dispose();
   });
 
-  Future<AgentSession> spawnSession({
-    String threadId = 'thread-1',
-  }) async {
-    return runtime.spawn(
-      roomId: 'room-1',
-      prompt: 'test',
-      threadId: threadId,
-    );
+  Future<AgentSession> spawnSession({String threadId = 'thread-1'}) async {
+    return runtime.spawn(roomId: 'room-1', prompt: 'test', threadId: threadId);
   }
 
   test('activeSession returns registered session', () async {

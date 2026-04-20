@@ -29,11 +29,7 @@ abstract class UiRenderer {
   ///
   /// [kind] is one of `'info'`, `'success'`, `'warning'`, `'error'`.
   /// Never blocks; renderer owns the dismiss timing.
-  void notify({
-    required String kind,
-    required String title,
-    String? body,
-  });
+  void notify({required String kind, required String title, String? body});
 
   /// Inject an ephemeral, client-only message into the active chat area.
   ///

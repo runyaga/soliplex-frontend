@@ -39,12 +39,8 @@ class UploadEntry {
   /// The scope key this entry belongs to (room or room+thread).
   final String scope;
 
-  UploadEntry _withStatus(UploadStatus newStatus) => UploadEntry(
-        id: id,
-        filename: filename,
-        status: newStatus,
-        scope: scope,
-      );
+  UploadEntry _withStatus(UploadStatus newStatus) =>
+      UploadEntry(id: id, filename: filename, status: newStatus, scope: scope);
 }
 
 /// Tracks file upload state across rooms and threads.

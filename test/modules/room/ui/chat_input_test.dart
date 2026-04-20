@@ -11,15 +11,17 @@ void main() {
     String? sentText;
     final sessionState = signal<AgentSessionState?>(null);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (text) => sentText = text,
-          onCancel: () {},
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (text) => sentText = text,
+            onCancel: () {},
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.enterText(find.byType(TextField), 'Hello agent');
     await tester.pump();
@@ -39,15 +41,17 @@ void main() {
   testWidgets('send button disabled when text is empty', (tester) async {
     final sessionState = signal<AgentSessionState?>(null);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (_) {},
-          onCancel: () {},
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (_) {},
+            onCancel: () {},
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     final sendButton = tester.widget<IconButton>(
       find.widgetWithIcon(IconButton, Icons.send),
@@ -61,15 +65,17 @@ void main() {
     bool cancelCalled = false;
     final sessionState = signal<AgentSessionState?>(AgentSessionState.running);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (_) {},
-          onCancel: () => cancelCalled = true,
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (_) {},
+            onCancel: () => cancelCalled = true,
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     expect(find.byIcon(Icons.stop), findsOneWidget);
     expect(find.byIcon(Icons.send), findsNothing);
@@ -84,15 +90,17 @@ void main() {
   testWidgets('text field readOnly during active run', (tester) async {
     final sessionState = signal<AgentSessionState?>(AgentSessionState.running);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (_) {},
-          onCancel: () {},
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (_) {},
+            onCancel: () {},
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     final textField = tester.widget<TextField>(find.byType(TextField));
     expect(textField.readOnly, isTrue);
@@ -104,15 +112,17 @@ void main() {
     String? sentText;
     final sessionState = signal<AgentSessionState?>(null);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (text) => sentText = text,
-          onCancel: () {},
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (text) => sentText = text,
+            onCancel: () {},
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     await tester.enterText(find.byType(TextField), 'Hello');
     await tester.pump();
@@ -129,15 +139,17 @@ void main() {
     String? sentText;
     final sessionState = signal<AgentSessionState?>(AgentSessionState.running);
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ChatInput(
-          onSend: (text) => sentText = text,
-          onCancel: () {},
-          sessionState: sessionState,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInput(
+            onSend: (text) => sentText = text,
+            onCancel: () {},
+            sessionState: sessionState,
+          ),
         ),
       ),
-    ));
+    );
 
     // Enter text via controller since TextField is readOnly during active run.
     tester.widget<TextField>(find.byType(TextField)).controller!.text =
@@ -214,10 +226,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: ChatInput(
-            onSend: (_) {},
-            onCancel: () {},
-          ),
+          body: ChatInput(onSend: (_) {}, onCancel: () {}),
         ),
       ),
     );
@@ -227,9 +236,7 @@ void main() {
 
   group('document chips', () {
     testWidgets('displays selected document chips', (tester) async {
-      final docs = {
-        const RagDocument(id: '1', title: 'Report.pdf'),
-      };
+      final docs = {const RagDocument(id: '1', title: 'Report.pdf')};
 
       await tester.pumpWidget(
         MaterialApp(
@@ -246,8 +253,9 @@ void main() {
       expect(find.text('Report.pdf'), findsOneWidget);
     });
 
-    testWidgets('shows filter button when onFilterTap provided',
-        (tester) async {
+    testWidgets('shows filter button when onFilterTap provided', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -306,10 +314,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ChatInput(
-              onSend: (_) {},
-              onCancel: () {},
-            ),
+            body: ChatInput(onSend: (_) {}, onCancel: () {}),
           ),
         ),
       );
@@ -319,8 +324,9 @@ void main() {
 
     testWidgets('disabled during active run', (tester) async {
       bool attachCalled = false;
-      final sessionState =
-          signal<AgentSessionState?>(AgentSessionState.running);
+      final sessionState = signal<AgentSessionState?>(
+        AgentSessionState.running,
+      );
 
       await tester.pumpWidget(
         MaterialApp(

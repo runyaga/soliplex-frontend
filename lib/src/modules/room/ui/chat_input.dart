@@ -111,8 +111,8 @@ class _ChatInputState extends State<ChatInput> {
     final state = widget.sessionState?.watch(context);
     final active = _isActive(state);
     final disabled = !widget.enabled || active;
-    final pythonRunning = widget.scriptingState != null &&
-        state == AgentSessionState.running;
+    final pythonRunning =
+        widget.scriptingState != null && state == AgentSessionState.running;
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -147,8 +147,9 @@ class _ChatInputState extends State<ChatInput> {
                                     .textTheme
                                     .bodySmall
                                     ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                               ),
                               Icon(
@@ -169,9 +170,7 @@ class _ChatInputState extends State<ChatInput> {
                                 for (final doc in widget.selectedDocuments)
                                   Chip(
                                     avatar: Icon(
-                                      getFileTypeIcon(
-                                        documentIconPath(doc),
-                                      ),
+                                      getFileTypeIcon(documentIconPath(doc)),
                                       size: 16,
                                     ),
                                     label: Text(documentDisplayName(doc)),
@@ -179,13 +178,11 @@ class _ChatInputState extends State<ChatInput> {
                                       Icons.close,
                                       size: 16,
                                     ),
-                                    onDeleted:
-                                        widget.onDocumentRemoved == null ||
-                                                disabled
-                                            ? null
-                                            : () => widget.onDocumentRemoved!(
-                                                  doc,
-                                                ),
+                                    onDeleted: widget.onDocumentRemoved ==
+                                                null ||
+                                            disabled
+                                        ? null
+                                        : () => widget.onDocumentRemoved!(doc),
                                     materialTapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
                                     visualDensity: VisualDensity.compact,
@@ -299,10 +296,9 @@ class _PythonRunningBadge extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Python',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: color),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color),
           ),
         ],
       ),

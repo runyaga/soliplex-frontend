@@ -4,10 +4,7 @@ import 'package:meta/meta.dart';
 /// customization of tools and resources.
 @immutable
 class SessionContext {
-  const SessionContext({
-    required this.serverId,
-    required this.roomId,
-  });
+  const SessionContext({required this.serverId, required this.roomId});
 
   /// The ID of the Soliplex server this session belongs to.
   final String serverId;

@@ -8,10 +8,7 @@ import 'package:soliplex_frontend/src/core/shell_config.dart';
 void main() {
   group('runSoliplexShell', () {
     test('throws ArgumentError on invalid config', () {
-      final config = ShellConfig(
-        appName: 'Test',
-        theme: ThemeData(),
-      );
+      final config = ShellConfig(appName: 'Test', theme: ThemeData());
 
       expect(() => runSoliplexShell(config), throwsArgumentError);
     });
@@ -27,9 +24,7 @@ void main() {
         theme: ThemeData(),
         initialRoute: '/check',
         modules: [
-          ModuleContribution(
-            overrides: [greeting.overrideWithValue('hello')],
-          ),
+          ModuleContribution(overrides: [greeting.overrideWithValue('hello')]),
           ModuleContribution(
             overrides: [farewell.overrideWithValue('goodbye')],
             routes: [
@@ -74,18 +69,9 @@ void main() {
           ),
           ModuleContribution(
             routes: [
-              GoRoute(
-                path: '/a',
-                builder: (_, __) => const Text('Page A'),
-              ),
-              GoRoute(
-                path: '/b',
-                builder: (_, __) => const Text('Page B'),
-              ),
-              GoRoute(
-                path: '/c',
-                builder: (_, __) => const Text('Page C'),
-              ),
+              GoRoute(path: '/a', builder: (_, __) => const Text('Page A')),
+              GoRoute(path: '/b', builder: (_, __) => const Text('Page B')),
+              GoRoute(path: '/c', builder: (_, __) => const Text('Page C')),
             ],
           ),
         ],

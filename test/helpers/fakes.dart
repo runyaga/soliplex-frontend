@@ -187,7 +187,8 @@ class FakeSoliplexApi extends SoliplexApi {
     if (nextError != null) throw nextError!;
     if (nextRooms != null) return nextRooms!;
     throw StateError(
-        'FakeSoliplexApi: set nextRooms or nextError before calling');
+      'FakeSoliplexApi: set nextRooms or nextError before calling',
+    );
   }
 
   @override
@@ -195,7 +196,8 @@ class FakeSoliplexApi extends SoliplexApi {
     if (nextError != null) throw nextError!;
     if (nextRoom != null) return nextRoom!;
     throw StateError(
-        'FakeSoliplexApi: set nextRoom or nextError before calling');
+      'FakeSoliplexApi: set nextRoom or nextError before calling',
+    );
   }
 
   @override
@@ -217,7 +219,8 @@ class FakeSoliplexApi extends SoliplexApi {
     if (nextThreadHistoryError != null) throw nextThreadHistoryError!;
     if (nextThreadHistory != null) return nextThreadHistory!;
     throw StateError(
-        'FakeSoliplexApi: set nextThreadHistory or nextThreadHistoryError');
+      'FakeSoliplexApi: set nextThreadHistory or nextThreadHistoryError',
+    );
   }
 
   @override

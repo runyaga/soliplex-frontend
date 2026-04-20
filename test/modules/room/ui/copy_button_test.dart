@@ -71,8 +71,9 @@ void main() {
         .setMockMethodCallHandler(SystemChannels.platform, null);
   });
 
-  testWidgets('shows error icon when clipboard fails then reverts',
-      (tester) async {
+  testWidgets('shows error icon when clipboard fails then reverts', (
+    tester,
+  ) async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.setData') {

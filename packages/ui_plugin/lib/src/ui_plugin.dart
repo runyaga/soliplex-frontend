@@ -160,9 +160,7 @@ class UiPlugin extends MontyPlugin with StatefulPlugin<UiSessionState> {
         HostFunction(schema: _uiShowModalSchema, handler: _handleShowModal),
         HostFunction(schema: _uiShowFormSchema, handler: _handleShowForm),
         HostFunction(
-          schema: _uiInjectMessageSchema,
-          handler: _handleInjectMessage,
-        ),
+            schema: _uiInjectMessageSchema, handler: _handleInjectMessage),
         HostFunction(
           schema: _uiRequestConfirmSchema,
           handler: _handleRequestConfirm,

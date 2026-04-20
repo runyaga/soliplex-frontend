@@ -68,7 +68,8 @@ class AgentRuntimeManager {
         await entry.runtime.dispose();
       } on Object catch (e) {
         _logger.warning(
-            'Failed to dispose runtime ${entry.connection.serverId}: $e');
+          'Failed to dispose runtime ${entry.connection.serverId}: $e',
+        );
       }
     }
   }

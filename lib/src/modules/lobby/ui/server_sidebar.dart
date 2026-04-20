@@ -133,10 +133,7 @@ class _ActionButtons extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextButton(
-          onPressed: onAddServer,
-          child: const Text('Home'),
-        ),
+        TextButton(onPressed: onAddServer, child: const Text('Home')),
         TextButton(
           onPressed: onNetworkInspector,
           child: const Text('Network Inspector'),

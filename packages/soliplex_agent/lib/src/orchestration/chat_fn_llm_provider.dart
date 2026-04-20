@@ -149,9 +149,7 @@ class ChatFnLlmProvider implements AgentLlmProvider {
             ),
           );
         case final SystemMessage m:
-          result.add(
-            (role: 'system', content: m.content),
-          );
+          result.add((role: 'system', content: m.content));
         default:
           break;
       }

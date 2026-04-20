@@ -66,10 +66,7 @@ ThemeData _defaultTheme() {
         blockquoteDecoration: BoxDecoration(
           color: colorScheme.surfaceContainerHighest,
           border: Border(
-            left: BorderSide(
-              color: colorScheme.outlineVariant,
-              width: 3,
-            ),
+            left: BorderSide(color: colorScheme.outlineVariant, width: 3),
           ),
         ),
       ),
@@ -195,10 +192,9 @@ Future<ShellConfig> standard({
 
   final registry = RunRegistry();
 
-  unawaited(_probeMontyRuntime(
-    LogManager.instance.getLogger('monty'),
-    serverManager,
-  ));
+  unawaited(
+    _probeMontyRuntime(LogManager.instance.getLogger('monty'), serverManager),
+  );
 
   return ShellConfig(
     appName: appName,

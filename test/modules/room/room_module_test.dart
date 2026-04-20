@@ -58,11 +58,14 @@ void main() {
     expect(paths, contains('/room/:serverAlias/:roomId/info'));
 
     final infoIndex = paths.indexOf('/room/:serverAlias/:roomId/info');
-    final threadIndex =
-        paths.indexOf('/room/:serverAlias/:roomId/thread/:threadId');
-    expect(infoIndex, lessThan(threadIndex),
-        reason:
-            '/info must precede /:threadId to avoid eager parameter matching');
+    final threadIndex = paths.indexOf(
+      '/room/:serverAlias/:roomId/thread/:threadId',
+    );
+    expect(
+      infoIndex,
+      lessThan(threadIndex),
+      reason: '/info must precede /:threadId to avoid eager parameter matching',
+    );
   });
 
   test('contributes no overrides in Slice A', () {

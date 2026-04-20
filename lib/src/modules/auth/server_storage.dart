@@ -31,7 +31,10 @@ sealed class PersistedServer {
       dev.log('Partial auth data for $serverUrl — treating as unauthenticated');
     }
     return KnownServer(
-        serverUrl: serverUrl, alias: alias, requiresAuth: requiresAuth);
+      serverUrl: serverUrl,
+      alias: alias,
+      requiresAuth: requiresAuth,
+    );
   }
 
   final Uri serverUrl;
@@ -66,8 +69,11 @@ class AuthenticatedServer extends PersistedServer {
 
 /// A known server without auth credentials.
 class KnownServer extends PersistedServer {
-  const KnownServer(
-      {required super.serverUrl, super.alias, super.requiresAuth});
+  const KnownServer({
+    required super.serverUrl,
+    super.alias,
+    super.requiresAuth,
+  });
 
   @override
   Map<String, dynamic> toJson() => {
@@ -100,8 +106,11 @@ Future<void> clearServersIfFreshInstall(ServerStorage storage) async {
       await storage.delete(serverId);
     }
   } catch (e, st) {
-    dev.log('Failed to clear servers on fresh install',
-        error: e, stackTrace: st);
+    dev.log(
+      'Failed to clear servers on fresh install',
+      error: e,
+      stackTrace: st,
+    );
   }
   await prefs.setBool(_freshInstallKey, true);
 }

@@ -29,9 +29,7 @@ const _testRoom = Room(
       kind: 'bare',
     ),
   },
-  mcpClientToolsets: {
-    'stdio-tools': McpClientToolset(kind: 'stdio'),
-  },
+  mcpClientToolsets: {'stdio-tools': McpClientToolset(kind: 'stdio')},
 );
 
 Widget _buildScreen({
@@ -129,8 +127,9 @@ void main() {
       expect(find.text('SKILLS (1)'), findsOneWidget);
     });
 
-    testWidgets('expanding skill shows detail dialog on Show more',
-        (tester) async {
+    testWidgets('expanding skill shows detail dialog on Show more', (
+      tester,
+    ) async {
       final room = _testRoom.copyWith(
         skills: {
           'web_search': const RoomSkill(
@@ -207,9 +206,7 @@ void main() {
     testWidgets('shows client tools loading then empty', (tester) async {
       final completer = Completer<ToolRegistry>();
       await tester.pumpWidget(
-        _buildScreen(
-          toolRegistryResolver: (_) => completer.future,
-        ),
+        _buildScreen(toolRegistryResolver: (_) => completer.future),
       );
       // Use pump() — pumpAndSettle would time out on the loading spinner.
       await tester.pump();

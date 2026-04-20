@@ -97,10 +97,7 @@ Future<void> main() async {
         content: 'Write a short Python hello world',
       ),
       AssistantMessage(id: lastMessageId ?? 'a_1', content: buffer.toString()),
-      const UserMessage(
-        id: 'user_2',
-        content: 'Now make it print goodbye too',
-      ),
+      const UserMessage(id: 'user_2', content: 'Now make it print goodbye too'),
     ],
     state: aguiState,
   );

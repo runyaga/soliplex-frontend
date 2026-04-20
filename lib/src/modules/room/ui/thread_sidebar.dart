@@ -69,10 +69,7 @@ class ThreadSidebar extends StatelessWidget {
         ),
         const Divider(height: 1),
         if (quizzes.isNotEmpty) ...[
-          _QuizRow(
-            quizzes: quizzes,
-            onQuizTapped: onQuizTapped,
-          ),
+          _QuizRow(quizzes: quizzes, onQuizTapped: onQuizTapped),
           const Divider(height: 1),
         ],
         Expanded(child: _buildContent(context)),
@@ -115,10 +112,11 @@ class ThreadSidebar extends StatelessWidget {
               ? ListView(
                   children: const [
                     Center(
-                        child: Padding(
-                      padding: EdgeInsets.only(top: 32),
-                      child: Text('No threads'),
-                    )),
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 32),
+                        child: Text('No threads'),
+                      ),
+                    ),
                   ],
                 )
               : ListView.builder(
@@ -142,10 +140,7 @@ class ThreadSidebar extends StatelessWidget {
   Widget _wrapWithRefresh(Widget child) {
     final handler = onRetryThreads;
     if (handler == null) return child;
-    return RefreshIndicator(
-      onRefresh: handler,
-      child: child,
-    );
+    return RefreshIndicator(onRefresh: handler, child: child);
   }
 }
 
@@ -207,9 +202,7 @@ class _QuizRowState extends State<_QuizRow> {
       icon: Icon(icon, size: 16),
       label: Text(label),
       style: TextButton.styleFrom(
-        padding: EdgeInsets.symmetric(
-          horizontal: indent ? 24 : 8,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: indent ? 24 : 8),
         visualDensity: VisualDensity.compact,
         alignment: Alignment.centerLeft,
       ),

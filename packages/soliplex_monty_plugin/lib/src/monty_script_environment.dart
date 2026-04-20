@@ -68,9 +68,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
   final Mutex _executeMutex = Mutex();
 
   @override
-  List<ClientTool> get tools => [
-        _buildExecutePythonTool(),
-      ];
+  List<ClientTool> get tools => [_buildExecutePythonTool()];
 
   /// Executes Python [code] directly in the interpreter.
   ///
@@ -211,8 +209,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     return ClientTool(
       definition: const Tool(
         name: 'execute_python',
-        description:
-            'Run a Python snippet in the persistent REPL. Variables, '
+        description: 'Run a Python snippet in the persistent REPL. Variables, '
             'functions, and state from previous calls remain in scope. '
             'Returns print() output and the last-expression value.\n\n'
             'LIMITATIONS (Monty subset of Python):\n'
@@ -262,9 +259,7 @@ class MontyScriptEnvironment implements ScriptEnvironment {
     }
     final value = result.value.dartValue?.toString();
     if (value != '2') {
-      throw Exception(
-        'Python runtime probe returned unexpected value: $value',
-      );
+      throw Exception('Python runtime probe returned unexpected value: $value');
     }
   }
 
@@ -292,8 +287,10 @@ class MontyScriptEnvironment implements ScriptEnvironment {
       });
 
       if (result.error != null) {
-        _log.debug('[$callId] Python error (returned as output): '
-            '${result.error!.message}');
+        _log.debug(
+          '[$callId] Python error (returned as output): '
+          '${result.error!.message}',
+        );
       }
       return _formatResult(result);
     } on TimeoutException {
@@ -342,10 +339,8 @@ class MontyScriptEnvironment implements ScriptEnvironment {
 /// A [ScriptEnvironment] decorator that filters the visible tools list.
 class ToolFilteredEnvironment implements ScriptEnvironment {
   /// Creates a [ToolFilteredEnvironment] wrapping the given environment.
-  ToolFilteredEnvironment(
-    this._env, {
-    required Set<String> allowedTools,
-  }) : _allowedTools = allowedTools;
+  ToolFilteredEnvironment(this._env, {required Set<String> allowedTools})
+      : _allowedTools = allowedTools;
 
   final ScriptEnvironment _env;
   final Set<String> _allowedTools;

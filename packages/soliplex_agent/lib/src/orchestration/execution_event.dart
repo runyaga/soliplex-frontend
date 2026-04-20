@@ -265,10 +265,7 @@ class AwaitingApproval extends ExecutionEvent {
 
 /// A sub-agent activity snapshot from the backend.
 class ActivitySnapshot extends ExecutionEvent {
-  const ActivitySnapshot({
-    required this.activityType,
-    required this.content,
-  });
+  const ActivitySnapshot({required this.activityType, required this.content});
 
   /// The kind of activity (e.g. `'skill_tool_call'`).
   final String activityType;

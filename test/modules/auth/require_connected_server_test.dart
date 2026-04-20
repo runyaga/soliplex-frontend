@@ -24,10 +24,7 @@ void main() {
     });
 
     test('returns /lobby when alias not found', () {
-      expect(
-        requireConnectedServer(serverManager, 'nonexistent'),
-        '/lobby',
-      );
+      expect(requireConnectedServer(serverManager, 'nonexistent'), '/lobby');
     });
 
     test('returns /lobby when server exists but not connected', () {

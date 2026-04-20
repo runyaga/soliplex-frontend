@@ -23,10 +23,7 @@ class WebCallbackSuccess extends CallbackParams {
 
 /// Failed web BFF OAuth callback.
 class WebCallbackError extends CallbackParams {
-  const WebCallbackError({
-    required this.error,
-    this.errorDescription,
-  });
+  const WebCallbackError({required this.error, this.errorDescription});
 
   final String error;
   final String? errorDescription;

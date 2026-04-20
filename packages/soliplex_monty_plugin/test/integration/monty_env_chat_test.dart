@@ -109,19 +109,17 @@ void main() {
 
     setUpAll(() {
       runtime = _runtime(
-        extensionFactory: toOwnedFactory(
-          (ctx) async {
-            final innerConn = _conn('inner');
-            final soliplexConn = SoliplexConnection.fromServerConnection(
-              innerConn,
-              alias: 'inner',
-              serverUrl: _demoUrl,
-            );
-            return MontyScriptEnvironment(
-              tools: buildSoliplexTools(ctx, () => {'inner': soliplexConn}),
-            );
-          },
-        ),
+        extensionFactory: toOwnedFactory((ctx) async {
+          final innerConn = _conn('inner');
+          final soliplexConn = SoliplexConnection.fromServerConnection(
+            innerConn,
+            alias: 'inner',
+            serverUrl: _demoUrl,
+          );
+          return MontyScriptEnvironment(
+            tools: buildSoliplexTools(ctx, () => {'inner': soliplexConn}),
+          );
+        }),
       );
     });
 
@@ -229,9 +227,7 @@ void main() {
       );
       // toSharedFactory: env is NOT disposed when a session ends.
       // Caller (tearDownAll) owns env.dispose().
-      runtime = _runtime(
-        extensionFactory: toSharedFactory(env),
-      );
+      runtime = _runtime(extensionFactory: toSharedFactory(env));
     });
 
     tearDownAll(() async {

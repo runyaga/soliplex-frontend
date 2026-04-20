@@ -28,8 +28,11 @@ class FakeUiRenderer implements UiRenderer {
     required String message,
     String? target,
   }) async {
-    _record(
-        'requestConfirm', {'verb': verb, 'message': message, 'target': target});
+    _record('requestConfirm', {
+      'verb': verb,
+      'message': message,
+      'target': target,
+    });
     return confirmAnswer?.call(verb) ?? true;
   }
 
@@ -87,11 +90,10 @@ void main() {
       final r = FakeUiRenderer();
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_notify',
-        {'kind': 'info', 'title': 'Hello'},
-      );
+      final result = await _callHandler(p, 'ui_notify', {
+        'kind': 'info',
+        'title': 'Hello',
+      });
 
       expect(result, isNull);
       expect(r.calls, hasLength(1));
@@ -110,15 +112,12 @@ void main() {
     });
 
     test('renderer error returns error string, no throw', () async {
-      final p = UiPlugin(
-        renderer: _ThrowingRenderer(on: 'notify'),
-      );
+      final p = UiPlugin(renderer: _ThrowingRenderer(on: 'notify'));
 
-      final result = await _callHandler(
-        p,
-        'ui_notify',
-        {'kind': 'error', 'title': 'Boom'},
-      );
+      final result = await _callHandler(p, 'ui_notify', {
+        'kind': 'error',
+        'title': 'Boom',
+      });
 
       expect(result, isA<String>());
       expect(result.toString(), contains('ui_notify'));
@@ -132,11 +131,10 @@ void main() {
       final states = <UiSessionState>[];
       p.stateSignal.subscribe((s) => states.add(s));
 
-      await _callHandler(
-        p,
-        'ui_show_modal',
-        {'title': 'Welcome', 'body': 'Hello there'},
-      );
+      await _callHandler(p, 'ui_show_modal', {
+        'title': 'Welcome',
+        'body': 'Hello there',
+      });
 
       expect(states, [isA<UiIdle>(), isA<UiModalOpen>(), isA<UiIdle>()]);
     });
@@ -145,11 +143,10 @@ void main() {
       final r = FakeUiRenderer()..modalAnswer = (_) => 'Got it';
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_show_modal',
-        {'title': 'MOTD', 'body': 'News'},
-      );
+      final result = await _callHandler(p, 'ui_show_modal', {
+        'title': 'MOTD',
+        'body': 'News',
+      });
 
       expect(result, 'Got it');
     });
@@ -158,11 +155,10 @@ void main() {
       final r = FakeUiRenderer()..modalAnswer = (_) => null;
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_show_modal',
-        {'title': 'MOTD', 'body': 'News'},
-      );
+      final result = await _callHandler(p, 'ui_show_modal', {
+        'title': 'MOTD',
+        'body': 'News',
+      });
 
       expect(result, isNull);
     });
@@ -175,13 +171,9 @@ void main() {
       final states = <UiSessionState>[];
       p.stateSignal.subscribe((s) => states.add(s));
 
-      await _callHandler(
-        p,
-        'ui_show_form',
-        {
-          'schema': {'title': 'Settings'},
-        },
-      );
+      await _callHandler(p, 'ui_show_form', {
+        'schema': {'title': 'Settings'},
+      });
 
       expect(states, [isA<UiIdle>(), isA<UiFormOpen>(), isA<UiIdle>()]);
     });
@@ -190,13 +182,9 @@ void main() {
       final r = FakeUiRenderer()..formAnswer = (_) => {'name': 'Alan'};
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_show_form',
-        {
-          'schema': {'fields': []},
-        },
-      );
+      final result = await _callHandler(p, 'ui_show_form', {
+        'schema': {'fields': []},
+      });
 
       expect(result, {'name': 'Alan'});
     });
@@ -205,13 +193,9 @@ void main() {
       final r = FakeUiRenderer()..formAnswer = (_) => null;
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_show_form',
-        {
-          'schema': {'fields': []},
-        },
-      );
+      final result = await _callHandler(p, 'ui_show_form', {
+        'schema': {'fields': []},
+      });
 
       expect(result, isNull);
     });
@@ -222,11 +206,9 @@ void main() {
       final r = FakeUiRenderer();
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_inject_message',
-        {'content': '**tip:** try /help'},
-      );
+      final result = await _callHandler(p, 'ui_inject_message', {
+        'content': '**tip:** try /help',
+      });
 
       expect(result, isNull);
       expect(r.calls.first.method, 'injectMessage');
@@ -237,11 +219,10 @@ void main() {
       final r = FakeUiRenderer();
       final p = _plugin(r);
 
-      await _callHandler(
-        p,
-        'ui_inject_message',
-        {'content': 'plain text', 'format': 'plain'},
-      );
+      await _callHandler(p, 'ui_inject_message', {
+        'content': 'plain text',
+        'format': 'plain',
+      });
 
       expect(r.calls.first.args['format'], 'plain');
     });
@@ -250,11 +231,7 @@ void main() {
       final r = FakeUiRenderer();
       final p = _plugin(r);
 
-      await _callHandler(
-        p,
-        'ui_inject_message',
-        {'content': 'hi'},
-      );
+      await _callHandler(p, 'ui_inject_message', {'content': 'hi'});
 
       expect(p.state, isA<UiIdle>());
     });
@@ -265,11 +242,10 @@ void main() {
       final r = FakeUiRenderer()..confirmAnswer = (_) => true;
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'delete', 'message': 'Delete this?'},
-      );
+      final result = await _callHandler(p, 'ui_request_confirm', {
+        'verb': 'delete',
+        'message': 'Delete this?',
+      });
 
       expect(result, true);
     });
@@ -278,11 +254,10 @@ void main() {
       final r = FakeUiRenderer()..confirmAnswer = (_) => false;
       final p = _plugin(r);
 
-      final result = await _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'clear', 'message': 'Clear history?'},
-      );
+      final result = await _callHandler(p, 'ui_request_confirm', {
+        'verb': 'clear',
+        'message': 'Clear history?',
+      });
 
       expect(result, false);
     });
@@ -293,11 +268,10 @@ void main() {
       final states = <UiSessionState>[];
       p.stateSignal.subscribe((s) => states.add(s));
 
-      await _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'reset', 'message': 'Reset?'},
-      );
+      await _callHandler(p, 'ui_request_confirm', {
+        'verb': 'reset',
+        'message': 'Reset?',
+      });
 
       expect(states, [isA<UiIdle>(), isA<UiAwaitingConfirm>(), isA<UiIdle>()]);
     });
@@ -306,16 +280,14 @@ void main() {
       final r = FakeUiRenderer();
       final p = _plugin(r);
 
-      final f1 = _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'delete', 'message': 'First?'},
-      );
-      final f2 = _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'clear', 'message': 'Second?'},
-      );
+      final f1 = _callHandler(p, 'ui_request_confirm', {
+        'verb': 'delete',
+        'message': 'First?',
+      });
+      final f2 = _callHandler(p, 'ui_request_confirm', {
+        'verb': 'clear',
+        'message': 'Second?',
+      });
 
       final results = await Future.wait([f1, f2]);
       // Both resolve without error; order is first-in-first-out.
@@ -326,11 +298,10 @@ void main() {
     test('renderer error returns error string, state resets', () async {
       final p = UiPlugin(renderer: _ThrowingRenderer(on: 'requestConfirm'));
 
-      final result = await _callHandler(
-        p,
-        'ui_request_confirm',
-        {'verb': 'delete', 'message': 'Boom?'},
-      );
+      final result = await _callHandler(p, 'ui_request_confirm', {
+        'verb': 'delete',
+        'message': 'Boom?',
+      });
 
       expect(result.toString(), contains('ui_request_confirm'));
       expect(p.state, isA<UiIdle>());

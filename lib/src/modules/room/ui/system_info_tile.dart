@@ -16,10 +16,7 @@ class SystemInfoTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant,
-          width: 0.5,
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant, width: 0.5),
       ),
       child: message.format == 'plain'
           ? SelectableText(

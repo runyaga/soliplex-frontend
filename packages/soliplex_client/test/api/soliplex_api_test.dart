@@ -619,10 +619,7 @@ void main() {
         expect(thread.id, equals('new-thread'));
         expect(thread.roomId, equals('room-123'));
         expect(thread.initialRunId, equals('run-1'));
-        expect(
-          aguiState,
-          containsPair('rag', isA<Map<String, dynamic>>()),
-        );
+        expect(aguiState, containsPair('rag', isA<Map<String, dynamic>>()));
       });
 
       test('returns empty state when runs have no run_input', () async {
@@ -905,11 +902,7 @@ void main() {
         ).thenThrow(const NotFoundException(message: 'Not found'));
 
         expect(
-          () => api.updateThreadMetadata(
-            'room-123',
-            'thread-456',
-            name: 'x',
-          ),
+          () => api.updateThreadMetadata('room-123', 'thread-456', name: 'x'),
           throwsA(isA<NotFoundException>()),
         );
       });
@@ -2068,14 +2061,13 @@ void main() {
           },
         );
 
-        final history =
-            await apiWithWarning.getThreadHistory('room-123', 'thread-456');
+        final history = await apiWithWarning.getThreadHistory(
+          'room-123',
+          'thread-456',
+        );
 
         expect(history.messages, hasLength(1));
-        expect(
-          (history.messages[0] as TextMessage).text,
-          equals('Hello'),
-        );
+        expect((history.messages[0] as TextMessage).text, equals('Hello'));
         expect(warnings, hasLength(1));
         expect(warnings[0], contains('Skipped 1 malformed event'));
 

@@ -45,10 +45,8 @@ class RoomsFailed extends ServerRooms {
 
 /// Manages per-server room lists, fetching from all connected servers.
 class LobbyState {
-  LobbyState({
-    required ServerManager serverManager,
-    ApiResolver? apiResolver,
-  })  : _serverManager = serverManager,
+  LobbyState({required ServerManager serverManager, ApiResolver? apiResolver})
+      : _serverManager = serverManager,
         _apiResolver = apiResolver ?? _defaultResolver {
     _unsubscribe = _serverManager.servers.subscribe(_onServersChanged);
   }
@@ -82,8 +80,9 @@ class LobbyState {
     final removed = knownIds.difference(nextIds);
     if (removed.isNotEmpty) {
       final updatedRooms = Map<String, ServerRooms>.from(_roomsByServer.value);
-      final updatedProfiles =
-          Map<String, UserProfile?>.from(_userProfiles.value);
+      final updatedProfiles = Map<String, UserProfile?>.from(
+        _userProfiles.value,
+      );
       for (final id in removed) {
         updatedRooms.remove(id);
         updatedProfiles.remove(id);
@@ -115,8 +114,9 @@ class LobbyState {
     } else {
       final updatedRooms = Map<String, ServerRooms>.from(_roomsByServer.value)
         ..remove(serverId);
-      final updatedProfiles =
-          Map<String, UserProfile?>.from(_userProfiles.value)..remove(serverId);
+      final updatedProfiles = Map<String, UserProfile?>.from(
+        _userProfiles.value,
+      )..remove(serverId);
       _cancelTokens.remove(serverId)?.cancel('disconnected');
       _roomsByServer.value = updatedRooms;
       _userProfiles.value = updatedProfiles;
@@ -131,10 +131,7 @@ class LobbyState {
     _cancelTokens[serverId] = token;
 
     // Mark as loading
-    _roomsByServer.value = {
-      ..._roomsByServer.value,
-      serverId: RoomsLoading(),
-    };
+    _roomsByServer.value = {..._roomsByServer.value, serverId: RoomsLoading()};
 
     _apiResolver(entry).getRooms(cancelToken: token).then((rooms) {
       if (token.isCancelled) return;

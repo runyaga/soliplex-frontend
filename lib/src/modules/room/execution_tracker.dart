@@ -4,9 +4,7 @@ import 'execution_activity.dart';
 import 'execution_step.dart';
 
 class ExecutionTracker {
-  ExecutionTracker({
-    required ReadonlySignal<ExecutionEvent?> executionEvents,
-  }) {
+  ExecutionTracker({required ReadonlySignal<ExecutionEvent?> executionEvents}) {
     _stopwatch.start();
     _unsub = executionEvents.subscribe(_onEvent);
   }
@@ -16,21 +14,25 @@ class ExecutionTracker {
   bool _isFrozen = false;
   bool get isFrozen => _isFrozen;
 
-  final Signal<List<ExecutionStep>> _steps =
-      Signal<List<ExecutionStep>>(const []);
+  final Signal<List<ExecutionStep>> _steps = Signal<List<ExecutionStep>>(
+    const [],
+  );
   ReadonlySignal<List<ExecutionStep>> get steps => _steps;
 
-  final Signal<List<ActivityEntry>> _activities =
-      Signal<List<ActivityEntry>>(const []);
+  final Signal<List<ActivityEntry>> _activities = Signal<List<ActivityEntry>>(
+    const [],
+  );
   ReadonlySignal<List<ActivityEntry>> get activities => _activities;
 
-  final Signal<Map<String, dynamic>> _aguiState =
-      Signal<Map<String, dynamic>>(const {});
+  final Signal<Map<String, dynamic>> _aguiState = Signal<Map<String, dynamic>>(
+    const {},
+  );
   ReadonlySignal<Map<String, dynamic>> get aguiState => _aguiState;
 
   final Map<String, ToolCallInfo> _toolCallsById = {};
-  final Signal<List<ToolCallInfo>> _toolCalls =
-      Signal<List<ToolCallInfo>>(const []);
+  final Signal<List<ToolCallInfo>> _toolCalls = Signal<List<ToolCallInfo>>(
+    const [],
+  );
   ReadonlySignal<List<ToolCallInfo>> get toolCalls => _toolCalls;
 
   void _flushToolCalls() {
@@ -55,7 +57,10 @@ class ExecutionTracker {
       case ServerToolCallStarted(:final toolName, :final toolCallId):
         _completeActiveStep();
         _addStep(toolName, toolCallId: toolCallId);
-        _toolCallsById[toolCallId] = ToolCallInfo(id: toolCallId, name: toolName);
+        _toolCallsById[toolCallId] = ToolCallInfo(
+          id: toolCallId,
+          name: toolName,
+        );
         _flushToolCalls();
       case ServerToolCallCompleted(:final toolCallId, :final result):
         _completeActiveStep();
@@ -88,7 +93,10 @@ class ExecutionTracker {
       case ClientToolExecuting(:final toolName, :final toolCallId):
         _completeActiveStep();
         _addStep(toolName);
-        _toolCallsById[toolCallId] = ToolCallInfo(id: toolCallId, name: toolName);
+        _toolCallsById[toolCallId] = ToolCallInfo(
+          id: toolCallId,
+          name: toolName,
+        );
         _flushToolCalls();
       case ClientToolCompleted(:final toolCallId, :final result, :final status):
         _completeActiveStep();

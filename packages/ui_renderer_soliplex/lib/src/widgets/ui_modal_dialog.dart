@@ -22,11 +22,8 @@ class UiModalDialog extends StatelessWidget {
         (actions == null || actions.isEmpty) ? ['Dismiss'] : actions;
     return showDialog<String>(
       context: context,
-      builder: (_) => UiModalDialog(
-        title: title,
-        body: body,
-        actions: effectiveActions,
-      ),
+      builder: (_) =>
+          UiModalDialog(title: title, body: body, actions: effectiveActions),
     );
   }
 

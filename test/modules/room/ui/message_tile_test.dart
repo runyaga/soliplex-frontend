@@ -19,7 +19,10 @@ void main() {
         text: 'Hello',
       );
       await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: TextMessageTile(message: msg))));
+        MaterialApp(
+          home: Scaffold(body: TextMessageTile(message: msg)),
+        ),
+      );
       expect(find.text('You'), findsOneWidget);
       expect(find.text('Hello'), findsOneWidget);
     });
@@ -32,7 +35,10 @@ void main() {
         text: 'Response',
       );
       await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: TextMessageTile(message: msg))));
+        MaterialApp(
+          home: Scaffold(body: TextMessageTile(message: msg)),
+        ),
+      );
       expect(find.text('Assistant'), findsOneWidget);
     });
 
@@ -45,7 +51,10 @@ void main() {
         thinkingText: 'Thinking about this...',
       );
       await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: TextMessageTile(message: msg))));
+        MaterialApp(
+          home: Scaffold(body: TextMessageTile(message: msg)),
+        ),
+      );
       expect(find.text('Thinking...'), findsOneWidget);
     });
 
@@ -65,22 +74,22 @@ void main() {
         text: 'Response',
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TextMessageTile(
-            message: msg,
-            executionTracker: tracker,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TextMessageTile(message: msg, executionTracker: tracker),
           ),
         ),
-      ));
+      );
 
       expect(find.byType(StepLog), findsOneWidget);
 
       tracker.dispose();
     });
 
-    testWidgets('renders ActivityIndicator when streamingActivity provided',
-        (tester) async {
+    testWidgets('renders ActivityIndicator when streamingActivity provided', (
+      tester,
+    ) async {
       final msg = TextMessage(
         id: 'msg-1',
         user: ChatUser.assistant,
@@ -88,14 +97,16 @@ void main() {
         text: 'Response',
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TextMessageTile(
-            message: msg,
-            streamingActivity: const RespondingActivity(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TextMessageTile(
+              message: msg,
+              streamingActivity: const RespondingActivity(),
+            ),
           ),
         ),
-      ));
+      );
 
       expect(find.byType(ActivityIndicator), findsOneWidget);
       expect(find.text('Responding...'), findsOneWidget);
@@ -109,15 +120,18 @@ void main() {
         text: '',
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: TextMessageTile(message: msg)),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TextMessageTile(message: msg)),
+        ),
+      );
 
       expect(find.text('...'), findsOneWidget);
     });
 
-    testWidgets('shows message thinkingText even when tracker provided',
-        (tester) async {
+    testWidgets('shows message thinkingText even when tracker provided', (
+      tester,
+    ) async {
       final events = Signal<ExecutionEvent?>(null);
       final tracker = ExecutionTracker(executionEvents: events);
 
@@ -129,14 +143,13 @@ void main() {
         thinkingText: 'persisted thinking',
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TextMessageTile(
-            message: msg,
-            executionTracker: tracker,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TextMessageTile(message: msg, executionTracker: tracker),
           ),
         ),
-      ));
+      );
 
       // Static _ThinkingBlock shown via ExpansionTile
       expect(find.byType(ExpansionTile), findsOneWidget);
@@ -147,9 +160,9 @@ void main() {
 
   group('LoadingMessageTile', () {
     testWidgets('renders spinner fallback without tracker', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: LoadingMessageTile()),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: LoadingMessageTile())),
+      );
 
       expect(find.text('Thinking...'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -164,14 +177,16 @@ void main() {
         toolCallId: 'tc-1',
       );
 
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: LoadingMessageTile(
-            executionTracker: tracker,
-            streamingActivity: const ThinkingActivity(),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LoadingMessageTile(
+              executionTracker: tracker,
+              streamingActivity: const ThinkingActivity(),
+            ),
           ),
         ),
-      ));
+      );
 
       expect(find.byType(ActivityIndicator), findsOneWidget);
       expect(find.byType(StepLog), findsOneWidget);
@@ -195,7 +210,10 @@ void main() {
         ],
       );
       await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ToolCallTile(message: msg))));
+        MaterialApp(
+          home: Scaffold(body: ToolCallTile(message: msg)),
+        ),
+      );
       expect(find.text('get_weather'), findsOneWidget);
       expect(find.text('completed'), findsOneWidget);
     });
@@ -215,7 +233,10 @@ void main() {
         ],
       );
       await tester.pumpWidget(
-          MaterialApp(home: Scaffold(body: ToolCallTile(message: msg))));
+        MaterialApp(
+          home: Scaffold(body: ToolCallTile(message: msg)),
+        ),
+      );
       expect(find.text('Found results'), findsNothing);
       await tester.tap(find.text('search'));
       await tester.pumpAndSettle();

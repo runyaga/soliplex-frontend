@@ -11,10 +11,14 @@ import 'package:soliplex_monty_plugin/soliplex_monty_plugin.dart';
 import 'package:test/test.dart';
 
 /// End-to-end: ONE MontyScriptEnvironment with simplified tools.
-final String _demoUrl =
-    _getEnv('SOLIPLEX_DEMO_URL', 'https://demo.toughserv.com');
-final String _localUrl =
-    _getEnv('SOLIPLEX_LOCAL_URL', 'https://demo.toughserv.com');
+final String _demoUrl = _getEnv(
+  'SOLIPLEX_DEMO_URL',
+  'https://demo.toughserv.com',
+);
+final String _localUrl = _getEnv(
+  'SOLIPLEX_LOCAL_URL',
+  'https://demo.toughserv.com',
+);
 
 String _getEnv(String key, String defaultValue) {
   try {
@@ -35,9 +39,7 @@ void main() {
     };
     final soliplexTools = buildSoliplexTools(ctx, () => connections);
 
-    env = MontyScriptEnvironment(
-      tools: soliplexTools,
-    );
+    env = MontyScriptEnvironment(tools: soliplexTools);
   });
 
   tearDownAll(() async {
@@ -110,8 +112,9 @@ void main() {
       final firstRoomId = ((roomsRes.value.dartValue as List).first
           as Map<String, dynamic>)['id'];
 
-      final r = await env
-          .execute('soliplex_get_room(server="demo", room_id="$firstRoomId")');
+      final r = await env.execute(
+        'soliplex_get_room(server="demo", room_id="$firstRoomId")',
+      );
       if (r.error != null) print('Error: ${r.error}');
       final room = r.value.dartValue as Map;
       print('  Room: $room');
@@ -120,22 +123,19 @@ void main() {
     timeout: const Timeout(Duration(seconds: 15)),
   );
 
-  test(
-    'help() works',
-    () async {
-      final r = await env.execute('help()');
-      if (r.error != null) print('Error: ${r.error}');
-      final data = r.value.dartValue as Map;
-      expect(
-        (data['tools'] as List).map((t) => (t as Map)['name']),
-        contains('soliplex_new_thread'),
-      );
-      expect(
-        (data['tools'] as List).map((t) => (t as Map)['name']),
-        contains('help'),
-      );
-    },
-  );
+  test('help() works', () async {
+    final r = await env.execute('help()');
+    if (r.error != null) print('Error: ${r.error}');
+    final data = r.value.dartValue as Map;
+    expect(
+      (data['tools'] as List).map((t) => (t as Map)['name']),
+      contains('soliplex_new_thread'),
+    );
+    expect(
+      (data['tools'] as List).map((t) => (t as Map)['name']),
+      contains('help'),
+    );
+  });
 }
 
 SoliplexConnection _buildConnection(String id, String baseUrl) {

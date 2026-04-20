@@ -87,10 +87,12 @@ void main() {
   // ── 2. list_rooms — each server has different rooms ────────────────
 
   test('2. list_rooms from both servers', () async {
-    final demoRooms =
-        asList(await call('soliplex_list_rooms', {'server': 'demo'}));
-    final localRooms =
-        asList(await call('soliplex_list_rooms', {'server': 'local'}));
+    final demoRooms = asList(
+      await call('soliplex_list_rooms', {'server': 'demo'}),
+    );
+    final localRooms = asList(
+      await call('soliplex_list_rooms', {'server': 'local'}),
+    );
 
     final demoIds =
         demoRooms.cast<Map<String, dynamic>>().map((r) => r['id']).toList();
@@ -108,20 +110,14 @@ void main() {
 
   test('3. get_room from each server', () async {
     final demoRoom = asMap(
-      await call('soliplex_get_room', {
-        'server': 'demo',
-        'room_id': 'cooking',
-      }),
+      await call('soliplex_get_room', {'server': 'demo', 'room_id': 'cooking'}),
     );
     print('  ✓ Demo "cooking": ${demoRoom['name']}');
     print('    Skills: ${demoRoom['skills']}');
     print('    Tools: ${demoRoom['tools']}');
 
     final localRoom = asMap(
-      await call('soliplex_get_room', {
-        'server': 'local',
-        'room_id': 'chat',
-      }),
+      await call('soliplex_get_room', {'server': 'local', 'room_id': 'chat'}),
     );
     print('  ✓ Local "chat": ${localRoom['name']}');
     print('    Skills: ${localRoom['skills']}');

@@ -14,8 +14,9 @@ ToolCallMessage makeMessage(List<ToolCallInfo> toolCalls) => ToolCallMessage(
     );
 
 void main() {
-  testWidgets('renders tool name and status for single tool call',
-      (tester) async {
+  testWidgets('renders tool name and status for single tool call', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       wrap(
         ToolCallTile(

@@ -47,8 +47,6 @@ class ShellConfig {
   List<GoRouterRedirect> get redirects =>
       modules.map((m) => m.redirect).nonNulls.toList();
 
-  List<String> validate() => validateRoutes(
-        routes: routes,
-        initialRoute: initialRoute,
-      );
+  List<String> validate() =>
+      validateRoutes(routes: routes, initialRoute: initialRoute);
 }

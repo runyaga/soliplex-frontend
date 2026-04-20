@@ -72,7 +72,7 @@ class _StateRow extends StatelessWidget {
         ),
       UiModalOpen(:final title) => (
           'Modal open: $title',
-          theme.colorScheme.primary
+          theme.colorScheme.primary,
         ),
       UiFormOpen(:final schemaKey) => (
           'Form open ($schemaKey)',
@@ -100,10 +100,7 @@ class _ConfirmButtons extends StatelessWidget {
     final theme = Theme.of(context);
     return Row(
       children: [
-        FilledButton.tonal(
-          onPressed: () {},
-          child: const Text('Approve'),
-        ),
+        FilledButton.tonal(onPressed: () {}, child: const Text('Approve')),
         const SizedBox(width: 8),
         OutlinedButton(
           onPressed: () {},

@@ -8,11 +8,7 @@ import 'package:soliplex_frontend/src/modules/room/ui/document_picker.dart';
 
 final _docs = [
   const RagDocument(id: '1', title: 'Report.pdf', uri: '/files/Report.pdf'),
-  const RagDocument(
-    id: '2',
-    title: 'Summary.docx',
-    uri: '/files/Summary.docx',
-  ),
+  const RagDocument(id: '2', title: 'Summary.docx', uri: '/files/Summary.docx'),
   const RagDocument(id: '3', title: 'Data.xlsx', uri: '/files/Data.xlsx'),
 ];
 

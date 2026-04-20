@@ -186,10 +186,7 @@ void main() {
 
     test('QuizCompleted rejects empty results', () {
       expect(
-        () => QuizCompleted(
-          quiz: _twoQuestionQuiz(),
-          results: const {},
-        ),
+        () => QuizCompleted(quiz: _twoQuestionQuiz(), results: const {}),
         throwsA(isA<ArgumentError>()),
       );
     });

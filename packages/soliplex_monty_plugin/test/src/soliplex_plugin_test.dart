@@ -31,11 +31,8 @@ ThreadInfo _threadInfo({String? id, String? runId}) => ThreadInfo(
       createdAt: _now,
     );
 
-RunInfo _runInfo({String? id}) => RunInfo(
-      id: id ?? _runId,
-      threadId: _threadId,
-      createdAt: _now,
-    );
+RunInfo _runInfo({String? id}) =>
+    RunInfo(id: id ?? _runId, threadId: _threadId, createdAt: _now);
 
 Stream<BaseEvent> _happyStream({
   String threadId = _threadId,
@@ -75,9 +72,7 @@ void main() {
   late Map<String, SoliplexConnection> connections;
 
   setUpAll(() {
-    registerFallbackValue(
-      const SimpleRunAgentInput(threadId: '', runId: ''),
-    );
+    registerFallbackValue(const SimpleRunAgentInput(threadId: '', runId: ''));
     registerFallbackValue(
       HostFunction(
         schema: const HostFunctionSchema(name: '_fallback', description: ''),
@@ -101,10 +96,7 @@ void main() {
     tools = buildSoliplexTools(_ctx, () => connections);
   });
 
-  Future<Object?> call(
-    String name,
-    Map<String, Object?> args,
-  ) {
+  Future<Object?> call(String name, Map<String, Object?> args) {
     final tool = tools.firstWhere((t) => t.name == name);
     return tool.handler(args);
   }
@@ -142,8 +134,9 @@ void main() {
         ),
       };
       final multiTools = buildSoliplexTools(_ctx, () => multiConnections);
-      final tool =
-          multiTools.firstWhere((t) => t.name == 'soliplex_list_servers');
+      final tool = multiTools.firstWhere(
+        (t) => t.name == 'soliplex_list_servers',
+      );
       final result = (await tool.handler({}))! as List<dynamic>;
       final ids =
           result.cast<Map<String, dynamic>>().map((e) => e['id']).toList();
@@ -198,12 +191,7 @@ void main() {
               description: 'A tool',
             ),
           },
-          skills: {
-            'skill1': RoomSkill(
-              name: 'skill1',
-              description: 'A skill',
-            ),
-          },
+          skills: {'skill1': RoomSkill(name: 'skill1', description: 'A skill')},
           enableAttachments: true,
           allowMcp: true,
         ),
@@ -226,11 +214,9 @@ void main() {
 
   group('soliplex_get_documents', () {
     test('returns document metadata', () async {
-      when(() => mockApi.getDocuments(_roomId)).thenAnswer(
-        (_) async => [
-          const RagDocument(id: 'd1', title: 'Doc 1'),
-        ],
-      );
+      when(
+        () => mockApi.getDocuments(_roomId),
+      ).thenAnswer((_) async => [const RagDocument(id: 'd1', title: 'Doc 1')]);
 
       final result = (await call('soliplex_get_documents', {
         'server': _serverId,
@@ -245,9 +231,7 @@ void main() {
 
   group('soliplex_get_chunk', () {
     test('returns chunk info', () async {
-      when(
-        () => mockApi.getChunkVisualization(_roomId, 'c1'),
-      ).thenAnswer(
+      when(() => mockApi.getChunkVisualization(_roomId, 'c1')).thenAnswer(
         (_) async => ChunkVisualization(
           chunkId: 'c1',
           documentUri: 'doc.pdf',
@@ -332,9 +316,7 @@ void main() {
     test('accumulates multi-delta response', () async {
       when(
         () => mockStream.runAgent(any(), any()),
-      ).thenAnswer(
-        (_) => _happyStream(deltas: ['Hello ', 'world', '!']),
-      );
+      ).thenAnswer((_) => _happyStream(deltas: ['Hello ', 'world', '!']));
 
       final result = (await call('soliplex_new_thread', {
         'server': _serverId,
@@ -347,9 +329,7 @@ void main() {
     test('captures StateSnapshotEvent', () async {
       when(
         () => mockStream.runAgent(any(), any()),
-      ).thenAnswer(
-        (_) => _happyStream(stateSnapshot: {'updated': 'state'}),
-      );
+      ).thenAnswer((_) => _happyStream(stateSnapshot: {'updated': 'state'}));
 
       await call('soliplex_new_thread', {
         'server': _serverId,
@@ -357,9 +337,9 @@ void main() {
         'message': 'Hi',
       });
 
-      when(() => mockApi.createRun(_roomId, _threadId)).thenAnswer(
-        (_) async => _runInfo(id: 'run-2'),
-      );
+      when(
+        () => mockApi.createRun(_roomId, _threadId),
+      ).thenAnswer((_) async => _runInfo(id: 'run-2'));
       when(
         () => mockStream.runAgent(any(), any()),
       ).thenAnswer((_) => _happyStream(runId: 'run-2'));
@@ -404,9 +384,7 @@ void main() {
     test('sends full history after new_thread', () async {
       when(
         () => mockApi.createThread(_roomId, name: any(named: 'name')),
-      ).thenAnswer(
-        (_) async => (_threadInfo(), <String, dynamic>{}),
-      );
+      ).thenAnswer((_) async => (_threadInfo(), <String, dynamic>{}));
       when(
         () => mockStream.runAgent(any(), any()),
       ).thenAnswer((_) => _happyStream(deltas: ['First response']));
@@ -417,12 +395,10 @@ void main() {
         'message': 'Turn 1',
       });
 
-      when(() => mockApi.createRun(_roomId, _threadId)).thenAnswer(
-        (_) async => _runInfo(id: 'run-2'),
-      );
       when(
-        () => mockStream.runAgent(any(), any()),
-      ).thenAnswer(
+        () => mockApi.createRun(_roomId, _threadId),
+      ).thenAnswer((_) async => _runInfo(id: 'run-2'));
+      when(() => mockStream.runAgent(any(), any())).thenAnswer(
         (_) => _happyStream(runId: 'run-2', deltas: ['Second response']),
       );
 
@@ -449,15 +425,10 @@ void main() {
 
     test('works without prior state', () async {
       when(() => mockApi.createRun(_roomId, 'orphan-thread')).thenAnswer(
-        (_) async => RunInfo(
-          id: 'run-x',
-          threadId: 'orphan-thread',
-          createdAt: _now,
-        ),
+        (_) async =>
+            RunInfo(id: 'run-x', threadId: 'orphan-thread', createdAt: _now),
       );
-      when(
-        () => mockStream.runAgent(any(), any()),
-      ).thenAnswer(
+      when(() => mockStream.runAgent(any(), any())).thenAnswer(
         (_) => _happyStream(threadId: 'orphan-thread', runId: 'run-x'),
       );
 
@@ -535,10 +506,7 @@ void main() {
           isA<ArgumentError>().having(
             (e) => e.message,
             'message',
-            allOf(
-              contains('Unknown server "missing"'),
-              contains(_serverId),
-            ),
+            allOf(contains('Unknown server "missing"'), contains(_serverId)),
           ),
         ),
       );
@@ -551,9 +519,7 @@ void main() {
     test('new buildSoliplexTools call has no shared thread history', () async {
       when(
         () => mockApi.createThread(_roomId, name: any(named: 'name')),
-      ).thenAnswer(
-        (_) async => (_threadInfo(), <String, dynamic>{}),
-      );
+      ).thenAnswer((_) async => (_threadInfo(), <String, dynamic>{}));
       when(
         () => mockStream.runAgent(any(), any()),
       ).thenAnswer((_) => _happyStream());
@@ -566,15 +532,16 @@ void main() {
 
       // Fresh tools instance — no shared thread state with parent.
       final childTools = buildSoliplexTools(_ctx, () => connections);
-      when(() => mockApi.createRun(_roomId, _threadId)).thenAnswer(
-        (_) async => _runInfo(id: 'child-run'),
-      );
+      when(
+        () => mockApi.createRun(_roomId, _threadId),
+      ).thenAnswer((_) async => _runInfo(id: 'child-run'));
       when(
         () => mockStream.runAgent(any(), any()),
       ).thenAnswer((_) => _happyStream(runId: 'child-run'));
 
-      final childTool =
-          childTools.firstWhere((t) => t.name == 'soliplex_reply_thread');
+      final childTool = childTools.firstWhere(
+        (t) => t.name == 'soliplex_reply_thread',
+      );
       await childTool.handler({
         'server': _serverId,
         'room_id': _roomId,
@@ -615,10 +582,7 @@ void main() {
     SoliplexTool makeTool(String name) => SoliplexTool(
           name: name,
           description: 'Test tool',
-          parameters: {
-            'type': 'object',
-            'properties': <String, dynamic>{},
-          },
+          parameters: {'type': 'object', 'properties': <String, dynamic>{}},
           handler: (args) async => null,
         );
 

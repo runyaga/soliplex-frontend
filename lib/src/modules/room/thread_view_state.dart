@@ -48,9 +48,7 @@ class MessagesFailed extends ThreadViewStatus {
 /// Provides the thread ID and the full loaded history so callers can
 /// seed the runtime's thread history cache with messages and AG-UI state.
 typedef HistoryLoadedCallback = void Function(
-  String threadId,
-  ThreadHistory history,
-);
+    String threadId, ThreadHistory history);
 
 class ThreadViewState {
   ThreadViewState({
@@ -71,11 +69,8 @@ class ThreadViewState {
   final HistoryLoadedCallback? onHistoryLoaded;
   final RunRegistry _registry;
 
-  ThreadKey get threadKey => (
-        serverId: _connection.serverId,
-        roomId: _roomId,
-        threadId: threadId,
-      );
+  ThreadKey get threadKey =>
+      (serverId: _connection.serverId, roomId: _roomId, threadId: threadId);
 
   CancelToken? _cancelToken;
   AgentSession? _activeSession;
@@ -84,8 +79,9 @@ class ThreadViewState {
   void Function()? _scriptingStateUnsub;
   bool _isDisposed = false;
 
-  final Signal<ThreadViewStatus> _messages =
-      Signal<ThreadViewStatus>(MessagesLoading());
+  final Signal<ThreadViewStatus> _messages = Signal<ThreadViewStatus>(
+    MessagesLoading(),
+  );
   ReadonlySignal<ThreadViewStatus> get messages => _messages;
 
   final Signal<StreamingState?> _streamingState = Signal<StreamingState?>(null);
@@ -95,15 +91,17 @@ class ThreadViewState {
   //            → null (_detachSession on terminal state, or cancelRun).
   //            Doubles as a concurrency guard (sendMessage rejects if non-null)
   //            and the UI signal for ChatInput's cancel button.
-  final Signal<AgentSessionState?> _sessionState =
-      Signal<AgentSessionState?>(null);
+  final Signal<AgentSessionState?> _sessionState = Signal<AgentSessionState?>(
+    null,
+  );
   ReadonlySignal<AgentSessionState?> get sessionState => _sessionState;
 
   final Signal<SendError?> _lastSendError = Signal<SendError?>(null);
   ReadonlySignal<SendError?> get lastSendError => _lastSendError;
 
-  final Signal<ScriptingState> _scriptingState =
-      Signal<ScriptingState>(ScriptingState.idle);
+  final Signal<ScriptingState> _scriptingState = Signal<ScriptingState>(
+    ScriptingState.idle,
+  );
   ReadonlySignal<ScriptingState> get scriptingState => _scriptingState;
 
   final TrackerRegistry _trackerRegistry = TrackerRegistry();
@@ -174,12 +172,14 @@ class ThreadViewState {
     if (pending == null) return false;
     _pendingSpawn = null;
     _sessionState.value = null;
-    unawaited(pending.then((s) {
-      s.cancel();
-      s.dispose();
-    }).catchError((Object e) {
-      debugPrint('Cancelled spawn cleanup failed: $e');
-    }));
+    unawaited(
+      pending.then((s) {
+        s.cancel();
+        s.dispose();
+      }).catchError((Object e) {
+        debugPrint('Cancelled spawn cleanup failed: $e');
+      }),
+    );
     return true;
   }
 
@@ -212,10 +212,7 @@ class ThreadViewState {
         }
         _streamingState.value = streaming;
         _sessionState.value = AgentSessionState.running;
-        _trackerRegistry.onStreaming(
-          streaming,
-          session.lastExecutionEvent,
-        );
+        _trackerRegistry.onStreaming(streaming, session.lastExecutionEvent);
       case CompletedState(:final conversation):
         _trackerRegistry.onRunTerminated();
         _detachSession();

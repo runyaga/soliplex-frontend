@@ -83,9 +83,7 @@ class _ArgsBlockState extends State<ArgsBlock> {
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: theme.colorScheme.outlineVariant,
-          ),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,9 +106,7 @@ class _ArgsBlockState extends State<ArgsBlock> {
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CopyButton(text: widget.raw, iconSize: 14),
-                ],
+                children: [CopyButton(text: widget.raw, iconSize: 14)],
               ),
             ),
             // scrollable monospace body

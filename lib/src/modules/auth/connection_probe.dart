@@ -18,10 +18,7 @@ sealed class ConnectionProbeResult {
 
 /// Backend was reached successfully.
 class ConnectionSuccess extends ConnectionProbeResult {
-  const ConnectionSuccess({
-    required this.serverUrl,
-    required this.providers,
-  });
+  const ConnectionSuccess({required this.serverUrl, required this.providers});
 
   final Uri serverUrl;
   final List<AuthProviderConfig> providers;

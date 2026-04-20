@@ -152,9 +152,7 @@ void main() {
     test(
       'ui_inject_message passes format hint to renderer',
       () async {
-        await exec(
-          'ui_inject_message(content="plain text", format="plain")',
-        );
+        await exec('ui_inject_message(content="plain text", format="plain")');
 
         expect(renderer.injected.first.format, equals('plain'));
       },
@@ -164,9 +162,7 @@ void main() {
     test(
       'ui_notify delivers kind, title, and body to renderer',
       () async {
-        await exec(
-          'ui_notify(kind="success", title="Done", body="All good")',
-        );
+        await exec('ui_notify(kind="success", title="Done", body="All good")');
 
         expect(renderer.notifications, hasLength(1));
         final n = renderer.notifications.first;
@@ -192,9 +188,7 @@ void main() {
       () async {
         renderer.nextModalResult = 'OK';
 
-        await exec(
-          'ui_show_modal(title="Confirm", body="Are you sure?")',
-        );
+        await exec('ui_show_modal(title="Confirm", body="Are you sure?")');
 
         expect(renderer.modals, contains('Confirm'));
       },
