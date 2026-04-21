@@ -1,3 +1,4 @@
+import 'package:ag_ui/ag_ui.dart';
 import 'package:soliplex_client/src/domain/chat_message.dart';
 import 'package:soliplex_client/src/domain/message_state.dart';
 import 'package:soliplex_client/src/domain/source_reference.dart';
@@ -98,6 +99,52 @@ void main() {
       );
 
       expect(history.messageStates.containsKey('user-2'), isFalse);
+    });
+
+    test('runs defaults to empty list', () {
+      final history = ThreadHistory(messages: const []);
+
+      expect(history.runs, isEmpty);
+    });
+
+    test('constructs with runs', () {
+      final bundle = RunEventBundle(
+        runId: 'run-1',
+        events: const [
+          TextMessageStartEvent(messageId: 'm1'),
+          TextMessageEndEvent(messageId: 'm1'),
+        ],
+      );
+
+      final history = ThreadHistory(messages: const [], runs: [bundle]);
+
+      expect(history.runs, hasLength(1));
+      expect(history.runs[0].runId, 'run-1');
+      expect(history.runs[0].events, hasLength(2));
+    });
+
+    test('is immutable - runs list cannot be modified externally', () {
+      final runs = <RunEventBundle>[
+        RunEventBundle(runId: 'run-1', events: const []),
+      ];
+      final history = ThreadHistory(messages: const [], runs: runs);
+
+      runs.add(RunEventBundle(runId: 'run-2', events: const []));
+
+      expect(history.runs, hasLength(1));
+    });
+  });
+
+  group('RunEventBundle', () {
+    test('is immutable - events list cannot be modified externally', () {
+      final events = <BaseEvent>[
+        const TextMessageStartEvent(messageId: 'm1'),
+      ];
+      final bundle = RunEventBundle(runId: 'run-1', events: events);
+
+      events.add(const TextMessageEndEvent(messageId: 'm1'));
+
+      expect(bundle.events, hasLength(1));
     });
   });
 }

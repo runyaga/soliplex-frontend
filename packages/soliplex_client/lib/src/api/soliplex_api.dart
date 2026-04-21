@@ -734,6 +734,7 @@ class SoliplexApi {
     const decoder = EventDecoder();
     final extractor = CitationExtractor();
     final messageStates = <String, MessageState>{};
+    final runs = <RunEventBundle>[];
     var skippedEventCount = 0;
 
     for (final (:runId, :events) in eventsPerRun) {
@@ -756,9 +757,11 @@ class SoliplexApi {
       }
 
       // Process all events in this run
+      final decodedEvents = <BaseEvent>[];
       for (final eventJson in events) {
         try {
           final event = decoder.decodeJson(eventJson);
+          decodedEvents.add(event);
           final result = processEvent(conversation, streaming, event);
           conversation = result.conversation;
           streaming = result.streaming;
@@ -766,6 +769,7 @@ class SoliplexApi {
           skippedEventCount++;
         }
       }
+      runs.add(RunEventBundle(runId: runId, events: decodedEvents));
 
       // Extract new citations by comparing state before/after this run
       if (userMessageId != null) {
@@ -792,6 +796,7 @@ class SoliplexApi {
       messages: conversation.messages,
       aguiState: conversation.aguiState,
       messageStates: messageStates,
+      runs: runs,
     );
   }
 
