@@ -360,7 +360,10 @@ void main() {
         await Future<void>.delayed(Duration.zero);
         await Future<void>.delayed(Duration.zero);
 
-        refreshCompleter.completeError(Exception('refresh failed'));
+        refreshCompleter.completeError(
+          Exception('refresh failed'),
+          StackTrace.current,
+        );
 
         await expectLater(request1, throwsException);
         await expectLater(request2, throwsException);

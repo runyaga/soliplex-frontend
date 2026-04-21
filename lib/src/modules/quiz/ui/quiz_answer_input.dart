@@ -70,6 +70,12 @@ class _OptionTile extends StatelessWidget {
     final isWrong =
         answeredResult != null && isSelected && !answeredResult!.isCorrect;
 
+    final radioIconColor = switch ((isDisabled, isSelected)) {
+      (true, _) => colorScheme.onSurface.withValues(alpha: 0.38),
+      (_, true) => colorScheme.primary,
+      _ => colorScheme.onSurfaceVariant,
+    };
+
     final backgroundColor = switch ((isCorrect, isWrong, isSelected)) {
       (true, _, _) => colorScheme.primaryContainer,
       (_, true, _) => colorScheme.errorContainer,
@@ -100,11 +106,7 @@ class _OptionTile extends StatelessWidget {
                   isSelected
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
-                  color: isDisabled
-                      ? colorScheme.onSurface.withValues(alpha: 0.38)
-                      : isSelected
-                      ? colorScheme.primary
-                      : colorScheme.onSurfaceVariant,
+                  color: radioIconColor,
                 ),
                 Expanded(child: Text(option)),
                 if (isCorrect)

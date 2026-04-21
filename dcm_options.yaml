@@ -1,0 +1,42 @@
+# DCM starter rule set for soliplex-frontend.
+#
+# Curated subset of https://github.com/runyaga/dart_monty/blob/main/dcm_options.yaml.
+# Start small: bug-prevention rules that rarely produce noise, plus a couple
+# of readability rules. Expand over time as we get comfortable with the cost
+# of each rule on this codebase.
+#
+# Docs: https://dcm.dev/docs/configuration
+
+dcm:
+  metrics:
+    cyclomatic-complexity:
+      threshold: 15
+    maximum-nesting-level:
+      threshold: 4
+
+  exclude:
+    metrics:
+      - "**/*.g.dart"
+      - "**/*.freezed.dart"
+      - "build/**"
+      - "test/**"
+    rules:
+      - "**/*.g.dart"
+      - "**/*.freezed.dart"
+      # Generated AG-UI feature schemas
+      - "lib/src/schema/**"
+
+  rules:
+    # --- Bug prevention ---
+    - avoid-throw-in-finally-block
+    - avoid-missing-completer-stack-trace
+    - avoid-contradictory-expressions
+    - no-equal-arguments
+    - no-equal-conditions
+    # NOTE: avoid-unused-assignment is deferred — too many false positives on
+    # closure-captured mutable locals (common in test doubles and async
+    # teardown handlers). Re-enable once we have per-file excludes tooled.
+
+    # --- Readability ---
+    - avoid-collapsible-if
+    - avoid-nested-conditional-expressions

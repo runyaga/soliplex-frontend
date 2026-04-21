@@ -57,7 +57,8 @@ class _PendingRequest {
   void complete() => _completer.complete(
     HttpResponse(statusCode: 200, bodyBytes: Uint8List(0)),
   );
-  void fail(Object error) => _completer.completeError(error);
+  void fail(Object error) =>
+      _completer.completeError(error, StackTrace.current);
 }
 
 class _RecordingObserver implements ConcurrencyObserver {
