@@ -6,9 +6,7 @@ import '../auth/require_connected_server.dart';
 import '../auth/server_manager.dart';
 import 'ui/quiz_screen.dart';
 
-ModuleContribution quizModule({
-  required ServerManager serverManager,
-}) {
+ModuleContribution quizModule({required ServerManager serverManager}) {
   return ModuleContribution(
     routes: [
       GoRoute(
@@ -21,9 +19,7 @@ ModuleContribution quizModule({
           final alias = state.pathParameters['serverAlias']!;
           final entry = serverManager.entryByAlias(alias);
           if (entry == null || !entry.isConnected) {
-            return const NoTransitionPage(
-              child: SizedBox.shrink(),
-            );
+            return const NoTransitionPage(child: SizedBox.shrink());
           }
           return NoTransitionPage(
             child: QuizScreen(

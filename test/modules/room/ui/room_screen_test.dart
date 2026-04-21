@@ -25,8 +25,7 @@ class _BlockingThreadsApi extends FakeSoliplexApi {
   Future<List<ThreadInfo>> getThreads(
     String roomId, {
     CancelToken? cancelToken,
-  }) =>
-      _completer.future;
+  }) => _completer.future;
 }
 
 Widget _buildRouted({
@@ -106,16 +105,18 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: entry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: entry,
+          roomId: 'room-1',
+          threadId: null,
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Test thread'), findsOneWidget);
@@ -126,16 +127,18 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: entry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: entry,
+          roomId: 'room-1',
+          threadId: null,
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     expect(find.byType(AppBar), findsOneWidget);
@@ -143,55 +146,61 @@ void main() {
   });
 
   testWidgets(
-      'narrow layout: tapping drawer icon opens drawer with thread list',
-      (tester) async {
-    tester.view.physicalSize = const Size(400, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
+    'narrow layout: tapping drawer icon opens drawer with thread list',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: entry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
-      ),
-    ));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RoomScreen(
+            serverEntry: entry,
+            roomId: 'room-1',
+            threadId: null,
+            runtimeManager: runtimeManager,
+            registry: registry,
+            documentSelections: DocumentSelections(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byType(Drawer), findsNothing);
+      expect(find.byType(Drawer), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.menu));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.menu));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(Drawer), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(Drawer),
-        matching: find.text('Test thread'),
-      ),
-      findsOneWidget,
-    );
-  });
+      expect(find.byType(Drawer), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(Drawer),
+          matching: find.text('Test thread'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('shows RoomWelcome fallback when no thread selected',
-      (tester) async {
+  testWidgets('shows RoomWelcome fallback when no thread selected', (
+    tester,
+  ) async {
     // No threads → auto-select never fires → no-thread content shown
     api.nextThreads = const [];
     api.nextRoom = Room(id: 'room-1', name: 'My Room');
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: entry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: entry,
+          roomId: 'room-1',
+          threadId: null,
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Select a thread'), findsOneWidget);
@@ -205,16 +214,18 @@ void main() {
     api.nextThreads = const [];
     api.nextCreateThreadError = Exception('network error');
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: entry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: entry,
+          roomId: 'room-1',
+          threadId: null,
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('New Thread'));
@@ -223,13 +234,16 @@ void main() {
     expect(find.byIcon(Icons.error_outline), findsOneWidget);
   });
 
-  testWidgets('auto-selects first thread when threadId is null',
-      (tester) async {
-    await tester.pumpWidget(_buildRouted(
-      entry: entry,
-      runtimeManager: runtimeManager,
-      registry: registry,
-    ));
+  testWidgets('auto-selects first thread when threadId is null', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _buildRouted(
+        entry: entry,
+        runtimeManager: runtimeManager,
+        registry: registry,
+      ),
+    );
     await tester.pumpAndSettle();
 
     // After auto-select, the thread name should be visible (loaded in sidebar
@@ -237,8 +251,9 @@ void main() {
     expect(find.text('Test thread'), findsWidgets);
   });
 
-  testWidgets('shows loading indicator while threads are loading',
-      (tester) async {
+  testWidgets('shows loading indicator while threads are loading', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -248,16 +263,18 @@ void main() {
     blockingApi.nextThreadHistory = ThreadHistory(messages: const []);
     final blockingEntry = createTestServerEntry(api: blockingApi);
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: blockingEntry,
-        roomId: 'room-1',
-        threadId: null,
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: blockingEntry,
+          roomId: 'room-1',
+          threadId: null,
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -278,16 +295,18 @@ void main() {
     ];
     final blockingEntry = createTestServerEntry(api: blockingApi);
 
-    await tester.pumpWidget(MaterialApp(
-      home: RoomScreen(
-        serverEntry: blockingEntry,
-        roomId: 'room-1',
-        threadId: 'thread-1',
-        runtimeManager: runtimeManager,
-        registry: registry,
-        documentSelections: DocumentSelections(),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoomScreen(
+          serverEntry: blockingEntry,
+          roomId: 'room-1',
+          threadId: 'thread-1',
+          runtimeManager: runtimeManager,
+          registry: registry,
+          documentSelections: DocumentSelections(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
 
     final textField = tester.widget<TextField>(find.byType(TextField));

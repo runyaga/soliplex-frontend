@@ -138,12 +138,11 @@ class _ChatInputState extends State<ChatInput> {
                               const Spacer(),
                               Text(
                                 'Hide',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
+                                style: Theme.of(context).textTheme.bodySmall
                                     ?.copyWith(
-                                      color:
-                                          Theme.of(context).colorScheme.primary,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
                                     ),
                               ),
                               Icon(
@@ -164,9 +163,7 @@ class _ChatInputState extends State<ChatInput> {
                                 for (final doc in widget.selectedDocuments)
                                   Chip(
                                     avatar: Icon(
-                                      getFileTypeIcon(
-                                        documentIconPath(doc),
-                                      ),
+                                      getFileTypeIcon(documentIconPath(doc)),
                                       size: 16,
                                     ),
                                     label: Text(documentDisplayName(doc)),
@@ -176,11 +173,9 @@ class _ChatInputState extends State<ChatInput> {
                                     ),
                                     onDeleted:
                                         widget.onDocumentRemoved == null ||
-                                                disabled
-                                            ? null
-                                            : () => widget.onDocumentRemoved!(
-                                                  doc,
-                                                ),
+                                            disabled
+                                        ? null
+                                        : () => widget.onDocumentRemoved!(doc),
                                     materialTapTargetSize:
                                         MaterialTapTargetSize.shrinkWrap,
                                     visualDensity: VisualDensity.compact,
@@ -198,9 +193,7 @@ class _ChatInputState extends State<ChatInput> {
                         children: [
                           Text(
                             '${widget.selectedDocuments.length} documents selected',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
@@ -263,8 +256,9 @@ class _ChatInputState extends State<ChatInput> {
                   valueListenable: _controller,
                   builder: (context, value, _) => IconButton(
                     icon: const Icon(Icons.send),
-                    onPressed:
-                        value.text.trim().isEmpty || disabled ? null : _send,
+                    onPressed: value.text.trim().isEmpty || disabled
+                        ? null
+                        : _send,
                   ),
                 ),
             ],

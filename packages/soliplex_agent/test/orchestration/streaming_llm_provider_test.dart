@@ -11,18 +11,19 @@ void main() {
       'emits RunStarted, text events, RunFinished for text stream',
       () async {
         final provider = StreamingLlmProvider(
-          chatFn: ({
-            required messages,
-            tools,
-            systemPrompt,
-            maxTokens,
-            abortTrigger,
-          }) async* {
-            yield const LlmTextDelta('Hello');
-            yield const LlmTextDelta(' world');
-            yield const LlmTextDone('Hello world');
-            yield const LlmDone();
-          },
+          chatFn:
+              ({
+                required messages,
+                tools,
+                systemPrompt,
+                maxTokens,
+                abortTrigger,
+              }) async* {
+                yield const LlmTextDelta('Hello');
+                yield const LlmTextDelta(' world');
+                yield const LlmTextDone('Hello world');
+                yield const LlmDone();
+              },
         );
 
         final handle = await provider.startRun(
@@ -47,27 +48,28 @@ void main() {
 
     test('emits tool call events', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          yield const LlmToolCallStart(
-            callId: 'call_1',
-            name: 'execute_python',
-          );
-          yield const LlmToolCallArgsDelta(
-            callId: 'call_1',
-            delta: '{"code": "print(42)"}',
-          );
-          yield const LlmToolCallDone(
-            callId: 'call_1',
-            arguments: '{"code": "print(42)"}',
-          );
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              yield const LlmToolCallStart(
+                callId: 'call_1',
+                name: 'execute_python',
+              );
+              yield const LlmToolCallArgsDelta(
+                callId: 'call_1',
+                delta: '{"code": "print(42)"}',
+              );
+              yield const LlmToolCallDone(
+                callId: 'call_1',
+                arguments: '{"code": "print(42)"}',
+              );
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(
@@ -92,19 +94,20 @@ void main() {
 
     test('closes text message before tool call', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          yield const LlmTextDelta('Thinking...');
-          yield const LlmToolCallStart(callId: 'c1', name: 'search');
-          yield const LlmToolCallArgsDelta(callId: 'c1', delta: '{}');
-          yield const LlmToolCallDone(callId: 'c1', arguments: '{}');
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              yield const LlmTextDelta('Thinking...');
+              yield const LlmToolCallStart(callId: 'c1', name: 'search');
+              yield const LlmToolCallArgsDelta(callId: 'c1', delta: '{}');
+              yield const LlmToolCallDone(callId: 'c1', arguments: '{}');
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(
@@ -127,15 +130,16 @@ void main() {
 
     test('emits RunErrorEvent on LlmError', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          yield const LlmError('connection refused');
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              yield const LlmError('connection refused');
+            },
       );
 
       final handle = await provider.startRun(
@@ -154,15 +158,16 @@ void main() {
 
     test('catches exceptions from chatFn and emits RunErrorEvent', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          throw Exception('network error');
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              throw Exception('network error');
+            },
       );
 
       final handle = await provider.startRun(
@@ -181,16 +186,17 @@ void main() {
 
     test('synthesizes RunFinished when stream ends without LlmDone', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          yield const LlmTextDelta('Hello');
-          // Stream ends without LlmDone
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              yield const LlmTextDelta('Hello');
+              // Stream ends without LlmDone
+            },
       );
 
       final handle = await provider.startRun(
@@ -210,16 +216,17 @@ void main() {
     test('passes system prompt to chatFn', () async {
       String? receivedPrompt;
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          receivedPrompt = systemPrompt;
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              receivedPrompt = systemPrompt;
+              yield const LlmDone();
+            },
         systemPrompt: 'You are a helpful assistant.',
       );
 
@@ -237,16 +244,17 @@ void main() {
     test('converts AG-UI messages to LlmChatMessage correctly', () async {
       List<LlmChatMessage>? receivedMessages;
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          receivedMessages = messages;
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              receivedMessages = messages;
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(
@@ -297,16 +305,17 @@ void main() {
     test('converts AG-UI tools to LlmToolDef correctly', () async {
       List<LlmToolDef>? receivedTools;
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          receivedTools = tools;
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              receivedTools = tools;
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(
@@ -341,20 +350,21 @@ void main() {
       var deltaCount = 0;
 
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          for (var i = 0; i < 100; i++) {
-            yield LlmTextDelta('chunk $i ');
-            // Simulate async delay to allow cancellation to propagate.
-            await Future<void>.delayed(Duration.zero);
-          }
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              for (var i = 0; i < 100; i++) {
+                yield LlmTextDelta('chunk $i ');
+                // Simulate async delay to allow cancellation to propagate.
+                await Future<void>.delayed(Duration.zero);
+              }
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(
@@ -380,15 +390,16 @@ void main() {
 
     test('uses existingRunId when provided', () async {
       final provider = StreamingLlmProvider(
-        chatFn: ({
-          required messages,
-          tools,
-          systemPrompt,
-          maxTokens,
-          abortTrigger,
-        }) async* {
-          yield const LlmDone();
-        },
+        chatFn:
+            ({
+              required messages,
+              tools,
+              systemPrompt,
+              maxTokens,
+              abortTrigger,
+            }) async* {
+              yield const LlmDone();
+            },
       );
 
       final handle = await provider.startRun(

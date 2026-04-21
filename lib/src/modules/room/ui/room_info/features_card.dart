@@ -27,10 +27,7 @@ class FeaturesCard extends StatelessWidget {
           label: 'Attachments',
           value: room.enableAttachments ? 'Enabled' : 'Disabled',
         ),
-        InfoRow(
-          label: 'Allow MCP',
-          value: room.allowMcp ? 'Yes' : 'No',
-        ),
+        InfoRow(label: 'Allow MCP', value: room.allowMcp ? 'Yes' : 'No'),
         if (room.allowMcp) McpTokenRow(api: api, roomId: roomId),
         if (room.aguiFeatureNames.isNotEmpty)
           InfoRow(

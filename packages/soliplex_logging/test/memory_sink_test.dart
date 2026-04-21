@@ -4,11 +4,11 @@ import 'package:soliplex_logging/soliplex_logging.dart';
 import 'package:test/test.dart';
 
 LogRecord _record(String message) => LogRecord(
-      level: LogLevel.info,
-      message: message,
-      timestamp: DateTime.now(),
-      loggerName: 'Test',
-    );
+  level: LogLevel.info,
+  message: message,
+  timestamp: DateTime.now(),
+  loggerName: 'Test',
+);
 
 void main() {
   group('MemorySink', () {

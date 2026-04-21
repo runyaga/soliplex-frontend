@@ -139,19 +139,12 @@ class _DocumentsCardState extends State<DocumentsCard> {
           }
         }
 
-        return SectionCard(
-          title: title,
-          children: children,
-        );
+        return SectionCard(title: title, children: children);
       },
     );
   }
 
-  Widget _buildDocTile(
-    RagDocument doc,
-    bool expanded,
-    ThemeData theme,
-  ) {
+  Widget _buildDocTile(RagDocument doc, bool expanded, ThemeData theme) {
     return GestureDetector(
       onTap: () => setState(() {
         if (expanded) {
@@ -168,10 +161,7 @@ class _DocumentsCardState extends State<DocumentsCard> {
           children: [
             Row(
               children: [
-                Icon(
-                  getFileTypeIcon(documentIconPath(doc)),
-                  size: 22,
-                ),
+                Icon(getFileTypeIcon(documentIconPath(doc)), size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -253,10 +243,7 @@ class _DocumentsCardState extends State<DocumentsCard> {
                         children: [
                           Text(label, style: labelStyle),
                           const SizedBox(height: 2),
-                          SelectableText(
-                            value,
-                            style: valueStyle,
-                          ),
+                          SelectableText(value, style: valueStyle),
                         ],
                       ),
                     ),
@@ -314,11 +301,7 @@ class MetadataDialog extends StatelessWidget {
     final entries = metadata.entries.toList();
 
     return AlertDialog(
-      title: Text(
-        title,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-      ),
+      title: Text(title, overflow: TextOverflow.ellipsis, maxLines: 1),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(

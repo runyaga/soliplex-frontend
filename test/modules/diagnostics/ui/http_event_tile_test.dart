@@ -17,7 +17,9 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HttpEventTile(group: group))),
+        MaterialApp(
+          home: Scaffold(body: HttpEventTile(group: group)),
+        ),
       );
       expect(find.text('POST'), findsOneWidget);
       expect(find.text('/api/v1/rooms'), findsOneWidget);
@@ -31,9 +33,7 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: HttpEventTile(group: group, dense: true),
-          ),
+          home: Scaffold(body: HttpEventTile(group: group, dense: true)),
         ),
       );
       // Dense mode: timestamp row is omitted
@@ -67,7 +67,9 @@ void main() {
         response: createResponseEvent(),
       );
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: HttpEventTile(group: group))),
+        MaterialApp(
+          home: Scaffold(body: HttpEventTile(group: group)),
+        ),
       );
       // Without onTap, no InkWell is present
       expect(find.byType(InkWell), findsNothing);

@@ -69,8 +69,9 @@ String _joinPath(String parent, String segment) {
   if (segment.isEmpty) return parent;
   if (segment.startsWith('/')) return segment;
   if (parent.isEmpty) return '/$segment';
-  final base =
-      parent.endsWith('/') ? parent.substring(0, parent.length - 1) : parent;
+  final base = parent.endsWith('/')
+      ? parent.substring(0, parent.length - 1)
+      : parent;
   return '$base/$segment';
 }
 

@@ -188,8 +188,8 @@ Future<Set<RagDocument>?> showDocumentPicker({
                   Text(
                     'Failed to load documents.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextButton.icon(
@@ -208,8 +208,8 @@ Future<Set<RagDocument>?> showDocumentPicker({
               child: Text(
                 'No documents in this room.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             );
           } else {
@@ -235,8 +235,9 @@ Future<Set<RagDocument>?> showDocumentPicker({
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed:
-                    canConfirm ? () => Navigator.pop(context, current) : null,
+                onPressed: canConfirm
+                    ? () => Navigator.pop(context, current)
+                    : null,
                 child: const Text('Done'),
               ),
             ],

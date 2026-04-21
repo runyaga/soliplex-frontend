@@ -55,9 +55,9 @@ class SoliplexApi {
     required HttpTransport transport,
     required UrlBuilder urlBuilder,
     void Function(String message)? onWarning,
-  })  : _transport = transport,
-        _urlBuilder = urlBuilder,
-        _onWarning = onWarning;
+  }) : _transport = transport,
+       _urlBuilder = urlBuilder,
+       _onWarning = onWarning;
 
   final HttpTransport _transport;
   final UrlBuilder _urlBuilder;
@@ -668,8 +668,8 @@ class SoliplexApi {
     // Extract user messages from run_input and create synthetic events
     final userMessageEvents = _extractUserMessageEvents(rawRun);
 
-    final events =
-        (rawRun['events'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final events = (rawRun['events'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
 
     // Combine: user message events first, then actual streamed events
     final allEvents = [...userMessageEvents, ...events];
@@ -709,11 +709,7 @@ class SoliplexApi {
 
     return [
       {'type': 'TEXT_MESSAGE_START', 'messageId': id, 'role': 'user'},
-      {
-        'type': 'TEXT_MESSAGE_CONTENT',
-        'messageId': id,
-        'delta': content,
-      },
+      {'type': 'TEXT_MESSAGE_CONTENT', 'messageId': id, 'delta': content},
       {'type': 'TEXT_MESSAGE_END', 'messageId': id},
     ];
   }
@@ -799,23 +795,22 @@ class SoliplexApi {
   List<MapEntry<String, dynamic>> _sortRunsByCreationTime(
     Map<String, dynamic> runs,
   ) {
-    return runs.entries.toList()
-      ..sort((a, b) {
-        final aData = a.value as Map<String, dynamic>;
-        final bData = b.value as Map<String, dynamic>;
-        final aCreated = aData['created'] as String?;
-        final bCreated = bData['created'] as String?;
+    return runs.entries.toList()..sort((a, b) {
+      final aData = a.value as Map<String, dynamic>;
+      final bData = b.value as Map<String, dynamic>;
+      final aCreated = aData['created'] as String?;
+      final bCreated = bData['created'] as String?;
 
-        if (aCreated == null && bCreated == null) return 0;
-        if (aCreated == null) return 1;
-        if (bCreated == null) return -1;
+      if (aCreated == null && bCreated == null) return 0;
+      if (aCreated == null) return 1;
+      if (bCreated == null) return -1;
 
-        // Use tryParse to handle malformed timestamps gracefully
-        final epoch = DateTime.fromMillisecondsSinceEpoch(0);
-        final aTime = DateTime.tryParse(aCreated) ?? epoch;
-        final bTime = DateTime.tryParse(bCreated) ?? epoch;
-        return aTime.compareTo(bTime);
-      });
+      // Use tryParse to handle malformed timestamps gracefully
+      final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+      final aTime = DateTime.tryParse(aCreated) ?? epoch;
+      final bTime = DateTime.tryParse(bCreated) ?? epoch;
+      return aTime.compareTo(bTime);
+    });
   }
 
   // ============================================================

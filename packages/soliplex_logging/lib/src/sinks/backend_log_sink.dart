@@ -46,9 +46,9 @@ class BackendLogSink implements LogSink {
     this.flushGate,
     this.maxFlushHoldDuration = const Duration(minutes: 5),
     this.onError,
-  })  : _client = client,
-        _diskQueue = diskQueue,
-        resourceAttributes = Map.unmodifiable(resourceAttributes) {
+  }) : _client = client,
+       _diskQueue = diskQueue,
+       resourceAttributes = Map.unmodifiable(resourceAttributes) {
     _timer = Timer.periodic(flushInterval, (_) => flush());
   }
 
@@ -382,8 +382,9 @@ class BackendLogSink implements LogSink {
       'install_id': installId,
       'session_id': sessionId,
       'user_id': userId,
-      'active_run':
-          threadId != null ? {'thread_id': threadId, 'run_id': runId} : null,
+      'active_run': threadId != null
+          ? {'thread_id': threadId, 'run_id': runId}
+          : null,
     };
   }
 
@@ -483,8 +484,9 @@ class BackendLogSink implements LogSink {
   List<Map<String, Object?>> _collectBreadcrumbs() {
     if (maxBreadcrumbs <= 0) return [];
     final records = memorySink!.records;
-    final start =
-        records.length > maxBreadcrumbs ? records.length - maxBreadcrumbs : 0;
+    final start = records.length > maxBreadcrumbs
+        ? records.length - maxBreadcrumbs
+        : 0;
     return [
       for (var i = start; i < records.length; i++)
         _breadcrumbFromRecord(records[i]),

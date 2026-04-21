@@ -50,8 +50,10 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<Quiz> _fetchQuiz() async {
     try {
-      return await widget.serverEntry.connection.api
-          .getQuiz(widget.roomId, widget.quizId);
+      return await widget.serverEntry.connection.api.getQuiz(
+        widget.roomId,
+        widget.quizId,
+      );
     } catch (error, stackTrace) {
       _logger.error(
         'Failed to load quiz ${widget.quizId} '
@@ -100,25 +102,25 @@ class _QuizScreenState extends State<QuizScreen> {
               final error = snapshot.error;
               final (message, action, label) = switch (error) {
                 AuthException() => (
-                    'Your session has expired. Please sign in again.',
-                    _handleBack,
-                    'Back to Room',
-                  ),
+                  'Your session has expired. Please sign in again.',
+                  _handleBack,
+                  'Back to Room',
+                ),
                 NotFoundException() => (
-                    'This quiz is no longer available.',
-                    _handleBack,
-                    'Back to Room',
-                  ),
+                  'This quiz is no longer available.',
+                  _handleBack,
+                  'Back to Room',
+                ),
                 NetworkException() => (
-                    'Could not reach the server. Check your connection and try again.',
-                    _retryFetch,
-                    'Retry',
-                  ),
+                  'Could not reach the server. Check your connection and try again.',
+                  _retryFetch,
+                  'Retry',
+                ),
                 _ => (
-                    'Something went wrong. Please try again.',
-                    _retryFetch,
-                    'Retry',
-                  ),
+                  'Something went wrong. Please try again.',
+                  _retryFetch,
+                  'Retry',
+                ),
               };
               return Center(
                 child: Padding(
@@ -128,10 +130,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     children: [
                       Text(message),
                       const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: action,
-                        child: Text(label),
-                      ),
+                      FilledButton(onPressed: action, child: Text(label)),
                     ],
                   ),
                 ),
@@ -159,7 +158,7 @@ class _QuizScreenState extends State<QuizScreen> {
       QuizInProgress(questionState: Composing(input: TextInput(:final text))) =>
         text,
       QuizInProgress(
-        questionState: Submitting(input: TextInput(:final text))
+        questionState: Submitting(input: TextInput(:final text)),
       ) =>
         text,
       QuizInProgress(questionState: Answered(input: TextInput(:final text))) =>
@@ -175,31 +174,30 @@ class _QuizScreenState extends State<QuizScreen> {
 
     return switch (session) {
       QuizNotStarted() => QuizStartView(
-          quiz: quiz,
-          onStart: () => _controller.start(quiz),
-        ),
+        quiz: quiz,
+        onStart: () => _controller.start(quiz),
+      ),
       QuizInProgress() => QuizQuestionView(
-          session: session,
-          answerController: _answerController,
-          submissionError: error,
-          onSelectOption: (o) =>
-              _controller.updateInput(MultipleChoiceInput(o)),
-          onTextChanged: (t) => _controller.updateInput(TextInput(t)),
-          onSubmit: _controller.submitAnswer,
-          onNext: () {
-            _answerController.clear();
-            _controller.nextQuestion();
-          },
-          onRetry: _controller.submitAnswer,
-        ),
+        session: session,
+        answerController: _answerController,
+        submissionError: error,
+        onSelectOption: (o) => _controller.updateInput(MultipleChoiceInput(o)),
+        onTextChanged: (t) => _controller.updateInput(TextInput(t)),
+        onSubmit: _controller.submitAnswer,
+        onNext: () {
+          _answerController.clear();
+          _controller.nextQuestion();
+        },
+        onRetry: _controller.submitAnswer,
+      ),
       QuizCompleted() => QuizResultsView(
-          session: session,
-          onBack: _handleBack,
-          onRetake: () {
-            _answerController.clear();
-            _controller.retake();
-          },
-        ),
+        session: session,
+        onBack: _handleBack,
+        onRetake: () {
+          _answerController.clear();
+          _controller.retake();
+        },
+      ),
     };
   }
 
