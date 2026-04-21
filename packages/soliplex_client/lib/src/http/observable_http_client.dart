@@ -195,15 +195,7 @@ class ObservableHttpClient implements SoliplexHttpClient {
       emittedEnd = true;
       final endTime = DateTime.now();
       final duration = endTime.difference(startTime);
-      final soliplexError = error == null
-          ? null
-          : (error is SoliplexException
-                ? error
-                : NetworkException(
-                    message: HttpRedactor.redactString(error.toString(), uri),
-                    originalError: error,
-                    stackTrace: stackTrace,
-                  ));
+      final soliplexError = _toSoliplexError(error, uri, stackTrace);
       _notifyObservers((observer) {
         observer.onStreamEnd(
           HttpStreamEndEvent(
@@ -395,6 +387,20 @@ class ObservableHttpClient implements SoliplexHttpClient {
       }
     }
   }
+}
+
+SoliplexException? _toSoliplexError(
+  Object? error,
+  Uri uri,
+  StackTrace? stackTrace,
+) {
+  if (error == null) return null;
+  if (error is SoliplexException) return error;
+  return NetworkException(
+    message: HttpRedactor.redactString(error.toString(), uri),
+    originalError: error,
+    stackTrace: stackTrace,
+  );
 }
 
 /// Rolling buffer for SSE stream content with size limit.

@@ -139,9 +139,7 @@ Future<ShellConfig> standard({
     appName: appName,
     logo: logo,
     theme: theme ?? _defaultTheme(),
-    initialRoute: callbackParams is! NoCallbackParams
-        ? '/auth/callback'
-        : (serverManager.authState.value is Authenticated ? '/lobby' : '/'),
+    initialRoute: _initialRoute(callbackParams, serverManager.authState.value),
     refreshListenable: authListenable,
     onDispose: () {
       authListenable.dispose();
@@ -173,4 +171,9 @@ Future<ShellConfig> standard({
       ),
     ],
   );
+}
+
+String _initialRoute(CallbackParams callbackParams, AuthState authState) {
+  if (callbackParams is! NoCallbackParams) return '/auth/callback';
+  return authState is Authenticated ? '/lobby' : '/';
 }

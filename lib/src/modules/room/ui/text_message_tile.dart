@@ -64,14 +64,7 @@ class TextMessageTile extends StatelessWidget {
                 : theme.colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: isUser
-              ? SelectableText(
-                  message.text,
-                  style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
-                )
-              : message.text.isEmpty
-              ? const Text('...')
-              : FlutterMarkdownPlusRenderer(data: message.text),
+          child: _messageBody(theme, isUser: isUser),
         ),
         const SizedBox(height: 4),
         Row(
@@ -105,6 +98,17 @@ class TextMessageTile extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Widget _messageBody(ThemeData theme, {required bool isUser}) {
+    if (isUser) {
+      return SelectableText(
+        message.text,
+        style: TextStyle(color: theme.colorScheme.onPrimaryContainer),
+      );
+    }
+    if (message.text.isEmpty) return const Text('...');
+    return FlutterMarkdownPlusRenderer(data: message.text);
   }
 }
 

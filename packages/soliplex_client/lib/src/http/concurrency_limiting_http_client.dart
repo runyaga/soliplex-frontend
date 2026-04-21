@@ -415,6 +415,7 @@ class _Semaphore {
           _waiters.remove(completer);
           completer.completeError(
             CancelledException(reason: cancelToken.reason),
+            StackTrace.current,
           );
         }
       });
@@ -453,6 +454,7 @@ class _Semaphore {
         const CancelledException(
           reason: 'HTTP client closed before slot acquired',
         ),
+        StackTrace.current,
       );
     }
   }
