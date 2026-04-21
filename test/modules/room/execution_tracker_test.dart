@@ -3,6 +3,7 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 
 import 'package:soliplex_frontend/src/modules/room/execution_step.dart';
 import 'package:soliplex_frontend/src/modules/room/execution_tracker.dart';
+import 'package:soliplex_frontend/src/modules/room/ui/execution/timeline_entry.dart';
 
 void main() {
   late Signal<ExecutionEvent?> events;
@@ -320,5 +321,160 @@ void main() {
         expect(calls.single.timestamp, greaterThan(0));
       },
     );
+  });
+
+  group('timeline', () {
+    test('empty on fresh tracker', () {
+      expect(tracker.timeline.value, isEmpty);
+    });
+
+    test('step appended as TimelineStep with empty activities', () {
+      events.value = const ThinkingStarted();
+
+      expect(tracker.timeline.value, hasLength(1));
+      final entry = tracker.timeline.value.single;
+      expect(entry, isA<TimelineStep>());
+      final step = entry as TimelineStep;
+      expect(step.step.label, 'Thinking');
+      expect(step.activities, isEmpty);
+    });
+
+    test('activity during active step nests under it', () {
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-1',
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'execute_script', 'args': '{}'},
+        timestamp: 100,
+      );
+
+      expect(tracker.timeline.value, hasLength(1));
+      final step = tracker.timeline.value.single as TimelineStep;
+      expect(step.activities, hasLength(1));
+      expect(step.activities.single.toolName, 'execute_script');
+    });
+
+    test('activity arriving with no active step is an orphan', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'execute_script', 'args': '{}'},
+        timestamp: 100,
+      );
+
+      expect(tracker.timeline.value, hasLength(1));
+      expect(tracker.timeline.value.single, isA<TimelineOrphanActivity>());
+    });
+
+    test(
+        'activity after a completed step with no new active step is orphan',
+        () {
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-1',
+      );
+      events.value = const ClientToolCompleted(
+        toolCallId: 'tc-1',
+        result: 'ok',
+        status: ToolCallStatus.completed,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'execute_script', 'args': '{}'},
+        timestamp: 100,
+      );
+
+      expect(tracker.timeline.value, hasLength(2));
+      expect(tracker.timeline.value.last, isA<TimelineOrphanActivity>());
+    });
+
+    test('multiple steps each get their own activities', () {
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-1',
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'execute_script', 'args': '{}'},
+        timestamp: 100,
+      );
+      events.value = const ClientToolCompleted(
+        toolCallId: 'tc-1',
+        result: 'ok',
+        status: ToolCallStatus.completed,
+      );
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-2',
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_2',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'list_environments', 'args': '{}'},
+        timestamp: 200,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_3',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'execute_script', 'args': '{}'},
+        timestamp: 201,
+      );
+
+      final tl = tracker.timeline.value;
+      expect(tl, hasLength(2));
+      expect((tl[0] as TimelineStep).activities, hasLength(1));
+      expect((tl[1] as TimelineStep).activities, hasLength(2));
+    });
+
+    test('replace updates nested activity in place', () {
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-1',
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'execute_script',
+          'args': '{}',
+          'status': 'in_progress',
+        },
+        timestamp: 100,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'bwrap:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'execute_script',
+          'args': '{}',
+          'status': 'done',
+        },
+        timestamp: 150,
+      );
+
+      final step = tracker.timeline.value.single as TimelineStep;
+      expect(step.activities, hasLength(1));
+      expect(step.activities.single.status, 'done');
+    });
+
+    test('step completion updates status in timeline entry', () {
+      events.value = const ClientToolExecuting(
+        toolName: 'execute_skill',
+        toolCallId: 'tc-1',
+      );
+      events.value = const ClientToolCompleted(
+        toolCallId: 'tc-1',
+        result: 'ok',
+        status: ToolCallStatus.completed,
+      );
+
+      final step = tracker.timeline.value.single as TimelineStep;
+      expect(step.step.status, StepStatus.completed);
+    });
   });
 }

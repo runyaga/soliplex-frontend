@@ -1,6 +1,7 @@
 import 'package:soliplex_agent/soliplex_agent.dart';
 
 import 'execution_step.dart';
+import 'ui/execution/timeline_entry.dart';
 
 class ExecutionTracker {
   ExecutionTracker({
@@ -34,6 +35,14 @@ class ExecutionTracker {
       Signal<List<SkillToolCallActivity>>(const []);
   ReadonlySignal<List<SkillToolCallActivity>> get skillToolCalls =>
       _skillToolCalls;
+
+  /// Unified timeline of steps with their nested activities, in arrival
+  /// order. Activities that arrive while a step is active are nested
+  /// under that step; activities arriving outside any active step are
+  /// emitted as [TimelineOrphanActivity].
+  final Signal<List<TimelineEntry>> _timeline =
+      Signal<List<TimelineEntry>>(const []);
+  ReadonlySignal<List<TimelineEntry>> get timeline => _timeline;
 
   void freeze() {
     _unsub?.call();
@@ -130,18 +139,18 @@ class ExecutionTracker {
     } else {
       _skillToolCalls.value = [...current, decoded];
     }
+    _upsertActivityInTimeline(decoded);
   }
 
   void _addStep(String label, StepType type) {
-    _steps.value = [
-      ..._steps.value,
-      ExecutionStep(
-        label: label,
-        type: type,
-        status: StepStatus.active,
-        timestamp: _stopwatch.elapsed,
-      ),
-    ];
+    final step = ExecutionStep(
+      label: label,
+      type: type,
+      status: StepStatus.active,
+      timestamp: _stopwatch.elapsed,
+    );
+    _steps.value = [..._steps.value, step];
+    _timeline.value = [..._timeline.value, TimelineStep(step: step)];
   }
 
   void _completeActiveStep() {
@@ -149,13 +158,12 @@ class ExecutionTracker {
     if (current.isEmpty) return;
     final last = current.last;
     if (last.status == StepStatus.active) {
-      _steps.value = [
-        ...current.sublist(0, current.length - 1),
-        last.copyWith(
-          status: StepStatus.completed,
-          timestamp: _stopwatch.elapsed,
-        ),
-      ];
+      final updated = last.copyWith(
+        status: StepStatus.completed,
+        timestamp: _stopwatch.elapsed,
+      );
+      _steps.value = [...current.sublist(0, current.length - 1), updated];
+      _updateLastActiveStepInTimeline(updated);
     }
   }
 
@@ -167,6 +175,55 @@ class ExecutionTracker {
             ? step.copyWith(status: status, timestamp: now)
             : step,
     ];
+    _timeline.value = [
+      for (final entry in _timeline.value)
+        if (entry is TimelineStep && entry.step.status == StepStatus.active)
+          entry.withStep(entry.step.copyWith(status: status, timestamp: now))
+        else
+          entry,
+    ];
+  }
+
+  void _updateLastActiveStepInTimeline(ExecutionStep updated) {
+    final current = _timeline.value;
+    for (var i = current.length - 1; i >= 0; i--) {
+      final entry = current[i];
+      if (entry is TimelineStep && entry.step.status == StepStatus.active) {
+        _timeline.value = [...current]..[i] = entry.withStep(updated);
+        return;
+      }
+    }
+  }
+
+  void _upsertActivityInTimeline(SkillToolCallActivity decoded) {
+    final current = _timeline.value;
+    for (var i = 0; i < current.length; i++) {
+      final entry = current[i];
+      if (entry is TimelineStep) {
+        final aIdx = entry.activities
+            .indexWhere((a) => a.messageId == decoded.messageId);
+        if (aIdx >= 0) {
+          final updated = [...entry.activities]..[aIdx] = decoded;
+          _timeline.value = [...current]..[i] = entry.withActivities(updated);
+          return;
+        }
+      } else if (entry is TimelineOrphanActivity &&
+          entry.activity.messageId == decoded.messageId) {
+        _timeline.value = [...current]
+          ..[i] = TimelineOrphanActivity(activity: decoded);
+        return;
+      }
+    }
+    if (current.isNotEmpty && current.last is TimelineStep) {
+      final lastStep = current.last as TimelineStep;
+      if (lastStep.step.status == StepStatus.active) {
+        _timeline.value = [...current]
+          ..[current.length - 1] =
+              lastStep.withActivities([...lastStep.activities, decoded]);
+        return;
+      }
+    }
+    _timeline.value = [...current, TimelineOrphanActivity(activity: decoded)];
   }
 
   void dispose() {
