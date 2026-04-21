@@ -493,8 +493,20 @@ ExecutionEvent? bridgeBaseEvent(BaseEvent event) {
       ServerToolCallCompleted(toolCallId: toolCallId, result: content),
     RunFinishedEvent() => const RunCompleted(),
     RunErrorEvent(:final message) => RunFailed(error: message),
-    ActivitySnapshotEvent(:final activityType, :final content) =>
-      ActivitySnapshot(activityType: activityType, content: content),
+    ActivitySnapshotEvent(
+      :final messageId,
+      :final activityType,
+      :final content,
+      :final timestamp,
+      :final replace,
+    ) =>
+      ActivitySnapshot(
+        messageId: messageId,
+        activityType: activityType,
+        content: content,
+        timestamp: timestamp,
+        replace: replace,
+      ),
     StepStartedEvent(:final stepName) => StepProgress(stepName: stepName),
 
     // Events that don't need ExecutionEvent bridging.

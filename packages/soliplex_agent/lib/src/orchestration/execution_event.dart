@@ -245,9 +245,16 @@ class AwaitingApproval extends ExecutionEvent {
 /// A sub-agent activity snapshot from the backend.
 class ActivitySnapshot extends ExecutionEvent {
   const ActivitySnapshot({
+    required this.messageId,
     required this.activityType,
     required this.content,
+    this.timestamp,
+    this.replace = true,
   });
+
+  /// Identifier for the target `ActivityMessage`. Snapshots with the
+  /// same [messageId] update the same tracker entry.
+  final String messageId;
 
   /// The kind of activity (e.g. `'skill_tool_call'`).
   final String activityType;
@@ -255,15 +262,33 @@ class ActivitySnapshot extends ExecutionEvent {
   /// Payload from the backend (e.g. `{'tool_name': 'search'}`).
   final Map<String, dynamic> content;
 
+  /// Event timestamp in ms since epoch, or `null` if the backend did
+  /// not supply one.
+  final int? timestamp;
+
+  /// AG-UI upsert semantic: `true` overwrites the record with the same
+  /// [messageId]; `false` is ignored when that [messageId] already
+  /// exists. Defaults to `true` per the AG-UI spec.
+  final bool replace;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ActivitySnapshot &&
+          messageId == other.messageId &&
           activityType == other.activityType &&
+          timestamp == other.timestamp &&
+          replace == other.replace &&
           _deepEq.equals(content, other.content);
 
   @override
-  int get hashCode => Object.hash(activityType, _deepEq.hash(content));
+  int get hashCode => Object.hash(
+    messageId,
+    activityType,
+    timestamp,
+    replace,
+    _deepEq.hash(content),
+  );
 }
 
 /// Extension point for third-party plugins to emit custom events.

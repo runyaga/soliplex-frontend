@@ -161,6 +161,10 @@ class _FakeTracker implements ExecutionTracker {
   ReadonlySignal<bool> get isThinkingStreaming => Signal<bool>(false);
 
   @override
+  ReadonlySignal<List<SkillToolCallActivity>> get skillToolCalls =>
+      Signal<List<SkillToolCallActivity>>(const []);
+
+  @override
   bool get isFrozen => false;
 
   @override

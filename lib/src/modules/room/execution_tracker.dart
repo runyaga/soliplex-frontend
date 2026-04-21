@@ -25,6 +25,16 @@ class ExecutionTracker {
   final Signal<bool> _isThinkingStreaming = Signal<bool>(false);
   ReadonlySignal<bool> get isThinkingStreaming => _isThinkingStreaming;
 
+  /// Decoded `skill_tool_call` activities in arrival order, keyed by
+  /// `messageId`. Records that fail to decode as a skill_tool_call are
+  /// dropped from this signal (but their raw form is still emitted on
+  /// [executionEvents]). Mirrors the upsert semantics of
+  /// `Conversation.activities` in soliplex_client.
+  final Signal<List<SkillToolCallActivity>> _skillToolCalls =
+      Signal<List<SkillToolCallActivity>>(const []);
+  ReadonlySignal<List<SkillToolCallActivity>> get skillToolCalls =>
+      _skillToolCalls;
+
   void freeze() {
     _unsub?.call();
     _unsub = null;
@@ -67,13 +77,58 @@ class ExecutionTracker {
       case RunFailed() || RunCancelled():
         _completeAllSteps(StepStatus.failed);
         _isThinkingStreaming.value = false;
+      case ActivitySnapshot(
+        :final messageId,
+        :final activityType,
+        :final content,
+        :final timestamp,
+        :final replace,
+      ):
+        _upsertSkillToolCall(
+          messageId: messageId,
+          activityType: activityType,
+          content: content,
+          timestamp: timestamp,
+          replace: replace,
+        );
       case TextDelta() ||
             StateUpdated() ||
             StepProgress() ||
             AwaitingApproval() ||
-            ActivitySnapshot() ||
             CustomExecutionEvent():
         break;
+    }
+  }
+
+  void _upsertSkillToolCall({
+    required String messageId,
+    required String activityType,
+    required Map<String, dynamic> content,
+    required int? timestamp,
+    required bool replace,
+  }) {
+    final current = _skillToolCalls.value;
+    final existingIndex = current.indexWhere((a) => a.messageId == messageId);
+
+    if (existingIndex >= 0 && !replace) {
+      return;
+    }
+
+    final record = ActivityRecord(
+      messageId: messageId,
+      activityType: activityType,
+      content: content,
+      timestamp: timestamp ?? DateTime.now().millisecondsSinceEpoch,
+    );
+    final decoded = SkillToolCallActivity.fromRecord(record);
+    if (decoded == null) {
+      return;
+    }
+
+    if (existingIndex >= 0) {
+      _skillToolCalls.value = [...current]..[existingIndex] = decoded;
+    } else {
+      _skillToolCalls.value = [...current, decoded];
     }
   }
 

@@ -162,6 +162,7 @@ void main() {
   test('ActivitySnapshot does not affect steps or thinking', () {
     events.value = const ThinkingStarted();
     events.value = const ActivitySnapshot(
+      messageId: 'rag:call_1',
       activityType: 'skill_tool_call',
       content: {'tool_name': 'search'},
     );
@@ -176,5 +177,148 @@ void main() {
     tracker.dispose();
     events.value = const ThinkingStarted();
     expect(tracker.steps.value, isEmpty);
+  });
+
+  group('skillToolCalls signal', () {
+    test('starts empty', () {
+      expect(tracker.skillToolCalls.value, isEmpty);
+    });
+
+    test('decodes a single skill_tool_call snapshot', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'ask',
+          'args': '{"q":"hi"}',
+          'status': 'in_progress',
+        },
+        timestamp: 100,
+      );
+
+      final calls = tracker.skillToolCalls.value;
+      expect(calls, hasLength(1));
+      expect(calls.single.messageId, 'rag:call_1');
+      expect(calls.single.toolName, 'ask');
+      expect(calls.single.args, {'q': 'hi'});
+      expect(calls.single.status, 'in_progress');
+      expect(calls.single.timestamp, 100);
+    });
+
+    test('replace:true overwrites record with same messageId in place', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'ask',
+          'args': '{"q":"hi"}',
+          'status': 'in_progress',
+        },
+        timestamp: 1,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'ask',
+          'args': '{"q":"hi"}',
+          'status': 'done',
+        },
+        timestamp: 2,
+      );
+
+      final calls = tracker.skillToolCalls.value;
+      expect(calls, hasLength(1));
+      expect(calls.single.status, 'done');
+      expect(calls.single.timestamp, 2);
+    });
+
+    test('replace:false on existing messageId is ignored', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'ask',
+          'args': '{"q":"first"}',
+          'status': 'in_progress',
+        },
+        timestamp: 1,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_1',
+        activityType: 'skill_tool_call',
+        content: {
+          'tool_name': 'search',
+          'args': '{"q":"second"}',
+          'status': 'done',
+        },
+        replace: false,
+        timestamp: 2,
+      );
+
+      final calls = tracker.skillToolCalls.value;
+      expect(calls, hasLength(1));
+      expect(calls.single.toolName, 'ask');
+      expect(calls.single.args, {'q': 'first'});
+    });
+
+    test('two concurrent messageIds stay independent', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_a',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'ask', 'args': '{"q":"a"}'},
+        timestamp: 1,
+      );
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:call_b',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'search', 'args': '{"q":"b"}'},
+        timestamp: 2,
+      );
+
+      final calls = tracker.skillToolCalls.value;
+      expect(calls, hasLength(2));
+      final byId = {for (final c in calls) c.messageId: c};
+      expect(byId['rag:call_a']!.toolName, 'ask');
+      expect(byId['rag:call_b']!.toolName, 'search');
+    });
+
+    test('non-skill_tool_call activityType is dropped', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'plan:1',
+        activityType: 'plan',
+        content: {'steps': 3},
+        timestamp: 1,
+      );
+
+      expect(tracker.skillToolCalls.value, isEmpty);
+    });
+
+    test('malformed skill_tool_call is dropped', () {
+      events.value = const ActivitySnapshot(
+        messageId: 'rag:bad',
+        activityType: 'skill_tool_call',
+        content: {'tool_name': 'ask', 'args': 'not json {'},
+        timestamp: 1,
+      );
+
+      expect(tracker.skillToolCalls.value, isEmpty);
+    });
+
+    test(
+      'missing timestamp is filled with wall-clock (non-zero) so the '
+      'decoded activity still appears',
+      () {
+        events.value = const ActivitySnapshot(
+          messageId: 'rag:call_1',
+          activityType: 'skill_tool_call',
+          content: {'tool_name': 'ask', 'args': '{}'},
+        );
+
+        final calls = tracker.skillToolCalls.value;
+        expect(calls, hasLength(1));
+        expect(calls.single.timestamp, greaterThan(0));
+      },
+    );
   });
 }

@@ -176,21 +176,30 @@ void main() {
 
       test('ActivitySnapshot equality', () {
         const a = ActivitySnapshot(
+          messageId: 'rag:call_1',
           activityType: 'skill_tool_call',
           content: {'tool_name': 'search'},
         );
         const b = ActivitySnapshot(
+          messageId: 'rag:call_1',
           activityType: 'skill_tool_call',
           content: {'tool_name': 'search'},
         );
         const c = ActivitySnapshot(
+          messageId: 'rag:call_1',
           activityType: 'skill_tool_call',
           content: {'tool_name': 'ask'},
+        );
+        const d = ActivitySnapshot(
+          messageId: 'rag:call_2',
+          activityType: 'skill_tool_call',
+          content: {'tool_name': 'search'},
         );
 
         expect(a, equals(b));
         expect(a.hashCode, equals(b.hashCode));
         expect(a, isNot(equals(c)));
+        expect(a, isNot(equals(d)));
       });
 
       test('CustomExecutionEvent deep equality with nested payload', () {
@@ -242,7 +251,7 @@ void main() {
           const StateUpdated(aguiState: {}),
           const StepProgress(stepName: ''),
           const CustomExecutionEvent(type: '', payload: {}),
-          const ActivitySnapshot(activityType: '', content: {}),
+          const ActivitySnapshot(messageId: '', activityType: '', content: {}),
         ];
 
         expect(events, hasLength(14));
