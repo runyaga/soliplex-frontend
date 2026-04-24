@@ -119,7 +119,8 @@ void main() {
       test('attaches in descending priority order', () async {
         final order = <int>[];
         final low = _OrderRecordingExtension(ns: 'low', pri: 1, order: order);
-        final high = _OrderRecordingExtension(ns: 'high', pri: 10, order: order);
+        final high =
+            _OrderRecordingExtension(ns: 'high', pri: 10, order: order);
         final mid = _OrderRecordingExtension(ns: 'mid', pri: 5, order: order);
 
         final coordinator = SessionCoordinator([low, high, mid]);

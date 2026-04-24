@@ -10,7 +10,6 @@ import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
 import 'package:soliplex_agent/src/orchestration/run_state.dart';
 import 'package:soliplex_agent/src/runtime/agent_runtime.dart';
 import 'package:soliplex_agent/src/runtime/agent_session_state.dart';
-import 'package:soliplex_agent/src/runtime/agent_ui_delegate.dart';
 import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/runtime/tool_approval_extension.dart';
@@ -45,12 +44,10 @@ class AgentSession implements ToolExecutionContext {
     required ToolRegistry toolRegistry,
     required Logger logger,
     required SessionCoordinator coordinator,
-    AgentUiDelegate? uiDelegate,
   })  : _runtime = runtime,
         _orchestrator = orchestrator,
         _toolRegistry = toolRegistry,
         _coordinator = coordinator,
-        _uiDelegate = uiDelegate,
         _logger = logger,
         id = '${threadKey.threadId}-'
             '${DateTime.now().microsecondsSinceEpoch}';
@@ -71,7 +68,6 @@ class AgentSession implements ToolExecutionContext {
   final RunOrchestrator _orchestrator;
   final ToolRegistry _toolRegistry;
   final SessionCoordinator _coordinator;
-  final AgentUiDelegate? _uiDelegate;
   final Logger _logger;
 
   static const _toolTimeout = Duration(seconds: 60);
@@ -182,22 +178,10 @@ class AgentSession implements ToolExecutionContext {
     );
 
     final approvalExt = _coordinator.getExtension<ToolApprovalExtension>();
-    if (approvalExt != null) {
-      return Future.any([
-        approvalExt.requestApproval(
-          toolCallId: toolCallId,
-          toolName: toolName,
-          arguments: arguments,
-          rationale: rationale,
-        ),
-        cancelToken.whenCancelled.then((_) => false),
-      ]);
-    }
-
-    if (_uiDelegate == null) return false;
+    if (approvalExt == null) return false;
     return Future.any([
-      _uiDelegate.requestToolApproval(
-        session: this,
+      approvalExt.requestApproval(
+        toolCallId: toolCallId,
         toolName: toolName,
         arguments: arguments,
         rationale: rationale,

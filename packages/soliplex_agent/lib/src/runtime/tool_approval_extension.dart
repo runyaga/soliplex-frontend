@@ -7,9 +7,10 @@ import 'package:soliplex_agent/src/runtime/session_extension.dart';
 /// reactive state that the UI can observe and respond to.
 ///
 /// When an instance of this extension is registered with a session,
-/// `AgentSession.requestApproval` delegates to [requestApproval] instead of
-/// falling back to `AgentUiDelegate`. Only one `ToolApprovalExtension` may be
-/// registered per session (enforced by the namespace uniqueness check in
+/// `AgentSession.requestApproval` delegates to [requestApproval]. When no
+/// extension is registered, `AgentSession.requestApproval` returns `false`
+/// (deny by default). Only one `ToolApprovalExtension` may be registered
+/// per session (enforced by the namespace uniqueness check in
 /// `SessionCoordinator`).
 abstract class ToolApprovalExtension extends SessionExtension {
   /// Requests user consent for the given tool call.

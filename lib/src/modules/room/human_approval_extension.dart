@@ -31,7 +31,7 @@ class ApprovalRequest {
 }
 
 /// A [ToolApprovalExtension] that surfaces tool approval requests as reactive
-/// state so the UI can respond without an [AgentUiDelegate].
+/// state so the UI can respond via a signal-driven dialog.
 ///
 /// When [AgentSession.requestApproval] fires, [stateSignal] is set to the
 /// pending [ApprovalRequest]. The UI watches the signal, shows an approval
