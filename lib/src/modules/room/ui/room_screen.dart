@@ -30,7 +30,6 @@ import 'async_action_dialog.dart';
 import 'room_welcome.dart';
 import 'thread_sidebar.dart';
 import 'extension_state_panel.dart';
-import 'state_panel.dart';
 import 'upload_event_banner.dart';
 import '../human_approval_extension.dart';
 import '../upload_tracker.dart';
@@ -84,7 +83,6 @@ class _RoomScreenState extends State<RoomScreen> {
   final _chatController = TextEditingController();
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
-  bool _statePanelExpanded = false;
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -909,13 +907,6 @@ class _RoomScreenState extends State<RoomScreen> {
                 tracker: _state.uploadTracker,
                 roomId: widget.roomId,
                 threadId: threadView.threadId,
-              ),
-            if (threadView.conversationState case final stateSignal?)
-              StatePanel(
-                stateSignal: stateSignal,
-                isExpanded: _statePanelExpanded,
-                onToggle: () =>
-                    setState(() => _statePanelExpanded = !_statePanelExpanded),
               ),
             ExtensionStatePanel(threadView: threadView),
             ChatInput(
