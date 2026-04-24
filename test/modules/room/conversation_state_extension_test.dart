@@ -131,7 +131,8 @@ void main() {
       ext.onDispose();
 
       expect(
-        () => session.emit(_running(_conversation(aguiState: {'post': 'dispose'}))),
+        () => session
+            .emit(_running(_conversation(aguiState: {'post': 'dispose'}))),
         returnsNormally,
       );
     });

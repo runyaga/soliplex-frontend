@@ -1,15 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 
 import 'package:soliplex_frontend/src/modules/room/send_error.dart';
 import 'package:soliplex_frontend/src/modules/room/session_spawner.dart';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 class _FakeSession implements AgentSession {
   bool cancelCalled = false;
@@ -29,22 +24,25 @@ void main() {
   group('SessionSpawner', () {
     late SessionSpawner spawner;
     late Signal<SendError?> errorSignal;
+    late List<AgentSessionState?> transitions;
 
     setUp(() {
       spawner = SessionSpawner();
       errorSignal = Signal(null);
+      transitions = [];
     });
 
     tearDown(() {
-      spawner.dispose();
       errorSignal.dispose();
     });
 
-    test('initial sessionState is null', () {
-      expect(spawner.sessionState.value, isNull);
+    void Function(AgentSessionState?) recordTransition() => transitions.add;
+
+    test('isSpawning starts false', () {
+      expect(spawner.isSpawning, isFalse);
     });
 
-    test('spawn sets state to spawning immediately', () async {
+    test('spawn emits spawning transition immediately', () async {
       final completer = Completer<AgentSession>();
 
       unawaited(
@@ -54,10 +52,12 @@ void main() {
           prompt: 'test',
           isDisposed: () => false,
           onSpawned: (_) {},
+          onStateTransition: recordTransition(),
         ),
       );
 
-      expect(spawner.sessionState.value, AgentSessionState.spawning);
+      expect(transitions, [AgentSessionState.spawning]);
+      expect(spawner.isSpawning, isTrue);
       completer.complete(_FakeSession());
       await Future<void>.delayed(Duration.zero);
     });
@@ -72,35 +72,25 @@ void main() {
         prompt: 'test',
         isDisposed: () => false,
         onSpawned: (s) => received = s,
+        onStateTransition: recordTransition(),
       );
 
       expect(received, same(session));
     });
 
-    test('spawn leaves sessionState as spawning after success', () async {
-      // The spawner does NOT auto-reset after a successful spawn.
-      // Callers update state via updateState() inside onSpawned.
+    test('spawn does NOT emit null transition after success', () async {
+      // On success the caller's onSpawned updates lifecycle state via the
+      // session it received; the spawner must not overwrite that.
       await spawner.spawn(
         spawnFn: () async => _FakeSession(),
         errorSignal: errorSignal,
         prompt: 'test',
         isDisposed: () => false,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
-      expect(spawner.sessionState.value, AgentSessionState.spawning);
-    });
-
-    test('onSpawned can clear sessionState via updateState', () async {
-      await spawner.spawn(
-        spawnFn: () async => _FakeSession(),
-        errorSignal: errorSignal,
-        prompt: 'test',
-        isDisposed: () => false,
-        onSpawned: (_) => spawner.updateState(null),
-      );
-
-      expect(spawner.sessionState.value, isNull);
+      expect(transitions, [AgentSessionState.spawning]);
     });
 
     test('spawn clears error signal before starting', () async {
@@ -112,12 +102,13 @@ void main() {
         prompt: 'test',
         isDisposed: () => false,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
       expect(errorSignal.value, isNull);
     });
 
-    test('concurrent spawn is a no-op when sessionState is non-null', () async {
+    test('concurrent spawn is a no-op while another is in flight', () async {
       final firstCompleter = Completer<AgentSession>();
       var spawnCount = 0;
 
@@ -131,6 +122,7 @@ void main() {
           prompt: 'first',
           isDisposed: () => false,
           onSpawned: (_) {},
+          onStateTransition: recordTransition(),
         ),
       );
 
@@ -144,6 +136,7 @@ void main() {
         prompt: 'second',
         isDisposed: () => false,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
       expect(spawnCount, 1);
@@ -160,6 +153,7 @@ void main() {
         prompt: 'my prompt',
         isDisposed: () => false,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
       expect(errorSignal.value, isNotNull);
@@ -173,21 +167,23 @@ void main() {
         prompt: 'test',
         isDisposed: () => true,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
       expect(errorSignal.value, isNull);
     });
 
-    test('spawn resets sessionState to null on error', () async {
+    test('spawn emits null transition on error', () async {
       await spawner.spawn(
         spawnFn: () async => throw Exception('boom'),
         errorSignal: errorSignal,
         prompt: 'test',
         isDisposed: () => false,
         onSpawned: (_) {},
+        onStateTransition: recordTransition(),
       );
 
-      expect(spawner.sessionState.value, isNull);
+      expect(transitions, [AgentSessionState.spawning, null]);
     });
 
     group('cancel', () {
@@ -205,6 +201,7 @@ void main() {
             prompt: 'test',
             isDisposed: () => false,
             onSpawned: (_) {},
+            onStateTransition: recordTransition(),
           ),
         );
 
@@ -213,7 +210,8 @@ void main() {
         await Future<void>.delayed(Duration.zero);
       });
 
-      test('resets sessionState to null on cancel', () async {
+      test('cancel does not emit a null transition — caller clears state',
+          () async {
         final completer = Completer<AgentSession>();
 
         unawaited(
@@ -223,14 +221,16 @@ void main() {
             prompt: 'test',
             isDisposed: () => false,
             onSpawned: (_) {},
+            onStateTransition: recordTransition(),
           ),
         );
 
         spawner.cancel();
-
-        expect(spawner.sessionState.value, isNull);
         completer.complete(_FakeSession());
         await Future<void>.delayed(Duration.zero);
+
+        expect(transitions, [AgentSessionState.spawning]);
+        expect(spawner.isSpawning, isFalse);
       });
 
       test('cancelled spawn does not call onSpawned', () async {
@@ -244,6 +244,7 @@ void main() {
             prompt: 'test',
             isDisposed: () => false,
             onSpawned: (_) => spawnedCalled = true,
+            onStateTransition: recordTransition(),
           ),
         );
 
@@ -253,18 +254,24 @@ void main() {
 
         expect(spawnedCalled, isFalse);
       });
-    });
 
-    group('updateState', () {
-      test('directly sets sessionState', () {
-        spawner.updateState(AgentSessionState.running);
-        expect(spawner.sessionState.value, AgentSessionState.running);
-      });
+      test('cancel then spawnFn throws suppresses the error', () async {
+        final completer = Completer<AgentSession>();
 
-      test('can clear sessionState to null', () {
-        spawner.updateState(AgentSessionState.running);
-        spawner.updateState(null);
-        expect(spawner.sessionState.value, isNull);
+        final future = spawner.spawn(
+          spawnFn: () => completer.future,
+          errorSignal: errorSignal,
+          prompt: 'test',
+          isDisposed: () => false,
+          onSpawned: (_) {},
+          onStateTransition: recordTransition(),
+        );
+
+        spawner.cancel();
+        completer.completeError(Exception('after-cancel'));
+        await future;
+
+        expect(errorSignal.value, isNull);
       });
     });
   });

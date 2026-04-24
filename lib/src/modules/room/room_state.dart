@@ -82,7 +82,9 @@ class RoomState {
 
   /// Tracks the spawn lifecycle: null → spawning → null.
   /// Non-null while a new-thread spawn is in progress.
-  ReadonlySignal<AgentSessionState?> get sessionState => _spawner.sessionState;
+  final Signal<AgentSessionState?> _sessionState =
+      Signal<AgentSessionState?>(null);
+  ReadonlySignal<AgentSessionState?> get sessionState => _sessionState;
 
   final Signal<SendError?> _lastError = Signal<SendError?>(null);
   ReadonlySignal<SendError?> get lastError => _lastError;
@@ -175,7 +177,9 @@ class RoomState {
   }
 
   /// Cancels a pending new-thread spawn. No-op if nothing is in progress.
-  void cancelSpawn() => _spawner.cancel();
+  void cancelSpawn() {
+    if (_spawner.cancel()) _sessionState.value = null;
+  }
 
   /// Implicit thread creation (send message with no thread selected).
   ///
@@ -196,7 +200,7 @@ class RoomState {
         isDisposed: () => _isDisposed,
         onSpawned: (session) {
           // Clear room-level spawn state — the thread view takes over.
-          _spawner.updateState(null);
+          _sessionState.value = null;
           final key = session.threadKey;
           _registry.register(key, session);
           if (_isDisposed) return;
@@ -214,6 +218,10 @@ class RoomState {
           _activeThreadView!.attachSession(session);
           onNavigateToThread?.call(key.threadId);
         },
+        onStateTransition: (state) {
+          if (_isDisposed) return;
+          _sessionState.value = state;
+        },
       );
 
   void dispose() {
@@ -221,7 +229,7 @@ class RoomState {
     _roomFetchToken?.cancel('disposed');
     threadList.dispose();
     _activeThreadView?.dispose();
-    _spawner.dispose();
+    _sessionState.dispose();
     runningThreadIds.dispose();
   }
 }

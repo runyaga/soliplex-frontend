@@ -162,7 +162,8 @@ void main() {
       expect(nullCount, isNotEmpty);
     });
 
-    test('namespace is human_approval', () => expect(ext.namespace, 'human_approval'));
+    test('namespace is human_approval',
+        () => expect(ext.namespace, 'human_approval'));
     test('priority is 30', () => expect(ext.priority, 30));
     test('tools is empty', () => expect(ext.tools, isEmpty));
 

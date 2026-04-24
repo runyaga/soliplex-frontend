@@ -9,78 +9,74 @@ import 'send_error.dart';
 /// [RoomState].
 ///
 /// Encapsulates:
-/// - The concurrency guard (`sessionState` is non-null while a spawn or
-///   active session is in progress).
+/// - The concurrency guard — [spawn] is a no-op while another spawn is
+///   in-flight.
 /// - Pending-future tracking and race detection via [cancel].
 /// - Cleanup of a spawn future that was abandoned by [cancel].
 ///
-/// Callers drive non-spawn lifecycle updates via [updateState].
-///
-/// **Dispose vs cancel semantics**: [dispose] only marks the spawner as
-/// disposed; it does NOT cancel in-flight spawns. This preserves the
-/// invariant that a session is always registered in the registry even if
-/// the owning view is disposed before the spawn resolves. Use [cancel]
-/// (via `cancelRun`/`cancelSpawn`) to explicitly abort a pending spawn.
+/// The lifecycle [Signal<AgentSessionState?>] is NOT owned by the spawner;
+/// callers pass an `onStateTransition` callback and own the signal they
+/// update from it. This keeps the spawner scoped to spawn-phase logic and
+/// leaves session-level state (running, detached, etc.) to the caller.
 class SessionSpawner {
-  final Signal<AgentSessionState?> _sessionState = Signal(null);
   Future<AgentSession>? _pendingSpawn;
+  bool _cancelled = false;
 
-  ReadonlySignal<AgentSessionState?> get sessionState =>
-      _sessionState.readonly();
-
-  /// Updates the session state from outside the spawn lifecycle —
-  /// e.g. running, completed, or cleared after detach.
-  void updateState(AgentSessionState? state) => _sessionState.value = state;
+  bool get isSpawning => _pendingSpawn != null;
 
   /// Runs the spawn state machine.
   ///
-  /// - Guards against concurrent spawns (no-op if [sessionState] is
-  ///   non-null).
-  /// - Clears [errorSignal] and sets state to [AgentSessionState.spawning].
+  /// - Guards against concurrent spawns (no-op if already spawning).
+  /// - Clears [errorSignal] and emits
+  ///   [AgentSessionState.spawning] via [onStateTransition].
   /// - Awaits the future returned by [spawnFn] with race detection.
   /// - On success, calls [onSpawned]; the callback is responsible for
   ///   checking whether the owner is disposed before attaching.
-  /// - On error, calls [isDisposed] (or checks `_sessionState == null`
-  ///   for cancellation) before surfacing the error in [errorSignal].
-  /// - Always cleans up pending state in the `finally` block.
+  /// - On error, surfaces via [errorSignal] unless cancelled or the owner
+  ///   is disposed.
+  /// - Emits `null` via [onStateTransition] when the spawn completes
+  ///   without success (e.g. error path), so callers can clear their
+  ///   lifecycle signal without duplicating bookkeeping.
   Future<void> spawn({
     required Future<AgentSession> Function() spawnFn,
     required Signal<SendError?> errorSignal,
     required String prompt,
     required bool Function() isDisposed,
     required void Function(AgentSession) onSpawned,
+    required void Function(AgentSessionState?) onStateTransition,
   }) async {
-    if (_sessionState.value != null) return;
+    if (_pendingSpawn != null) return;
+    _cancelled = false;
     errorSignal.value = null;
-    _sessionState.value = AgentSessionState.spawning;
+    onStateTransition(AgentSessionState.spawning);
     Future<AgentSession>? future;
     try {
       future = spawnFn();
       _pendingSpawn = future;
       final session = await future;
-      if (_pendingSpawn != future) return; // Cancelled via cancel().
+      if (_cancelled) return;
       _pendingSpawn = null;
       onSpawned(session); // Callback owns the dispose/attach decision.
     } on Object catch (error) {
-      // Suppress errors when cancelled (_sessionState cleared by cancel())
-      // or when the owning view is disposed.
-      if (isDisposed() || _sessionState.value == null) return;
+      if (_cancelled || isDisposed()) return;
       errorSignal.value = SendError(error, unsentText: prompt);
     } finally {
-      if (_pendingSpawn == future) {
+      if (!_cancelled && _pendingSpawn == future) {
         _pendingSpawn = null;
-        _sessionState.value = null;
+        onStateTransition(null);
       }
     }
   }
 
   /// Cancels the pending spawn, if any. Returns `true` if a spawn was
-  /// cancelled, `false` if there was nothing pending.
+  /// cancelled, `false` if there was nothing pending. Callers are
+  /// responsible for clearing their lifecycle signal — the spawner does
+  /// not call back into `onStateTransition` from here.
   bool cancel() {
     final pending = _pendingSpawn;
     if (pending == null) return false;
     _pendingSpawn = null;
-    _sessionState.value = null;
+    _cancelled = true;
     unawaited(
       pending.then((s) {
         s.cancel();
@@ -91,8 +87,4 @@ class SessionSpawner {
     );
     return true;
   }
-
-  /// No-op. In-flight spawns complete normally so sessions are always
-  /// registered. Use [cancel] to explicitly abort a pending spawn.
-  void dispose() {}
 }

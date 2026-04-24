@@ -45,7 +45,8 @@ class _FakeModule extends AppModule {
 }
 
 class _OrderRecordingModule extends AppModule {
-  _OrderRecordingModule({required String ns, required int pri, required this.order})
+  _OrderRecordingModule(
+      {required String ns, required int pri, required this.order})
       : _ns = ns,
         _pri = pri;
 
@@ -67,7 +68,8 @@ class _OrderRecordingModule extends AppModule {
 }
 
 class _DisposeOrderModule extends AppModule {
-  _DisposeOrderModule({required String ns, required int pri, required this.order})
+  _DisposeOrderModule(
+      {required String ns, required int pri, required this.order})
       : _ns = ns,
         _pri = pri;
 
@@ -112,7 +114,8 @@ void main() {
       final b = _FakeModule(ns: 'b');
 
       await expectLater(
-        ShellConfig.fromModules(modules: [a, b], appName: 'test', theme: _theme()),
+        ShellConfig.fromModules(
+            modules: [a, b], appName: 'test', theme: _theme()),
         completes,
       );
     });
@@ -122,7 +125,8 @@ void main() {
       final b = _FakeModule(ns: '');
 
       await expectLater(
-        ShellConfig.fromModules(modules: [a, b], appName: 'test', theme: _theme()),
+        ShellConfig.fromModules(
+            modules: [a, b], appName: 'test', theme: _theme()),
         completes,
       );
     });
@@ -132,7 +136,8 @@ void main() {
       final b = _FakeModule(ns: 'dup');
 
       await expectLater(
-        ShellConfig.fromModules(modules: [a, b], appName: 'test', theme: _theme()),
+        ShellConfig.fromModules(
+            modules: [a, b], appName: 'test', theme: _theme()),
         throwsA(isA<StateError>()),
       );
     });

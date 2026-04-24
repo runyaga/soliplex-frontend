@@ -98,9 +98,11 @@ class ThreadViewState {
   ReadonlySignal<StreamingState?> get streamingState => _streamingState;
 
   /// Tracks the session lifecycle: null → spawning → running → null.
-  /// Managed by [_spawner] during spawn; updated via [_spawner.updateState]
-  /// for running and detach transitions.
-  ReadonlySignal<AgentSessionState?> get sessionState => _spawner.sessionState;
+  /// Driven by [_spawner] during spawn (via its state-transition callback)
+  /// and updated directly here for attach, running, and detach transitions.
+  final Signal<AgentSessionState?> _sessionState =
+      Signal<AgentSessionState?>(null);
+  ReadonlySignal<AgentSessionState?> get sessionState => _sessionState;
 
   final Signal<SendError?> _lastSendError = Signal<SendError?>(null);
   ReadonlySignal<SendError?> get lastSendError => _lastSendError;
@@ -163,30 +165,42 @@ class ThreadViewState {
     String prompt,
     AgentRuntime runtime, {
     Map<String, dynamic>? stateOverlay,
-  }) =>
-      _spawner.spawn(
-        spawnFn: () => runtime.spawn(
-          roomId: _roomId,
-          prompt: prompt,
-          threadId: threadId,
-          stateOverlay: stateOverlay,
-        ),
-        errorSignal: _lastSendError,
+  }) {
+    // Guard against sends while a session is already spawning/running.
+    // The spawner's own re-entrancy guard only covers in-flight spawns;
+    // this blocks overlapping sends when a prior session is attached.
+    if (_sessionState.value != null) return Future<void>.value();
+    return _spawner.spawn(
+      spawnFn: () => runtime.spawn(
+        roomId: _roomId,
         prompt: prompt,
-        isDisposed: () => _isDisposed,
-        onSpawned: (session) {
-          _registry.register(threadKey, session);
-          if (_isDisposed) return;
-          _attachSession(session);
-        },
-      );
+        threadId: threadId,
+        stateOverlay: stateOverlay,
+      ),
+      errorSignal: _lastSendError,
+      prompt: prompt,
+      isDisposed: () => _isDisposed,
+      onSpawned: (session) {
+        _registry.register(threadKey, session);
+        if (_isDisposed) return;
+        _attachSession(session);
+      },
+      onStateTransition: (state) {
+        if (_isDisposed) return;
+        _sessionState.value = state;
+      },
+    );
+  }
 
   void attachSession(AgentSession session) {
     _attachSession(session);
   }
 
   void cancelRun() {
-    if (_spawner.cancel()) return;
+    if (_spawner.cancel()) {
+      _sessionState.value = null;
+      return;
+    }
     _activeSession?.cancel();
   }
 
@@ -195,7 +209,7 @@ class ThreadViewState {
     _detachSession();
     _cancelToken?.cancel('session attached');
     _activeSession = session;
-    _spawner.updateState(session.state);
+    _sessionState.value = session.state;
     _runStateUnsub = session.runState.subscribe(_onRunState);
   }
 
@@ -208,7 +222,7 @@ class ThreadViewState {
           _messages.value = _messagesLoaded(conversation);
         }
         _streamingState.value = streaming;
-        _spawner.updateState(AgentSessionState.running);
+        _sessionState.value = AgentSessionState.running;
       case CompletedState(:final conversation):
         _detachSession();
         _messages.value = _messagesLoaded(conversation);
@@ -252,7 +266,7 @@ class ThreadViewState {
     _runStateUnsub = null;
     _activeSession = null;
     _streamingState.value = null;
-    _spawner.updateState(null);
+    _sessionState.value = null;
   }
 
   bool _restoreFromRegistry() {
@@ -320,6 +334,6 @@ class ThreadViewState {
     _cancelToken?.cancel('disposed');
     _detachSession();
     _trackerRegistry.dispose();
-    _spawner.dispose();
+    _sessionState.dispose();
   }
 }
