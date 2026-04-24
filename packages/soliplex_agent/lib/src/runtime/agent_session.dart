@@ -10,8 +10,9 @@ import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
 import 'package:soliplex_agent/src/orchestration/run_state.dart';
 import 'package:soliplex_agent/src/runtime/agent_runtime.dart';
 import 'package:soliplex_agent/src/runtime/agent_session_state.dart';
-import 'package:soliplex_agent/src/runtime/agent_ui_delegate.dart';
+import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
+import 'package:soliplex_agent/src/runtime/tool_approval_extension.dart';
 import 'package:soliplex_agent/src/tools/tool_execution_context.dart';
 import 'package:soliplex_agent/src/tools/tool_registry.dart';
 import 'package:soliplex_client/soliplex_client.dart';
@@ -42,13 +43,11 @@ class AgentSession implements ToolExecutionContext {
     required RunOrchestrator orchestrator,
     required ToolRegistry toolRegistry,
     required Logger logger,
-    List<SessionExtension> extensions = const [],
-    AgentUiDelegate? uiDelegate,
+    required SessionCoordinator coordinator,
   })  : _runtime = runtime,
         _orchestrator = orchestrator,
         _toolRegistry = toolRegistry,
-        _extensions = extensions,
-        _uiDelegate = uiDelegate,
+        _coordinator = coordinator,
         _logger = logger,
         id = '${threadKey.threadId}-'
             '${DateTime.now().microsecondsSinceEpoch}';
@@ -68,8 +67,7 @@ class AgentSession implements ToolExecutionContext {
   final AgentRuntime _runtime;
   final RunOrchestrator _orchestrator;
   final ToolRegistry _toolRegistry;
-  final List<SessionExtension> _extensions;
-  final AgentUiDelegate? _uiDelegate;
+  final SessionCoordinator _coordinator;
   final Logger _logger;
 
   static const _toolTimeout = Duration(seconds: 60);
@@ -171,7 +169,6 @@ class AgentSession implements ToolExecutionContext {
     required Map<String, dynamic> arguments,
     required String rationale,
   }) async {
-    if (_uiDelegate == null) return false;
     emitEvent(
       AwaitingApproval(
         toolCallId: toolCallId,
@@ -179,9 +176,12 @@ class AgentSession implements ToolExecutionContext {
         rationale: rationale,
       ),
     );
+
+    final approvalExt = _coordinator.getExtension<ToolApprovalExtension>();
+    if (approvalExt == null) return false;
     return Future.any([
-      _uiDelegate.requestToolApproval(
-        session: this,
+      approvalExt.requestApproval(
+        toolCallId: toolCallId,
         toolName: toolName,
         arguments: arguments,
         rationale: rationale,
@@ -212,12 +212,13 @@ class AgentSession implements ToolExecutionContext {
   }
 
   @override
-  T? getExtension<T extends SessionExtension>() {
-    for (final ext in _extensions) {
-      if (ext is T) return ext;
-    }
-    return null;
-  }
+  T? getExtension<T extends SessionExtension>() =>
+      _coordinator.getExtension<T>();
+
+  /// Yields `(namespace, signal)` for every stateful extension with a
+  /// non-empty namespace registered in this session.
+  Iterable<(String, ReadonlySignal<Object?>)> statefulObservations() =>
+      _coordinator.statefulObservations();
 
   // ---------------------------------------------------------------------------
   // Child management
@@ -297,17 +298,9 @@ class AgentSession implements ToolExecutionContext {
   // Extension lifecycle
   // ---------------------------------------------------------------------------
 
-  Future<void> _attachExtensions() async {
-    for (final ext in _extensions) {
-      await ext.onAttach(this);
-    }
-  }
+  Future<void> _attachExtensions() => _coordinator.attachAll(this);
 
-  void _disposeExtensions() {
-    for (final ext in _extensions) {
-      ext.onDispose();
-    }
-  }
+  void _disposeExtensions() => _coordinator.disposeAll();
 
   // ---------------------------------------------------------------------------
   // State listener

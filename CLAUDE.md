@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Soliplex Flutter frontend — both a **runnable app** and an **importable library**. Uses a modular shell architecture where each module is a function returning a `ModuleContribution` (routes, Riverpod overrides, and an optional redirect). See `docs/plans/0001-app-shell/proposal.md` for the full design proposal.
+Soliplex Flutter frontend — both a **runnable app** and an **importable library**. Uses a modular shell architecture where each module is an `AppModule` subclass that contributes routes, Riverpod overrides, and lifecycle hooks.
 
 ## Commands
 
@@ -33,19 +33,100 @@ Prefer Dart MCP tools over shell commands. All tools take `root` as `file:///abs
 
 Entry point: `runSoliplexShell(ShellConfig)` boots the app from a `ShellConfig`.
 
-Each module is a function that takes dependencies via constructor injection and returns a `ModuleContribution` (routes, Riverpod overrides, and an optional redirect). No base class, no registry. The compiler enforces dependency ordering. Flavor functions create concrete instances, inject them into module functions, and compose `ModuleContribution` values into a `ShellConfig`. The shell flattens modules and collects overrides into a single root `ProviderScope`.
+Each module subclasses `AppModule` and implements:
+
+- `String get namespace` — unique identifier (validated at startup)
+- `ModuleRoutes build()` — returns routes, Riverpod overrides, and an optional
+  redirect
+- `Future<void> onDispose()` — resource cleanup (optional)
+
+Flavor functions construct concrete `AppModule` instances and pass them to
+`ShellConfig.fromModules(...)`. Modules are built in registration order and
+disposed in reverse. The shell flattens routes and collects overrides into a
+single root `ProviderScope`.
 
 ### State Management
 
-Riverpod is **DI/service locator only** — no AsyncNotifier or FutureProvider chains. Reactive state comes from `signals` (via `soliplex_agent`). The `signals` package bridges signal reactivity to Flutter widget rebuilds.
+Riverpod is **DI/service locator only** — no AsyncNotifier or FutureProvider chains.
+Reactive state comes from `signals` (via `soliplex_agent`). The `signals` package
+bridges signal reactivity to Flutter widget rebuilds.
 
 ### Theming
 
-`ShellConfig` takes `ThemeData` directly — Flutter's standard abstraction. Each flavor provides its own `ThemeData`. Custom palette abstractions deferred until multiple flavors need them.
+`ShellConfig` takes `ThemeData` directly — Flutter's standard abstraction. Each flavor
+provides its own `ThemeData`. Custom palette abstractions deferred until multiple
+flavors need them.
 
 ### Flavors
 
-Flavors are functions that compose module functions into a `ShellConfig`. Modules are included/excluded by presence in the flavor — no enum or toggle framework.
+Flavors are functions that construct `AppModule` instances and call
+`ShellConfig.fromModules(...)`. Modules are included/excluded by presence in the
+flavor — no enum or toggle framework.
+
+### Adding custom client-side session extensions
+
+`standard()` takes an optional `extraExtensions: SessionExtensionFactory?`
+parameter. The factory is invoked once per `AgentSession` and its output is
+appended after the framework's built-in extensions (execution tracker, tool
+calls, human approval). Use this to register custom `SessionExtension`s —
+including ones that expose `ClientTool`s — without forking the flavor.
+
+Example — a consumer adding a `get_current_time` tool:
+
+```dart
+class ClockExtension extends SessionExtension {
+  @override
+  String get namespace => 'clock';
+
+  @override
+  Future<void> onAttach(AgentSession session) async {}
+
+  @override
+  void onDispose() {}
+
+  @override
+  List<ClientTool> get tools => [
+        ClientTool.simple(
+          name: 'get_current_time',
+          description: 'Returns the current device time as ISO 8601.',
+          executor: (_, __) async => DateTime.now().toIso8601String(),
+        ),
+      ];
+}
+
+// In main.dart:
+runSoliplexShell(
+  await standard(
+    extraExtensions: () async => [ClockExtension()],
+  ),
+);
+```
+
+The framework's own `main.dart` uses the same hook to gate the on-device
+Python runtime (`MontyRuntimeExtension` from `soliplex_agent_monty`) behind
+the compile-time `MONTY_ENABLED` flag:
+
+```sh
+flutter build macos --dart-define=MONTY_ENABLED=true
+flutter build web   --dart-define=MONTY_ENABLED=true
+```
+
+The flag is a tree-shake boundary — with `MONTY_ENABLED=false` (default)
+the `dart_monty` bytes do not reach the release binary.
+
+### Monty integration
+
+The app depends on `dart_monty` directly. `dart_monty_core` (which
+owns the WASM/JS bridge assets) comes in transitively via
+`dart_monty` — Flutter bundles a dependency's declared
+`flutter.assets` without the consumer needing to redeclare them.
+
+On web, `lib/main.dart` calls `await DartMonty.ensureInitialized()`
+inside the `MONTY_ENABLED` gate to load the bridge script dynamically
+from `assets/packages/dart_monty_core/lib/assets/dart_monty_core_bridge.js`.
+On native targets the call is a no-op via conditional-import stub.
+No `<script>` tag is needed in `web/index.html`; `--base-href` is
+honoured automatically.
 
 ## Modules
 
@@ -59,9 +140,10 @@ Five feature modules composed in the standard flavor:
 
 ## Workspace Packages
 
-Four internal packages under `packages/`:
+Internal packages under `packages/`:
 
 - `soliplex_agent` — Agent orchestration (runtime, sessions, tool registry, execution events)
+- `soliplex_agent_monty` — Bridge that wraps `dart_monty`'s Python sandbox in a `SessionExtension` and exposes the `run_python_on_device` `ClientTool`. Optional; enabled via `--dart-define=MONTY_ENABLED=true`.
 - `soliplex_client` — Backend HTTP/AG-UI API client, domain models, citation extraction
 - `soliplex_client_native` — Native HTTP client (iOS/macOS via cupertino_http)
 - `soliplex_logging` — Structured logging with memory, console, disk, and backend sinks

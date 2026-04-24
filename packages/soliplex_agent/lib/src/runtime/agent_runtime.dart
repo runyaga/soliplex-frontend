@@ -10,8 +10,8 @@ import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
 import 'package:soliplex_agent/src/orchestration/run_state.dart';
 import 'package:soliplex_agent/src/runtime/agent_session.dart';
 import 'package:soliplex_agent/src/runtime/agent_session_state.dart';
-import 'package:soliplex_agent/src/runtime/agent_ui_delegate.dart';
 import 'package:soliplex_agent/src/runtime/server_connection.dart';
+import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
 import 'package:soliplex_client/soliplex_client.dart' show ThreadHistory;
@@ -53,7 +53,6 @@ class AgentRuntime {
     required Logger logger,
     AgentLlmProvider? llmProvider,
     SessionExtensionFactory? extensionFactory,
-    AgentUiDelegate? uiDelegate,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -65,7 +64,6 @@ class AgentRuntime {
             ),
         _toolRegistryResolver = toolRegistryResolver,
         _extensionFactory = extensionFactory,
-        _uiDelegate = uiDelegate,
         _platform = platform,
         _logger = logger;
 
@@ -73,7 +71,6 @@ class AgentRuntime {
   final AgentLlmProvider _llmProvider;
   final ToolRegistryResolver _toolRegistryResolver;
   final SessionExtensionFactory? _extensionFactory;
-  final AgentUiDelegate? _uiDelegate;
   final PlatformConstraints _platform;
   final Logger _logger;
 
@@ -323,10 +320,9 @@ class AgentRuntime {
   }) async {
     var toolRegistry = await _toolRegistryResolver(roomId);
     final extensions = await _createExtensions();
-    for (final ext in extensions) {
-      for (final tool in ext.tools) {
-        toolRegistry = toolRegistry.register(tool);
-      }
+    final coordinator = SessionCoordinator(extensions);
+    for (final tool in coordinator.tools) {
+      toolRegistry = toolRegistry.register(tool);
     }
     final orchestrator = RunOrchestrator(
       llmProvider: _llmProvider,
@@ -340,8 +336,7 @@ class AgentRuntime {
       runtime: this,
       orchestrator: orchestrator,
       toolRegistry: toolRegistry,
-      extensions: extensions,
-      uiDelegate: _uiDelegate,
+      coordinator: coordinator,
       logger: _logger,
     );
   }
