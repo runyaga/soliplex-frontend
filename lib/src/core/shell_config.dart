@@ -7,29 +7,6 @@ import 'package:go_router/go_router.dart';
 import 'app_module.dart';
 import 'router.dart';
 
-/// A static bag of routes, overrides, and an optional redirect contributed
-/// by a module.
-///
-/// Deprecated. Implement [AppModule] and use [ShellConfig.fromModules]
-/// instead. [ModuleContribution] will be removed once all consumers have
-/// migrated.
-@Deprecated(
-  'Implement AppModule and use ShellConfig.fromModules instead. '
-  'ModuleContribution will be removed once all consumers have migrated.',
-)
-class ModuleContribution {
-  final List<RouteBase> routes;
-  final List<Override> overrides;
-  final GoRouterRedirect? redirect;
-
-  ModuleContribution({
-    List<RouteBase> routes = const [],
-    List<Override> overrides = const [],
-    this.redirect,
-  })  : routes = List.unmodifiable(routes),
-        overrides = List.unmodifiable(overrides);
-}
-
 class ShellConfig {
   final String appName;
   final Widget? logo;
@@ -41,31 +18,6 @@ class ShellConfig {
   final List<RouteBase> _routes;
   final List<Override> _overrides;
   final List<GoRouterRedirect> _redirects;
-
-  /// Deprecated. Use [ShellConfig.fromModules] with [AppModule] classes
-  /// instead. This constructor will be removed once all consumers have
-  /// migrated.
-  // ignore: deprecated_member_use_from_same_package
-  @Deprecated(
-    'Use ShellConfig.fromModules with AppModule classes instead. '
-    'This constructor will be removed once all consumers have migrated.',
-  )
-  // ignore: deprecated_member_use_from_same_package
-  ShellConfig({
-    required this.appName,
-    this.logo,
-    required this.theme,
-    this.initialRoute = '/',
-    // ignore: deprecated_member_use_from_same_package
-    List<ModuleContribution> modules = const [],
-    this.refreshListenable,
-    this.onDispose,
-    // ignore: deprecated_member_use_from_same_package
-  })  : _routes = modules.expand((m) => m.routes).toList(),
-        // ignore: deprecated_member_use_from_same_package
-        _overrides = modules.expand((m) => m.overrides).toList(),
-        // ignore: deprecated_member_use_from_same_package
-        _redirects = modules.map((m) => m.redirect).nonNulls.toList();
 
   ShellConfig._internal({
     required this.appName,

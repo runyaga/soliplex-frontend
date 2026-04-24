@@ -36,21 +36,14 @@ Entry point: `runSoliplexShell(ShellConfig)` boots the app from a `ShellConfig`.
 Each module subclasses `AppModule` and implements:
 
 - `String get namespace` — unique identifier (validated at startup)
-- `int get priority` — attach order (descending); dispose is reverse
-- `ModuleRoutes build(AppModuleContext ctx)` — returns routes, Riverpod overrides,
-  and an optional redirect
-- `Future<void> onAttach(AppModuleContext ctx)` — lifecycle init (optional)
+- `ModuleRoutes build()` — returns routes, Riverpod overrides, and an optional
+  redirect
 - `Future<void> onDispose()` — resource cleanup (optional)
 
-Flavor functions construct concrete `AppModule` instances, pass them to
-`ShellConfig.fromModules(...)`, and the coordinator handles ordering and lifecycle.
-The shell flattens routes and collects overrides into a single root `ProviderScope`.
-
-Cross-module discovery uses `AppModuleContext.module<T>()` — type-based lookup with
-no string keys.
-
-`ModuleContribution` and the old `ShellConfig(modules: [...])` constructor are
-`@Deprecated` and will be removed once all consumers migrate.
+Flavor functions construct concrete `AppModule` instances and pass them to
+`ShellConfig.fromModules(...)`. Modules are built in registration order and
+disposed in reverse. The shell flattens routes and collects overrides into a
+single root `ProviderScope`.
 
 ### State Management
 
