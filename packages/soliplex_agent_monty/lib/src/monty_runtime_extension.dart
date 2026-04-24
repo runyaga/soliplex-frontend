@@ -38,6 +38,17 @@ class MontyRuntimeExtension extends SessionExtension
   MontyRuntime? _runtime;
   final List<void Function()> _unsubs = [];
 
+  /// Single-flight serialization for `_runPythonOnDevice`.
+  ///
+  /// `MontyRuntime`'s underlying bridge rejects concurrent
+  /// `execute()` calls with `StateError('Bridge is already
+  /// executing')` — the contract is one script at a time per session,
+  /// on both FFI and WASM backends. The LLM can legitimately fire two
+  /// tool calls in parallel; absorbing that here (rather than
+  /// surfacing the StateError to the model) keeps the user-visible
+  /// contract "tool calls always complete" intact.
+  Future<void> _executionLock = Future<void>.value();
+
   @override
   String get namespace => 'monty';
 
@@ -103,10 +114,35 @@ class MontyRuntimeExtension extends SessionExtension
   /// Python-level errors are returned in the payload — not thrown — so
   /// the LLM sees a completed tool call with an `error` field rather
   /// than retrying on `status: failed`.
+  ///
+  /// Concurrent tool calls are serialized through [_executionLock]:
+  /// if a prior call is still running on the shared runtime, this
+  /// call waits its turn rather than throwing
+  /// `StateError('Bridge is already executing')`. Errors in earlier
+  /// calls do not block later ones.
   Future<String> _runPythonOnDevice(
     ToolCallInfo toolCall,
     ToolExecutionContext context,
   ) async {
+    final previous = _executionLock;
+    final completer = Completer<void>();
+    _executionLock = completer.future;
+    try {
+      // Wait for the previous caller to finish; swallow its errors so
+      // one failing tool call does not cascade into subsequent ones.
+      try {
+        await previous;
+      } on Object {
+        // Previous call's error is its own problem — already reported
+        // through its own JSON payload.
+      }
+      return await _runPythonOnDeviceBody(toolCall);
+    } finally {
+      completer.complete();
+    }
+  }
+
+  Future<String> _runPythonOnDeviceBody(ToolCallInfo toolCall) async {
     final String code;
     try {
       final args = toolCall.arguments.isEmpty

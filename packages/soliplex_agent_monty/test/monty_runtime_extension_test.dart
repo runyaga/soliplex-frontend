@@ -160,6 +160,63 @@ void main() {
         final payload = jsonDecode(result) as Map<String, Object?>;
         expect(payload['error'], isNotNull);
       });
+
+      test('concurrent tool calls serialize instead of throwing', () async {
+        // Two tool calls dispatched in parallel. Without the
+        // serialization lock the second hits the underlying bridge's
+        // `StateError('Bridge is already executing')` and the LLM
+        // sees a malformed tool result. With the lock, both complete
+        // cleanly and in order.
+        final toolCall = ToolCallInfo(
+          id: 'tc-1',
+          name: 'run_python_on_device',
+          arguments: jsonEncode({'code': '40 + 2'}),
+        );
+        final first = ext.tools.single.executor(
+          toolCall,
+          _FakeToolExecutionContext(),
+        );
+        final second = ext.tools.single.executor(
+          toolCall,
+          _FakeToolExecutionContext(),
+        );
+        final results = await Future.wait([first, second]);
+        for (final raw in results) {
+          final payload = jsonDecode(raw) as Map<String, Object?>;
+          expect(
+            payload['error'],
+            isNull,
+            reason: 'serialized call should not expose bridge-busy error',
+          );
+        }
+      });
+
+      test('earlier tool-call failure does not block later ones', () async {
+        // A syntactically broken call ahead of a good one: the good
+        // one should still complete. Lock must not propagate the
+        // prior failure into the next turn.
+        final brokenResult = ext.tools.single.executor(
+          const ToolCallInfo(
+            id: 'broken',
+            name: 'run_python_on_device',
+            arguments: '{"code": "def broken(:"}',
+          ),
+          _FakeToolExecutionContext(),
+        );
+        final goodResult = ext.tools.single.executor(
+          ToolCallInfo(
+            id: 'good',
+            name: 'run_python_on_device',
+            arguments: jsonEncode({'code': '1 + 1'}),
+          ),
+          _FakeToolExecutionContext(),
+        );
+        final results = await Future.wait([brokenResult, goodResult]);
+        final brokenPayload = jsonDecode(results[0]) as Map<String, Object?>;
+        final goodPayload = jsonDecode(results[1]) as Map<String, Object?>;
+        expect(brokenPayload['error'], isNotNull);
+        expect(goodPayload['error'], isNull);
+      });
     },
     tags: [
       'native',
