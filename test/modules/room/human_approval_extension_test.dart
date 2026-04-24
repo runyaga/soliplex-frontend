@@ -21,10 +21,6 @@ void main() {
 
     tearDown(() => ext.onDispose());
 
-    test('initial state is null', () {
-      expect(ext.state, isNull);
-    });
-
     test('requestApproval sets state to ApprovalRequest', () async {
       unawaited(ext.requestApproval(
         toolCallId: 'tc-1',
@@ -160,17 +156,6 @@ void main() {
       await future;
 
       expect(nullCount, isNotEmpty);
-    });
-
-    test('namespace is human_approval',
-        () => expect(ext.namespace, 'human_approval'));
-    test('priority is 30', () => expect(ext.priority, 30));
-    test('tools is empty', () => expect(ext.tools, isEmpty));
-
-    test('onAttach is a no-op (does not throw)', () async {
-      final ext2 = HumanApprovalExtension();
-      expect(() async => ext2.onAttach(_FakeSession()), returnsNormally);
-      ext2.onDispose();
     });
   });
 

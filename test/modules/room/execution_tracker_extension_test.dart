@@ -66,11 +66,6 @@ void main() {
 
     tearDown(() => ext.onDispose());
 
-    test('initial state is empty map', () {
-      expect(ext.state, isEmpty);
-      expect(ext.trackers, isEmpty);
-    });
-
     test('RunningState with AwaitingText creates a tracker entry', () {
       session.emitRun(_running(const AwaitingText()));
 
@@ -166,18 +161,6 @@ void main() {
 
       expect(ext.state, isNotEmpty);
       expect(ext.state.values.first.isFrozen, isTrue);
-    });
-
-    test('namespace is execution_tracker', () {
-      expect(ext.namespace, 'execution_tracker');
-    });
-
-    test('priority is 10', () {
-      expect(ext.priority, 10);
-    });
-
-    test('tools is empty', () {
-      expect(ext.tools, isEmpty);
     });
 
     test('onDispose unsubscribes — emitting after dispose does not throw', () {

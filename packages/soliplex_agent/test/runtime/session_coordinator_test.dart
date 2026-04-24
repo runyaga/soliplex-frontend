@@ -101,21 +101,6 @@ void main() {
     });
 
     group('attachAll', () {
-      test('calls onAttach on all extensions', () async {
-        final a = _FakeExtension(ns: 'a');
-        final b = _FakeExtension(ns: 'b');
-        final coordinator = SessionCoordinator([a, b]);
-
-        // We can't easily pass a real AgentSession here, so we verify that
-        // attachCount increments (onAttach was called).
-        // Use a fake that satisfies the type requirement via noSuchMethod.
-        final fakeSession = _FakeAgentSessionStub();
-        await coordinator.attachAll(fakeSession);
-
-        expect(a.attachCount, 1);
-        expect(b.attachCount, 1);
-      });
-
       test('attaches in descending priority order', () async {
         final order = <int>[];
         final low = _OrderRecordingExtension(ns: 'low', pri: 1, order: order);

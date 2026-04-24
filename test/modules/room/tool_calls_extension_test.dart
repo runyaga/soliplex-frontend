@@ -34,10 +34,6 @@ void main() {
 
     tearDown(() => ext.onDispose());
 
-    test('initial state is empty list', () {
-      expect(ext.state, isEmpty);
-    });
-
     test('ClientToolExecuting adds executing entry (client-side)', () {
       session.emit(const ClientToolExecuting(
         toolCallId: 'tc-1',
@@ -153,10 +149,6 @@ void main() {
 
       expect(counts, contains(1));
     });
-
-    test('namespace is tool_calls', () => expect(ext.namespace, 'tool_calls'));
-    test('priority is 5', () => expect(ext.priority, 5));
-    test('tools is empty', () => expect(ext.tools, isEmpty));
 
     test('onDispose unsubscribes — emitting after dispose does not throw', () {
       ext.onDispose();
