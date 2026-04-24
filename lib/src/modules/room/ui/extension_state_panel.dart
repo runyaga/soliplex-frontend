@@ -10,8 +10,9 @@ import '../thread_view_state.dart';
 ///
 /// Iterates [ThreadViewState.statefulObservations] to obtain
 /// `(namespace, signal)` pairs, then renders a row per extension that
-/// rebuilds independently as each signal changes. The panel itself rebuilds
-/// when [ThreadViewState.sessionState] changes (session attached/detached).
+/// rebuilds independently as each signal changes. The panel watches
+/// [ThreadViewState.sessionState] so it rebuilds when the session attaches
+/// or detaches.
 class ExtensionStatePanel extends StatefulWidget {
   const ExtensionStatePanel({super.key, required this.threadView});
   final ThreadViewState threadView;
@@ -21,46 +22,15 @@ class ExtensionStatePanel extends StatefulWidget {
 }
 
 class _ExtensionStatePanelState extends State<ExtensionStatePanel> {
-  void Function()? _unsub;
-  List<(String, ReadonlySignal<Object?>)> _observations = const [];
   bool _isExpanded = false;
 
   @override
-  void initState() {
-    super.initState();
-    _subscribe(widget.threadView);
-  }
-
-  @override
-  void didUpdateWidget(ExtensionStatePanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.threadView != widget.threadView) {
-      _unsub?.call();
-      _subscribe(widget.threadView);
-    }
-  }
-
-  void _subscribe(ThreadViewState view) {
-    setState(() {
-      _observations = view.statefulObservations.toList();
-    });
-    _unsub = view.sessionState.subscribe((_) {
-      if (!mounted) return;
-      setState(() {
-        _observations = view.statefulObservations.toList();
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _unsub?.call();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_observations.isEmpty) return const SizedBox.shrink();
+    // Rebuild when a session attaches/detaches so the observation list
+    // reflects the currently active extensions.
+    widget.threadView.sessionState.watch(context);
+    final observations = widget.threadView.statefulObservations.toList();
+    if (observations.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
     return Container(
@@ -104,7 +74,7 @@ class _ExtensionStatePanelState extends State<ExtensionStatePanel> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      '${_observations.length}',
+                      '${observations.length}',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onSecondaryContainer,
                       ),
@@ -128,7 +98,7 @@ class _ExtensionStatePanelState extends State<ExtensionStatePanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (final (namespace, signal) in _observations)
+                    for (final (namespace, signal) in observations)
                       _ExtensionRow(namespace: namespace, signal: signal),
                   ],
                 ),
