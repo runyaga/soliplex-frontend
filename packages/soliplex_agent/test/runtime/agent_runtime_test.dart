@@ -227,8 +227,8 @@ void main() {
     test('sends initial AG-UI state from createThread to backend', () async {
       final initialState = <String, dynamic>{
         'rag': <String, dynamic>{
+          'citation_index': <String, dynamic>{},
           'citations': <dynamic>[],
-          'qa_history': <dynamic>[],
         },
       };
       when(
@@ -265,8 +265,8 @@ void main() {
     test('seedThreadState makes initial state available for spawn', () async {
       final initialState = <String, dynamic>{
         'rag': <String, dynamic>{
+          'citation_index': <String, dynamic>{},
           'citations': <dynamic>[],
-          'qa_history': <dynamic>[],
         },
       };
       runtime.seedThreadState(_threadId, initialState);
@@ -321,8 +321,8 @@ void main() {
       // createThread returns server-side initial state (e.g. citations)
       final serverState = <String, dynamic>{
         'rag': <String, dynamic>{
+          'citation_index': <String, dynamic>{},
           'citations': <dynamic>[],
-          'qa_history': <dynamic>[],
         },
       };
       when(
@@ -359,13 +359,13 @@ void main() {
 
       expect(capturedInput, isNotNull);
       // stateOverlay should be merged with server state:
-      // server's citations/qa_history preserved, client's document_filter added
+      // server's citation_index/citations preserved, client's document_filter added
       expect(
         capturedInput!.state,
         equals(<String, dynamic>{
           'rag': <String, dynamic>{
+            'citation_index': <String, dynamic>{},
             'citations': <dynamic>[],
-            'qa_history': <dynamic>[],
             'document_filter': "id = 'abc-123'",
           },
         }),

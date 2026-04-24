@@ -1484,21 +1484,15 @@ void main() {
           const StateSnapshotEvent(
             snapshot: {
               'rag': {
-                'qa_history': [
-                  {
-                    'question': 'Q1',
-                    'answer': 'A1',
-                    'citations': [
-                      {
-                        'chunk_id': 'chunk-1',
-                        'content': 'Citation text',
-                        'document_id': 'doc-1',
-                        'document_uri': 'https://example.com/doc.pdf',
-                      },
-                    ],
+                'citation_index': {
+                  'chunk-1': {
+                    'chunk_id': 'chunk-1',
+                    'content': 'Citation text',
+                    'document_id': 'doc-1',
+                    'document_uri': 'https://example.com/doc.pdf',
                   },
-                ],
-                'citation_registry': <String, int>{},
+                },
+                'citations': ['chunk-1'],
               },
             },
           ),
@@ -1557,21 +1551,15 @@ void main() {
         const StateSnapshotEvent(
           snapshot: {
             'rag': {
-              'qa_history': [
-                {
-                  'question': 'Q1',
-                  'answer': 'A1',
-                  'citations': [
-                    {
-                      'chunk_id': 'chunk-1',
-                      'content': 'Citation text',
-                      'document_id': 'doc-1',
-                      'document_uri': 'https://example.com/doc.pdf',
-                    },
-                  ],
+              'citation_index': {
+                'chunk-1': {
+                  'chunk_id': 'chunk-1',
+                  'content': 'Citation text',
+                  'document_id': 'doc-1',
+                  'document_uri': 'https://example.com/doc.pdf',
                 },
-              ],
-              'citation_registry': <String, int>{},
+              },
+              'citations': ['chunk-1'],
             },
           },
         ),
@@ -1625,21 +1613,15 @@ void main() {
             const StateSnapshotEvent(
               snapshot: {
                 'rag': {
-                  'qa_history': [
-                    {
-                      'question': 'Q1',
-                      'answer': 'A1',
-                      'citations': [
-                        {
-                          'chunk_id': 'chunk-1',
-                          'content': 'First citation',
-                          'document_id': 'doc-1',
-                          'document_uri': 'https://example.com/doc1.pdf',
-                        },
-                      ],
+                  'citation_index': {
+                    'chunk-1': {
+                      'chunk_id': 'chunk-1',
+                      'content': 'First citation',
+                      'document_id': 'doc-1',
+                      'document_uri': 'https://example.com/doc1.pdf',
                     },
-                  ],
-                  'citation_registry': <String, int>{},
+                  },
+                  'citations': ['chunk-1'],
                 },
               },
             ),
@@ -1662,33 +1644,21 @@ void main() {
           const StateSnapshotEvent(
             snapshot: {
               'rag': {
-                'qa_history': [
-                  {
-                    'question': 'Q1',
-                    'answer': 'A1',
-                    'citations': [
-                      {
-                        'chunk_id': 'chunk-1',
-                        'content': 'First citation',
-                        'document_id': 'doc-1',
-                        'document_uri': 'https://example.com/doc1.pdf',
-                      },
-                    ],
+                'citation_index': {
+                  'chunk-1': {
+                    'chunk_id': 'chunk-1',
+                    'content': 'First citation',
+                    'document_id': 'doc-1',
+                    'document_uri': 'https://example.com/doc1.pdf',
                   },
-                  {
-                    'question': 'Q2',
-                    'answer': 'A2',
-                    'citations': [
-                      {
-                        'chunk_id': 'chunk-2',
-                        'content': 'Second citation',
-                        'document_id': 'doc-2',
-                        'document_uri': 'https://example.com/doc2.pdf',
-                      },
-                    ],
+                  'chunk-2': {
+                    'chunk_id': 'chunk-2',
+                    'content': 'Second citation',
+                    'document_id': 'doc-2',
+                    'document_uri': 'https://example.com/doc2.pdf',
                   },
-                ],
-                'citation_registry': <String, int>{},
+                },
+                'citations': ['chunk-1', 'chunk-2'],
               },
             },
           ),
@@ -1749,27 +1719,21 @@ void main() {
             const StateSnapshotEvent(
               snapshot: {
                 'rag': {
-                  'qa_history': [
-                    {
-                      'question': 'Q1',
-                      'answer': 'A1',
-                      'citations': [
-                        {
-                          'chunk_id': 'chunk-1',
-                          'content': 'First',
-                          'document_id': 'doc-1',
-                          'document_uri': 'file:///doc1.pdf',
-                        },
-                        {
-                          'chunk_id': 'chunk-2',
-                          'content': 'Second',
-                          'document_id': 'doc-1',
-                          'document_uri': 'file:///doc1.pdf',
-                        },
-                      ],
+                  'citation_index': {
+                    'chunk-1': {
+                      'chunk_id': 'chunk-1',
+                      'content': 'First',
+                      'document_id': 'doc-1',
+                      'document_uri': 'file:///doc1.pdf',
                     },
-                  ],
-                  'citation_registry': <String, int>{},
+                    'chunk-2': {
+                      'chunk_id': 'chunk-2',
+                      'content': 'Second',
+                      'document_id': 'doc-1',
+                      'document_uri': 'file:///doc1.pdf',
+                    },
+                  },
+                  'citations': ['chunk-1', 'chunk-2'],
                 },
               },
             ),
@@ -1796,45 +1760,27 @@ void main() {
           const StateSnapshotEvent(
             snapshot: {
               'rag': {
-                'qa_history': [
-                  {
-                    'question': 'Q1',
-                    'answer': 'A1',
-                    'citations': [
-                      {
-                        'chunk_id': 'chunk-1',
-                        'content': 'First',
-                        'document_id': 'doc-1',
-                        'document_uri': 'file:///doc1.pdf',
-                      },
-                      {
-                        'chunk_id': 'chunk-2',
-                        'content': 'Second',
-                        'document_id': 'doc-1',
-                        'document_uri': 'file:///doc1.pdf',
-                      },
-                    ],
+                'citation_index': {
+                  'chunk-1': {
+                    'chunk_id': 'chunk-1',
+                    'content': 'First',
+                    'document_id': 'doc-1',
+                    'document_uri': 'file:///doc1.pdf',
                   },
-                  {
-                    'question': 'Q2',
-                    'answer': 'A2',
-                    'citations': [
-                      {
-                        'chunk_id': 'chunk-2',
-                        'content': 'Second',
-                        'document_id': 'doc-1',
-                        'document_uri': 'file:///doc1.pdf',
-                      },
-                      {
-                        'chunk_id': 'chunk-3',
-                        'content': 'Third',
-                        'document_id': 'doc-2',
-                        'document_uri': 'file:///doc2.pdf',
-                      },
-                    ],
+                  'chunk-2': {
+                    'chunk_id': 'chunk-2',
+                    'content': 'Second',
+                    'document_id': 'doc-1',
+                    'document_uri': 'file:///doc1.pdf',
                   },
-                ],
-                'citation_registry': <String, int>{},
+                  'chunk-3': {
+                    'chunk_id': 'chunk-3',
+                    'content': 'Third',
+                    'document_id': 'doc-2',
+                    'document_uri': 'file:///doc2.pdf',
+                  },
+                },
+                'citations': ['chunk-1', 'chunk-2', 'chunk-3'],
               },
             },
           ),

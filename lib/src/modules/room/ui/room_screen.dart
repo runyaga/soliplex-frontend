@@ -7,7 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:soliplex_client/soliplex_client.dart'
-    show RagDocument, Room, SourceReferenceFormatting, buildDocumentFilter;
+    show
+        RagDocument,
+        Room,
+        SourceReferenceFormatting,
+        buildDocumentFilter,
+        buildRagDocumentFilterOverlay;
 import '../../auth/server_entry.dart';
 import '../document_selections.dart';
 import '../pick_file.dart';
@@ -118,12 +123,9 @@ class _RoomScreenState extends State<RoomScreen> {
   Map<String, dynamic>? _buildStateOverlay() {
     if (!_filterEnabled) return null;
     final selected = _selectedDocuments;
-    return {
-      'rag': <String, dynamic>{
-        'document_filter':
-            selected.isEmpty ? null : buildDocumentFilter(selected.toList()),
-      },
-    };
+    return buildRagDocumentFilterOverlay(
+      selected.isEmpty ? null : buildDocumentFilter(selected.toList()),
+    );
   }
 
   @override
@@ -853,6 +855,7 @@ class _RoomScreenState extends State<RoomScreen> {
                     )
                   : MessageTimeline(
                       key: ValueKey(threadView.threadId),
+                      roomId: widget.roomId,
                       messages: messages,
                       messageStates: messageStates,
                       streamingState: streaming,

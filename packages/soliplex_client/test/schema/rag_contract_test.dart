@@ -16,33 +16,26 @@ import 'package:test/test.dart';
 void main() {
   group('Rag contract', () {
     group('fields matching backend RAGState', () {
-      test('has all six backend fields', () {
+      test('has all four backend fields', () {
         final rag = Rag();
 
-        // All fields from backend RAGState — compile-time check
+        expect(rag.citationIndex, isNull);
         expect(rag.citations, isNull);
         expect(rag.documentFilter, isNull);
-        expect(rag.documents, isNull);
-        expect(rag.qaHistory, isNull);
-        expect(rag.reports, isNull);
         expect(rag.searches, isNull);
       });
 
       test('can construct with all fields populated', () {
         final rag = Rag(
+          citationIndex: {},
           citations: [],
           documentFilter: "id = 'abc'",
-          documents: [],
-          qaHistory: [],
-          reports: [],
           searches: {},
         );
 
+        expect(rag.citationIndex, isEmpty);
         expect(rag.citations, isEmpty);
         expect(rag.documentFilter, equals("id = 'abc'"));
-        expect(rag.documents, isEmpty);
-        expect(rag.qaHistory, isEmpty);
-        expect(rag.reports, isEmpty);
         expect(rag.searches, isEmpty);
       });
     });
@@ -51,38 +44,24 @@ void main() {
       test('parses minimal state (all fields absent)', () {
         final rag = Rag.fromJson(<String, dynamic>{});
 
+        expect(rag.citationIndex, isEmpty);
         expect(rag.citations, isEmpty);
         expect(rag.documentFilter, isNull);
-        expect(rag.documents, isEmpty);
-        expect(rag.qaHistory, isEmpty);
-        expect(rag.reports, isEmpty);
         expect(rag.searches, isNull);
       });
 
       test('parses full backend state', () {
         final json = {
-          'citations': [
-            {
+          'citation_index': {
+            'c1': {
               'chunk_id': 'c1',
               'content': 'text',
               'document_id': 'd1',
               'document_uri': 'uri',
             },
-          ],
+          },
+          'citations': ['c1'],
           'document_filter': "id = 'abc'",
-          'documents': [
-            {'created': '2026-01-01', 'title': 'Doc', 'uri': 'uri'},
-          ],
-          'qa_history': [
-            {'question': 'Q', 'answer': 'A'},
-          ],
-          'reports': [
-            {
-              'question': 'Q',
-              'title': 'Report',
-              'executive_summary': 'Summary',
-            },
-          ],
           'searches': {
             'query1': [
               {'content': 'result', 'score': 0.9},
@@ -91,38 +70,32 @@ void main() {
         };
 
         final rag = Rag.fromJson(json);
-        expect(rag.citations, hasLength(1));
+        expect(rag.citationIndex, hasLength(1));
+        expect(rag.citations, equals(['c1']));
         expect(rag.documentFilter, equals("id = 'abc'"));
-        expect(rag.documents, hasLength(1));
-        expect(rag.qaHistory, hasLength(1));
-        expect(rag.reports, hasLength(1));
         expect(rag.searches, hasLength(1));
       });
 
       test('searches null guard — absent searches does not crash', () {
         // Backend omits searches in STATE_DELTA events.
         final json = {
-          'qa_history': [
-            {'question': 'Q', 'answer': 'A'},
-          ],
+          'citations': ['c1'],
         };
 
         final rag = Rag.fromJson(json);
         expect(rag.searches, isNull);
-        expect(rag.qaHistory, hasLength(1));
+        expect(rag.citations, equals(['c1']));
       });
 
       test('ignores unknown keys without crashing', () {
         final json = <String, dynamic>{
-          'citation_registry': <String, int>{},
+          'legacy_field': <String, int>{},
           'session_context': {'summary': 'old'},
-          'qa_history': [
-            {'question': 'Q', 'answer': 'A'},
-          ],
+          'citations': ['c1'],
         };
 
         final rag = Rag.fromJson(json);
-        expect(rag.qaHistory, hasLength(1));
+        expect(rag.citations, equals(['c1']));
       });
     });
 
@@ -141,28 +114,16 @@ void main() {
     group('roundtrip serialization', () {
       test('Rag survives JSON roundtrip', () {
         final original = Rag(
-          citations: [
-            Citation(
+          citationIndex: {
+            'c1': Citation(
               chunkId: 'c1',
               content: 'text',
               documentId: 'd1',
               documentUri: 'uri',
             ),
-          ],
+          },
+          citations: ['c1'],
           documentFilter: 'filter',
-          documents: [
-            DocumentInfo(created: '2026-01-01', title: 'Doc', uri: 'uri'),
-          ],
-          qaHistory: [
-            QaHistoryEntry(question: 'Q', answer: 'A'),
-          ],
-          reports: [
-            ResearchEntry(
-              question: 'Q',
-              title: 'T',
-              executiveSummary: 'S',
-            ),
-          ],
           searches: {
             'q': [SearchResult(content: 'r', score: 0.9)],
           },
@@ -172,11 +133,9 @@ void main() {
         final decoded =
             Rag.fromJson(jsonDecode(jsonString) as Map<String, dynamic>);
 
-        expect(decoded.citations, hasLength(1));
+        expect(decoded.citationIndex, hasLength(1));
+        expect(decoded.citations, equals(['c1']));
         expect(decoded.documentFilter, equals('filter'));
-        expect(decoded.documents, hasLength(1));
-        expect(decoded.qaHistory, hasLength(1));
-        expect(decoded.reports, hasLength(1));
         expect(decoded.searches, hasLength(1));
       });
     });
@@ -300,98 +259,6 @@ void main() {
     });
   });
 
-  group('QaHistoryEntry contract', () {
-    test('answer and question are required', () {
-      final entry = QaHistoryEntry(answer: 'The answer', question: 'Q?');
-
-      expect(entry.answer, equals('The answer'));
-      expect(entry.question, equals('Q?'));
-    });
-
-    test('citations and confidence are optional', () {
-      final entry = QaHistoryEntry(
-        answer: 'answer',
-        question: 'question',
-        citations: [
-          Citation(
-            chunkId: 'c1',
-            content: 'content',
-            documentId: 'd1',
-            documentUri: 'uri',
-          ),
-        ],
-        confidence: 0.95,
-      );
-
-      expect(entry.citations, hasLength(1));
-      expect(entry.confidence, equals(0.95));
-    });
-
-    test('JSON keys match backend QAHistoryEntry', () {
-      final json = {'answer': 'A', 'question': 'Q', 'confidence': 0.9};
-
-      final entry = QaHistoryEntry.fromJson(json);
-      expect(entry.answer, equals('A'));
-      expect(entry.question, equals('Q'));
-      expect(entry.confidence, equals(0.9));
-    });
-  });
-
-  group('DocumentInfo contract', () {
-    test('created, title, uri are required; id is optional', () {
-      final doc = DocumentInfo(
-        created: '2026-01-01',
-        title: 'Test Doc',
-        uri: 'https://example.com/doc.pdf',
-      );
-
-      expect(doc.created, equals('2026-01-01'));
-      expect(doc.title, equals('Test Doc'));
-      expect(doc.uri, equals('https://example.com/doc.pdf'));
-      expect(doc.id, isNull);
-    });
-
-    test('JSON keys match backend DocumentInfo', () {
-      final json = {
-        'created': '2026-01-01',
-        'id': 'doc-123',
-        'title': 'Doc',
-        'uri': 'uri',
-      };
-
-      final doc = DocumentInfo.fromJson(json);
-      expect(doc.id, equals('doc-123'));
-    });
-  });
-
-  group('ResearchEntry contract', () {
-    test('question, title, executiveSummary are required', () {
-      final entry = ResearchEntry(
-        question: 'What is X?',
-        title: 'Research on X',
-        executiveSummary: 'X is Y.',
-      );
-
-      expect(entry.question, equals('What is X?'));
-      expect(entry.title, equals('Research on X'));
-      expect(entry.executiveSummary, equals('X is Y.'));
-    });
-
-    test('JSON key is executive_summary (snake_case)', () {
-      final json = {
-        'question': 'Q',
-        'title': 'T',
-        'executive_summary': 'S',
-      };
-
-      final entry = ResearchEntry.fromJson(json);
-      expect(entry.executiveSummary, equals('S'));
-
-      final output = entry.toJson();
-      expect(output.containsKey('executive_summary'), isTrue);
-    });
-  });
-
   group('SearchResult contract', () {
     test('content and score are required; rest is optional', () {
       final result = SearchResult(content: 'found text', score: 0.85);
@@ -406,6 +273,7 @@ void main() {
       expect(result.headings, isNull);
       expect(result.labels, isNull);
       expect(result.pageNumbers, isNull);
+      expect(result.order, equals(0));
     });
 
     test('JSON keys match backend SearchResult', () {
@@ -420,6 +288,7 @@ void main() {
         'headings': ['H1'],
         'labels': ['label1'],
         'page_numbers': [1, 2],
+        'order': 3,
       };
 
       final result = SearchResult.fromJson(json);
@@ -427,6 +296,22 @@ void main() {
       expect(result.docItemRefs, equals(['ref1']));
       expect(result.labels, equals(['label1']));
       expect(result.pageNumbers, equals([1, 2]));
+      expect(result.order, equals(3));
+    });
+
+    test('order survives JSON roundtrip', () {
+      final original = SearchResult(content: 'text', score: 0.5, order: 7);
+      final json = original.toJson();
+      expect(json['order'], equals(7));
+
+      final decoded = SearchResult.fromJson(json);
+      expect(decoded.order, equals(7));
+    });
+
+    test('order defaults to 0 when absent in JSON', () {
+      final json = {'content': 'text', 'score': 0.5};
+      final decoded = SearchResult.fromJson(json);
+      expect(decoded.order, equals(0));
     });
   });
 }

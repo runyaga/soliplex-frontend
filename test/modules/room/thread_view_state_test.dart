@@ -100,8 +100,8 @@ void main() {
     );
     final aguiState = <String, dynamic>{
       'rag': <String, dynamic>{
+        'citation_index': <String, dynamic>{},
         'citations': <dynamic>[],
-        'qa_history': <dynamic>[],
       },
     };
     api.nextThreadHistory = ThreadHistory(
