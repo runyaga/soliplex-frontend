@@ -12,7 +12,6 @@ import 'tool_calls_extension.dart';
 import 'run_registry.dart';
 import 'send_error.dart';
 import 'session_spawner.dart';
-import 'tracker_registry.dart';
 
 export 'send_error.dart';
 
@@ -108,15 +107,17 @@ class ThreadViewState {
   ReadonlySignal<SendError?> get lastSendError => _lastSendError;
 
   // Persists historical trackers from loaded thread history and from
-  // completed sessions (absorbed in _detachSession).
-  final TrackerRegistry _trackerRegistry = TrackerRegistry();
+  // completed sessions (absorbed in _detachSession). Plain map — the live
+  // registry lives inside ExecutionTrackerExtension, which outlives the
+  // view when the session runs in the background.
+  final Map<String, ExecutionTracker> _historicalTrackers = {};
 
   /// Returns all execution trackers for this thread: historical (from loaded
   /// thread history) merged with any live trackers from the active session.
   Map<String, ExecutionTracker> get executionTrackers {
     final ext = _activeSession?.getExtension<ExecutionTrackerExtension>();
-    if (ext == null) return _trackerRegistry.trackers;
-    return {..._trackerRegistry.trackers, ...ext.trackers};
+    if (ext == null) return Map.unmodifiable(_historicalTrackers);
+    return {..._historicalTrackers, ...ext.trackers};
   }
 
   /// Live ag-ui conversation state from the active session, or null if no
@@ -260,7 +261,10 @@ class ThreadViewState {
     // reference, so historical data persists after the session ends.
     final ext = _activeSession?.getExtension<ExecutionTrackerExtension>();
     if (ext != null) {
-      _trackerRegistry.seedHistorical(ext.trackers);
+      // Live tracker wins over any historical entry with the same key.
+      for (final entry in ext.trackers.entries) {
+        _historicalTrackers.putIfAbsent(entry.key, () => entry.value);
+      }
     }
     _runStateUnsub?.call();
     _runStateUnsub = null;
@@ -314,7 +318,9 @@ class ThreadViewState {
         .then((history) {
       if (token.isCancelled) return;
       _cancelToken = null;
-      _trackerRegistry.seedHistorical(replayToTrackers(history.runs));
+      for (final entry in replayToTrackers(history.runs).entries) {
+        _historicalTrackers.putIfAbsent(entry.key, () => entry.value);
+      }
       _messages.value = MessagesLoaded(
         messages: history.messages,
         messageStates: history.messageStates,
@@ -333,7 +339,6 @@ class ThreadViewState {
     _isDisposed = true;
     _cancelToken?.cancel('disposed');
     _detachSession();
-    _trackerRegistry.dispose();
     _sessionState.dispose();
   }
 }
