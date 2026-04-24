@@ -15,7 +15,7 @@ class QuizAppModule extends AppModule {
   String get namespace => 'quiz';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         routes: [
           GoRoute(
             path: '/room/:serverAlias/:roomId/quiz/:quizId',

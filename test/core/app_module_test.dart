@@ -4,97 +4,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soliplex_frontend/src/core/app_module.dart';
 import 'package:soliplex_frontend/src/core/shell_config.dart';
 
-// ---------------------------------------------------------------------------
-// Test doubles
-// ---------------------------------------------------------------------------
-
 class _FakeModule extends AppModule {
-  _FakeModule({
-    required String ns,
-    int pri = 0,
-    ModuleRoutes? routes,
-  })  : _ns = ns,
-        _pri = pri,
+  _FakeModule({required String ns, ModuleRoutes? routes})
+      : _ns = ns,
         _routes = routes ?? const ModuleRoutes();
 
   final String _ns;
-  final int _pri;
   final ModuleRoutes _routes;
 
-  int attachCount = 0;
   int disposeCount = 0;
-  AppModuleContext? attachedCtx;
 
   @override
   String get namespace => _ns;
 
   @override
-  int get priority => _pri;
-
-  @override
-  ModuleRoutes build(AppModuleContext ctx) => _routes;
-
-  @override
-  Future<void> onAttach(AppModuleContext ctx) async {
-    attachCount++;
-    attachedCtx = ctx;
-  }
+  ModuleRoutes build() => _routes;
 
   @override
   Future<void> onDispose() async => disposeCount++;
 }
 
-class _OrderRecordingModule extends AppModule {
-  _OrderRecordingModule(
-      {required String ns, required int pri, required this.order})
-      : _ns = ns,
-        _pri = pri;
+class _DisposeOrderModule extends AppModule {
+  _DisposeOrderModule({required String ns, required this.order}) : _ns = ns;
 
   final String _ns;
-  final int _pri;
-  final List<int> order;
+  final List<String> order;
 
   @override
   String get namespace => _ns;
 
   @override
-  int get priority => _pri;
+  ModuleRoutes build() => const ModuleRoutes();
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => const ModuleRoutes();
-
-  @override
-  Future<void> onAttach(AppModuleContext ctx) async => order.add(_pri);
+  Future<void> onDispose() async => order.add(_ns);
 }
 
-class _DisposeOrderModule extends AppModule {
-  _DisposeOrderModule(
-      {required String ns, required int pri, required this.order})
-      : _ns = ns,
-        _pri = pri;
-
-  final String _ns;
-  final int _pri;
-  final List<int> order;
+class _NoLifecycleModule extends AppModule {
+  @override
+  String get namespace => 'no-lifecycle';
 
   @override
-  String get namespace => _ns;
-
-  @override
-  int get priority => _pri;
-
-  @override
-  ModuleRoutes build(AppModuleContext ctx) => const ModuleRoutes();
-
-  @override
-  Future<void> onDispose() async => order.add(_pri);
+  ModuleRoutes build() => const ModuleRoutes();
 }
 
 ThemeData _theme() => ThemeData.light();
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 void main() {
   group('ShellConfig.fromModules — namespace validation', () {
@@ -110,78 +64,48 @@ void main() {
     });
 
     test('accepts modules with unique namespaces', () async {
-      final a = _FakeModule(ns: 'a');
-      final b = _FakeModule(ns: 'b');
-
       await expectLater(
         ShellConfig.fromModules(
-            modules: [a, b], appName: 'test', theme: _theme()),
+          modules: [_FakeModule(ns: 'a'), _FakeModule(ns: 'b')],
+          appName: 'test',
+          theme: _theme(),
+        ),
         completes,
       );
     });
 
     test('allows multiple modules with empty namespace', () async {
-      final a = _FakeModule(ns: '');
-      final b = _FakeModule(ns: '');
-
       await expectLater(
         ShellConfig.fromModules(
-            modules: [a, b], appName: 'test', theme: _theme()),
+          modules: [_FakeModule(ns: ''), _FakeModule(ns: '')],
+          appName: 'test',
+          theme: _theme(),
+        ),
         completes,
       );
     });
 
     test('throws StateError for duplicate non-empty namespace', () async {
-      final a = _FakeModule(ns: 'dup');
-      final b = _FakeModule(ns: 'dup');
-
       await expectLater(
         ShellConfig.fromModules(
-            modules: [a, b], appName: 'test', theme: _theme()),
+          modules: [_FakeModule(ns: 'dup'), _FakeModule(ns: 'dup')],
+          appName: 'test',
+          theme: _theme(),
+        ),
         throwsA(isA<StateError>()),
       );
     });
   });
 
   group('ShellConfig.fromModules — lifecycle', () {
-    test('calls onAttach on all modules', () async {
-      final a = _FakeModule(ns: 'a');
-      final b = _FakeModule(ns: 'b');
-
-      await ShellConfig.fromModules(
-        modules: [a, b],
-        appName: 'test',
-        theme: _theme(),
-      );
-
-      expect(a.attachCount, 1);
-      expect(b.attachCount, 1);
-    });
-
-    test('attaches in descending priority order', () async {
-      final order = <int>[];
-      final low = _OrderRecordingModule(ns: 'low', pri: 1, order: order);
-      final high = _OrderRecordingModule(ns: 'high', pri: 10, order: order);
-      final mid = _OrderRecordingModule(ns: 'mid', pri: 5, order: order);
-
-      await ShellConfig.fromModules(
-        modules: [low, high, mid],
-        appName: 'test',
-        theme: _theme(),
-      );
-
-      expect(order, [10, 5, 1]);
-    });
-
     test('onDispose called in reverse registration order', () async {
-      final order = <int>[];
-      // Register high→mid→low so reversed = low→mid→high.
-      final high = _DisposeOrderModule(ns: 'high', pri: 10, order: order);
-      final mid = _DisposeOrderModule(ns: 'mid', pri: 5, order: order);
-      final low = _DisposeOrderModule(ns: 'low', pri: 1, order: order);
+      final order = <String>[];
+      final first = _DisposeOrderModule(ns: 'first', order: order);
+      final second = _DisposeOrderModule(ns: 'second', order: order);
+      final third = _DisposeOrderModule(ns: 'third', order: order);
 
       final config = await ShellConfig.fromModules(
-        modules: [high, mid, low],
+        modules: [first, second, third],
         appName: 'test',
         theme: _theme(),
       );
@@ -189,50 +113,12 @@ void main() {
       config.onDispose?.call();
       await Future<void>.delayed(Duration.zero);
 
-      expect(order, [1, 5, 10]);
-    });
-  });
-
-  group('AppModuleContext.module<T>()', () {
-    test('returns matching module by type', () async {
-      final a = _FakeModule(ns: 'a');
-      _FakeModule? discovered;
-
-      final b = _DiscoveryModule(
-        ns: 'b',
-        attachCallback: (ctx) => discovered = ctx.module<_FakeModule>(),
-      );
-
-      await ShellConfig.fromModules(
-        modules: [a, b],
-        appName: 'test',
-        theme: _theme(),
-      );
-
-      expect(discovered, same(a));
-    });
-
-    test('returns null when type not registered', () async {
-      _FakeModule? discovered;
-
-      final b = _DiscoveryModule(
-        ns: 'b',
-        attachCallback: (ctx) => discovered = ctx.module<_FakeModule>(),
-      );
-
-      await ShellConfig.fromModules(
-        modules: [b],
-        appName: 'test',
-        theme: _theme(),
-      );
-
-      expect(discovered, isNull);
+      expect(order, ['third', 'second', 'first']);
     });
   });
 
   group('ShellConfig.fromModules — routes & overrides', () {
     test('flattens routes from all modules', () async {
-      // ModuleRoutes with empty routes still produces a valid config.
       final config = await ShellConfig.fromModules(
         modules: [_FakeModule(ns: 'a'), _FakeModule(ns: 'b')],
         appName: 'test',
@@ -256,55 +142,9 @@ void main() {
   });
 
   group('AppModule defaults', () {
-    test('default priority is 0', () {
-      expect(_FakeModule(ns: 'x').priority, 0);
-    });
-
-    test('default onAttach is a no-op', () async {
-      final m = _NoLifecycleModule();
-      expect(
-        () async => m.onAttach(_StubContext()),
-        returnsNormally,
-      );
-    });
-
     test('default onDispose is a no-op', () async {
       final m = _NoLifecycleModule();
       expect(() async => m.onDispose(), returnsNormally);
     });
   });
-}
-
-// ---------------------------------------------------------------------------
-// Additional test doubles
-// ---------------------------------------------------------------------------
-
-class _DiscoveryModule extends AppModule {
-  _DiscoveryModule({required String ns, required this.attachCallback})
-      : _ns = ns;
-
-  final String _ns;
-  final void Function(AppModuleContext) attachCallback;
-
-  @override
-  String get namespace => _ns;
-
-  @override
-  ModuleRoutes build(AppModuleContext ctx) => const ModuleRoutes();
-
-  @override
-  Future<void> onAttach(AppModuleContext ctx) async => attachCallback(ctx);
-}
-
-class _NoLifecycleModule extends AppModule {
-  @override
-  String get namespace => 'no-lifecycle';
-
-  @override
-  ModuleRoutes build(AppModuleContext ctx) => const ModuleRoutes();
-}
-
-class _StubContext implements AppModuleContext {
-  @override
-  T? module<T extends AppModule>() => null;
 }

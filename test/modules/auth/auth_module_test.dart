@@ -2,20 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:soliplex_frontend/src/core/app_module.dart';
 import 'package:soliplex_frontend/src/modules/auth/auth_module.dart';
 import 'package:soliplex_frontend/src/modules/auth/auth_session.dart';
 import 'package:soliplex_frontend/src/modules/auth/auth_tokens.dart';
 import 'package:soliplex_frontend/src/modules/auth/server_manager.dart';
 
 import '../../helpers/fakes.dart';
-
-class _NullContext implements AppModuleContext {
-  @override
-  T? module<T extends AppModule>() => null;
-}
-
-final _ctx = _NullContext();
 
 ServerManager _createServerManager() => ServerManager(
       authFactory: () => AuthSession(
@@ -35,19 +27,19 @@ AuthAppModule _createModule({ServerManager? serverManager}) => AuthAppModule(
 void main() {
   group('AuthAppModule', () {
     test('contributes routes for /, /servers, /auth/callback', () {
-      final contribution = _createModule().build(_ctx);
+      final contribution = _createModule().build();
       final paths =
           contribution.routes.whereType<GoRoute>().map((r) => r.path).toList();
       expect(paths, containsAll(['/', '/servers', '/auth/callback']));
     });
 
     test('contributes a redirect', () {
-      final contribution = _createModule().build(_ctx);
+      final contribution = _createModule().build();
       expect(contribution.redirect, isNotNull);
     });
 
     test('contributes overrides for required providers', () {
-      final contribution = _createModule().build(_ctx);
+      final contribution = _createModule().build();
       // At minimum: serverManager, authFlow, probeClient.
       // Optional overrides only added when non-null.
       expect(contribution.overrides, isNotEmpty);
@@ -60,7 +52,7 @@ void main() {
     late GoRouter router;
 
     Widget buildApp() {
-      final contribution = module.build(_ctx);
+      final contribution = module.build();
       router = GoRouter(
         initialLocation: '/',
         routes: [
@@ -104,7 +96,7 @@ void main() {
     });
 
     testWidgets('allows /auth/callback when unauthenticated', (tester) async {
-      final contribution = module.build(_ctx);
+      final contribution = module.build();
       router = GoRouter(
         initialLocation: '/auth/callback',
         routes: contribution.routes,

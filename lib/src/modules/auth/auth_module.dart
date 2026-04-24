@@ -54,7 +54,7 @@ class AuthAppModule extends AppModule {
   String get namespace => 'auth';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         overrides: [
           serverManagerProvider.overrideWithValue(_serverManager),
           authFlowProvider.overrideWithValue(_authFlow),

@@ -14,7 +14,7 @@ class DiagnosticsAppModule extends AppModule {
   String get namespace => 'diagnostics';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         overrides: [
           networkInspectorProvider.overrideWithValue(inspector),
         ],

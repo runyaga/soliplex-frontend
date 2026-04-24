@@ -9,7 +9,7 @@ class _HomeModule extends AppModule {
   String get namespace => 'home';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         routes: [
           GoRoute(path: '/', builder: (_, __) => const Text('Soliplex')),
         ],

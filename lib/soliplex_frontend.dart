@@ -1,8 +1,7 @@
 /// Modular Flutter frontend framework for Soliplex.
 library;
 
-export 'src/core/app_module.dart'
-    show AppModule, AppModuleContext, ModuleRoutes;
+export 'src/core/app_module.dart' show AppModule, ModuleRoutes;
 export 'src/core/shell.dart' show runSoliplexShell;
 export 'src/core/shell_config.dart' show ShellConfig;
 export 'src/interfaces/auth_state.dart'

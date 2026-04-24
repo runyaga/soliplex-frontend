@@ -31,7 +31,7 @@ class RoomAppModule extends AppModule {
   String get namespace => 'room';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         routes: [
           GoRoute(
             path: '/room/:serverAlias/:roomId/info',
@@ -85,7 +85,7 @@ class RoomAppModule extends AppModule {
 
   @override
   Future<void> onDispose() async {
-    runtimeManager.dispose();
+    await runtimeManager.dispose();
     registry.dispose();
     _uploadRegistry.dispose();
   }

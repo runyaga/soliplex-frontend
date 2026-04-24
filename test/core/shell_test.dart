@@ -26,7 +26,7 @@ class _TestModule extends AppModule {
   final GoRouterRedirect? redirect;
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) =>
+  ModuleRoutes build() =>
       ModuleRoutes(routes: routes, overrides: overrides, redirect: redirect);
 }
 
@@ -159,20 +159,18 @@ void main() {
       );
     });
 
-    test('onAttach and onDispose are called', () async {
+    test('onDispose is called when the shell disposes', () async {
       final log = <String>[];
 
-      final module = _LifecycleModule(log);
       final config = await ShellConfig.fromModules(
         appName: 'Test',
         theme: ThemeData(),
-        modules: [module],
+        modules: [_LifecycleModule(log)],
       );
 
-      expect(log, ['attach']);
       config.onDispose?.call();
       await Future<void>.delayed(Duration.zero); // let async dispose flush
-      expect(log, ['attach', 'dispose']);
+      expect(log, ['dispose']);
     });
   });
 }
@@ -186,10 +184,7 @@ class _LifecycleModule extends AppModule {
   String get namespace => 'lifecycle';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => const ModuleRoutes();
-
-  @override
-  Future<void> onAttach(AppModuleContext ctx) async => _log.add('attach');
+  ModuleRoutes build() => const ModuleRoutes();
 
   @override
   Future<void> onDispose() async => _log.add('dispose');

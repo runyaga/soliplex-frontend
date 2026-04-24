@@ -92,10 +92,9 @@ class ShellConfig {
 
   /// Creates a [ShellConfig] from a list of [AppModule] instances.
   ///
-  /// Calls [AppModule.build] on each module to collect routes and overrides,
-  /// then calls [AppModule.onAttach] in descending [AppModule.priority] order.
-  /// When the shell is disposed, calls [AppModule.onDispose] in reverse
-  /// registration order.
+  /// Calls [AppModule.build] on each module in registration order to
+  /// collect routes and overrides. When the shell is disposed, calls
+  /// [AppModule.onDispose] in reverse registration order.
   static Future<ShellConfig> fromModules({
     required List<AppModule> modules,
     required String appName,
@@ -105,7 +104,6 @@ class ShellConfig {
     Listenable? refreshListenable,
   }) async {
     final coordinator = _AppModuleCoordinator(modules);
-    await coordinator.attachAll();
     return ShellConfig._internal(
       appName: appName,
       logo: logo,
@@ -124,7 +122,7 @@ class ShellConfig {
 // Internal coordinator — not part of the public API.
 // ---------------------------------------------------------------------------
 
-class _AppModuleCoordinator implements AppModuleContext {
+class _AppModuleCoordinator {
   _AppModuleCoordinator(List<AppModule> modules) {
     final seen = <String>{};
     for (final m in modules) {
@@ -133,30 +131,11 @@ class _AppModuleCoordinator implements AppModuleContext {
       }
     }
     _modules = List.unmodifiable(modules);
+    _built = _modules.map((m) => m.build()).toList(growable: false);
   }
 
   late final List<AppModule> _modules;
-  List<ModuleRoutes>? _built;
-
-  List<ModuleRoutes> get _builtModules =>
-      _built ??= _modules.map((m) => m.build(this)).toList();
-
-  @override
-  T? module<T extends AppModule>() {
-    for (final m in _modules) {
-      if (m is T) return m;
-    }
-    return null;
-  }
-
-  Future<void> attachAll() async {
-    _built = _modules.map((m) => m.build(this)).toList();
-    final sorted = [..._modules]
-      ..sort((a, b) => b.priority.compareTo(a.priority));
-    for (final m in sorted) {
-      await m.onAttach(this);
-    }
-  }
+  late final List<ModuleRoutes> _built;
 
   Future<void> disposeAll() async {
     for (final m in _modules.reversed) {
@@ -164,11 +143,10 @@ class _AppModuleCoordinator implements AppModuleContext {
     }
   }
 
-  List<RouteBase> get routes => _builtModules.expand((r) => r.routes).toList();
+  List<RouteBase> get routes => _built.expand((r) => r.routes).toList();
 
-  List<Override> get overrides =>
-      _builtModules.expand((r) => r.overrides).toList();
+  List<Override> get overrides => _built.expand((r) => r.overrides).toList();
 
   List<GoRouterRedirect> get redirects =>
-      _builtModules.map((r) => r.redirect).nonNulls.toList();
+      _built.map((r) => r.redirect).nonNulls.toList();
 }

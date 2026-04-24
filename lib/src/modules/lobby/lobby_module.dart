@@ -13,7 +13,7 @@ class LobbyAppModule extends AppModule {
   String get namespace => 'lobby';
 
   @override
-  ModuleRoutes build(AppModuleContext ctx) => ModuleRoutes(
+  ModuleRoutes build() => ModuleRoutes(
         routes: [
           GoRoute(
             path: '/lobby',
