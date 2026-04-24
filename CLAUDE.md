@@ -114,25 +114,19 @@ flutter build web   --dart-define=MONTY_ENABLED=true
 The flag is a tree-shake boundary — with `MONTY_ENABLED=false` (default)
 the `dart_monty` bytes do not reach the release binary.
 
-### Monty two-package dependency pattern (IMPORTANT)
+### Monty integration
 
-The app depends on **both** `dart_monty` (the high-level API) **and**
-`dart_monty_core` (the package whose pubspec physically declares the
-WASM/JS asset files). Flutter's asset resolver does not chase
-transitive references — `flutter.assets` entries under the
-`packages/<name>/...` URI scheme must name the package that owns the
-files.
-
-**Do not remove `dart_monty_core` from `pubspec.yaml` thinking it is
-redundant with `dart_monty`.** It is not. Removing it, or dropping the
-three `packages/dart_monty_core/assets/...` lines from `flutter.assets`,
-will break `flutter build web --dart-define=MONTY_ENABLED=true` with
-`No file or variants found for asset:` errors at asset-bundle time.
+The app depends on `dart_monty` directly. `dart_monty_core` (which
+owns the WASM/JS bridge assets) comes in transitively via
+`dart_monty` — Flutter bundles a dependency's declared
+`flutter.assets` without the consumer needing to redeclare them.
 
 On web, `lib/main.dart` calls `await DartMonty.ensureInitialized()`
-inside the `MONTY_ENABLED` gate to load the bridge script dynamically.
-On native targets the call is a no-op. No `<script>` tag is needed in
-`web/index.html`; `--base-href` is honoured automatically.
+inside the `MONTY_ENABLED` gate to load the bridge script dynamically
+from `assets/packages/dart_monty_core/lib/assets/dart_monty_core_bridge.js`.
+On native targets the call is a no-op via conditional-import stub.
+No `<script>` tag is needed in `web/index.html`; `--base-href` is
+honoured automatically.
 
 ## Modules
 

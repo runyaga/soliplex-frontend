@@ -170,7 +170,7 @@ jobs:
         if: matrix.monty == true
         run: |
           for f in dart_monty_core_bridge.js dart_monty_core_worker.js dart_monty_core_native.wasm; do
-            if [ ! -f "build/web/assets/packages/dart_monty_core/assets/$f" ]; then
+            if [ ! -f "build/web/assets/packages/dart_monty_core/lib/assets/$f" ]; then
               echo "::error::Missing bundled asset: $f"
               exit 1
             fi

@@ -34,14 +34,9 @@ dependencies:
   mime: ^2.0.0
   url_launcher: ^6.3.1
   web: ^1.1.1
-  # Monty — on-device Python runtime. dart_monty is the API;
-  # dart_monty_core is required as a peer dep so Flutter's asset
-  # bundler can resolve `- package: dart_monty_core` (below). Do NOT
-  # remove dart_monty_core thinking it's redundant — it isn't.
+  # Monty — on-device Python runtime.
   dart_monty:
     path: ../dart_monty
-  dart_monty_core:
-    path: ../dart_monty_core
   soliplex_agent:
     path: packages/soliplex_agent
   soliplex_agent_monty:
@@ -86,14 +81,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/soliplex/
-    # Monty WASM/JS bridge — physically lives in dart_monty_core.
-    # Flutter's asset resolver does not chase transitive references
-    # through dart_monty, so we list the files explicitly under the
-    # packages/<name>/ scheme. This is the reason dart_monty_core is
-    # a direct dependency above; do not remove it.
-    - packages/dart_monty_core/assets/dart_monty_core_bridge.js
-    - packages/dart_monty_core/assets/dart_monty_core_worker.js
-    - packages/dart_monty_core/assets/dart_monty_core_native.wasm
 
 flutter_native_splash:
   color: "#424242"
