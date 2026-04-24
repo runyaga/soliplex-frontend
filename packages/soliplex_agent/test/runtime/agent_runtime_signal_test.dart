@@ -203,4 +203,42 @@ void main() {
       expect(streamEmissions.first, equals(1));
     });
   });
+
+  group('_scheduleCompletion disposal race', () {
+    test(
+        'external session.dispose before completion runs does not read '
+        'disposed runState', () async {
+      // Setup: spawn a session that never completes on its own. We then
+      // dispose it externally (simulating a view teardown). When the
+      // result future eventually fires (from _completeIfPending inside
+      // dispose), _scheduleCompletion's .then must short-circuit before
+      // touching session.runState — that signal is already disposed.
+      stubCreateThread();
+      stubCreateRun();
+      stubDeleteThread();
+      final controller = StreamController<BaseEvent>();
+      stubRunAgent(stream: controller.stream);
+
+      final session = await runtime.spawn(
+        roomId: _roomId,
+        prompt: 'Hello',
+      );
+      // Drain the spawn's initial tick so the coordinator has attached
+      // _scheduleCompletion's future listener.
+      await Future<void>.delayed(Duration.zero);
+
+      // Dispose externally — this completes the pending result future
+      // and synchronously disposes the runState signal.
+      session.dispose();
+
+      // Allow the .then microtask to run. With the guard in place this
+      // is a no-op; without it, we'd see a "read after disposed"
+      // warning from AgentRuntime._captureThreadHistory.
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(session.isDisposed, isTrue);
+
+      await controller.close();
+    });
+  });
 }
