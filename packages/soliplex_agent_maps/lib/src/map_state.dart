@@ -74,6 +74,8 @@ class MarkerData {
   final int? createdAtMs;
 
   MarkerData copyWith({
+    double? lat,
+    double? lng,
     String? label,
     String? color,
     String? icon,
@@ -82,8 +84,8 @@ class MarkerData {
   }) =>
       MarkerData(
         id: id,
-        lat: lat,
-        lng: lng,
+        lat: lat ?? this.lat,
+        lng: lng ?? this.lng,
         label: label ?? this.label,
         color: color ?? this.color,
         icon: icon ?? this.icon,

@@ -900,6 +900,69 @@ class MapExtension extends SessionExtension
     return marker.id;
   }
 
+  /// Per-marker move-cancellation tokens. Each call to [moveMarker]
+  /// bumps the token for that id; in-flight tweens compare against
+  /// the token on every tick and bail if it has changed (i.e. a
+  /// newer move started).
+  final Map<String, int> _moveTokens = {};
+
+  /// Animates an existing marker from its current position to the
+  /// target lat/lng over [durationMs]. If the marker id is unknown
+  /// returns false. If a newer `moveMarker` call comes in for the
+  /// same id before this one finishes, the older tween bails and the
+  /// newer one takes over from wherever the marker currently is.
+  ///
+  /// Use cases: a helicopter flying across the map, a tour cursor
+  /// following a route, a real-time tracker following a feed.
+  Future<bool> moveMarker({
+    required String id,
+    required double lat,
+    required double lng,
+    int durationMs = 1500,
+  }) async {
+    final list = _markers.value;
+    final idx = list.indexWhere((m) => m.id == id);
+    if (idx < 0) return false;
+    final start = list[idx];
+    final token = (_moveTokens[id] ?? 0) + 1;
+    _moveTokens[id] = token;
+
+    if (durationMs <= 0) {
+      _replaceMarker(id, start.copyWith(lat: lat, lng: lng));
+      return true;
+    }
+
+    final steps = (durationMs / 16).clamp(1, 360).toInt();
+    final startLat = start.lat;
+    final startLng = start.lng;
+    for (var i = 1; i <= steps; i++) {
+      if (_moveTokens[id] != token) return false; // newer move took over
+      final t = i / steps;
+      // Ease-in-out so the marker accelerates then settles.
+      final eased = t < 0.5
+          ? 2 * t * t
+          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
+      final curLat = startLat + (lat - startLat) * eased;
+      final curLng = startLng + (lng - startLng) * eased;
+      final cur = _markers.value;
+      final j = cur.indexWhere((m) => m.id == id);
+      if (j < 0) return false; // marker was removed mid-tween
+      _replaceMarker(id, cur[j].copyWith(lat: curLat, lng: curLng));
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    return true;
+  }
+
+  void _replaceMarker(String id, MarkerData replacement) {
+    final list = _markers.value;
+    final idx = list.indexWhere((m) => m.id == id);
+    if (idx < 0) return;
+    final next = [...list];
+    next[idx] = replacement;
+    _markers.value = next;
+    _refreshState(lastEvent: 'move_marker');
+  }
+
   /// Removes every marker, polyline, and polygon. Mirrors the
   /// `clear_markers` ClientTool semantics.
   void clearAll() {

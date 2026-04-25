@@ -244,6 +244,40 @@ class MapMontyExtension extends MontyExtension {
         ),
         HostFunction(
           schema: HostFunctionSchema(
+            name: 'map_move_marker',
+            description:
+                'Animate an existing marker from its current position '
+                'to a new (lat, lng) over duration_ms. Returns True on '
+                'success, False if the marker id was not found. Useful '
+                'for moving vehicles, helicopter sprites, or a tour '
+                'cursor that follows a path. Re-entrant: a newer move '
+                'on the same id supersedes any in-flight one.',
+            params: const [
+              HostParam(
+                name: 'id',
+                type: HostParamType.string,
+                description:
+                    'Marker id returned by map_add_marker.',
+              ),
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'duration_ms',
+                type: HostParamType.integer,
+                isRequired: false,
+                defaultValue: 1500,
+              ),
+            ],
+          ),
+          handler: (args, ctx) => _maps.moveMarker(
+            id: args['id']! as String,
+            lat: (args['lat']! as num).toDouble(),
+            lng: (args['lng']! as num).toDouble(),
+            durationMs: (args['duration_ms'] as num?)?.toInt() ?? 1500,
+          ),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
             name: 'map_clear_markers',
             description: 'Remove every marker, polyline, and polygon.',
             params: const [],
