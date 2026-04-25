@@ -589,7 +589,7 @@ Widget _buildImage(ImageOverlayData img) {
         textAlign: TextAlign.center,
         overflow: TextOverflow.ellipsis,
         maxLines: 4,
-        style: TextStyle(
+        style: const TextStyle(
           color: Colors.black,
           fontSize: 8,
           fontWeight: FontWeight.bold,

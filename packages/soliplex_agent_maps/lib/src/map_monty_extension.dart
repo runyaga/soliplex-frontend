@@ -442,7 +442,10 @@ class MapMontyExtension extends MontyExtension {
             description:
                 'Animate an existing image overlay to a new (lat, lng) '
                 'over duration_ms. Same re-entrant semantics as '
-                'map_move_marker. Returns true on success.',
+                'map_move_marker. By default rotates the sprite to face '
+                'the direction of travel (great-circle bearing). Image '
+                'must be drawn nose-up (north) for face_heading to look '
+                'right. Returns true on success.',
             params: const [
               HostParam(name: 'id', type: HostParamType.string),
               HostParam(name: 'lat', type: HostParamType.number),
@@ -453,6 +456,14 @@ class MapMontyExtension extends MontyExtension {
                 isRequired: false,
                 defaultValue: 1500,
               ),
+              HostParam(
+                name: 'face_heading',
+                type: HostParamType.boolean,
+                isRequired: false,
+                defaultValue: true,
+                description: 'If true, set rotation to bearing toward '
+                    'destination at start of move.',
+              ),
             ],
           ),
           handler: (args, ctx) => _maps.moveImage(
@@ -460,7 +471,66 @@ class MapMontyExtension extends MontyExtension {
             lat: (args['lat']! as num).toDouble(),
             lng: (args['lng']! as num).toDouble(),
             durationMs: (args['duration_ms'] as num?)?.toInt() ?? 1500,
+            faceHeading: (args['face_heading'] as bool?) ?? true,
           ),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_fly_with_image',
+            description:
+                'Animate the camera AND an image overlay simultaneously '
+                'to the same (lat, lng) over duration_ms. Camera does '
+                'its full arc fly choreography (zoom out → pan → zoom '
+                'in) while the sprite tracks its own ground position. '
+                'They land at the same moment, so the sprite stays in '
+                'the viewport for the entire flight. Use for "follow '
+                'the helicopter" cinematic flies. Returns null.',
+            params: const [
+              HostParam(
+                name: 'image_id',
+                type: HostParamType.string,
+                description: 'Id returned by map_add_image.',
+              ),
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'zoom',
+                type: HostParamType.number,
+                isRequired: false,
+                description: 'Final camera zoom 1..19.',
+              ),
+              HostParam(
+                name: 'rotation',
+                type: HostParamType.number,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'duration_ms',
+                type: HostParamType.integer,
+                isRequired: false,
+                description:
+                    'Defaults to distance-aware (same as map_fly_to).',
+              ),
+              HostParam(
+                name: 'face_heading',
+                type: HostParamType.boolean,
+                isRequired: false,
+                defaultValue: true,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            await _maps.flyWithImage(
+              imageId: args['image_id']! as String,
+              lat: (args['lat']! as num).toDouble(),
+              lng: (args['lng']! as num).toDouble(),
+              zoom: (args['zoom'] as num?)?.toDouble(),
+              rotation: (args['rotation'] as num?)?.toDouble(),
+              durationMs: (args['duration_ms'] as num?)?.toInt(),
+              faceHeading: (args['face_heading'] as bool?) ?? true,
+            );
+            return null;
+          },
         ),
         HostFunction(
           schema: HostFunctionSchema(

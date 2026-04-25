@@ -47,15 +47,19 @@ for lat, lng, name in points:
 
 # ---- 4. Spawn a helicopter sprite and fly it through every city ------
 # Uses the bundled PNG asset shipped at assets/maps/helicopter.png.
+# map_fly_with_image runs the camera arc AND sprite move in parallel:
+# - camera arcs out → pans → zooms in
+# - sprite tracks its own ground position
+# - they land together, so the sprite is in viewport the whole time
+# - face_heading=True rotates the sprite to its travel bearing
 heli = map_add_image(
     "assets/maps/helicopter.png",
     points[0][0], points[0][1],
     width=80, height=80,
 )
 for lat, lng, name in points[1:]:
-    map_fly_to(lat, lng, zoom=5, duration_ms=2500)   # arc fly
-    map_move_image(heli, lat, lng, duration_ms=2200)
-    map_sleep_ms(2200)
+    map_fly_with_image(heli, lat, lng, zoom=5, duration_ms=3000)
+    map_sleep_ms(400)  # brief pause at each destination
 
 # ---- 5. Trace the full route as an animated dashed line --------------
 route = [[p[0], p[1]] for p in points]

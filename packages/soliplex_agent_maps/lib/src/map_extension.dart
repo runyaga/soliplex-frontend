@@ -1127,11 +1127,18 @@ class MapExtension extends SessionExtension
 
   /// Animates an existing image overlay to a new lat/lng over [durationMs].
   /// Same re-entrant cancellation semantics as [moveMarker].
+  ///
+  /// When [faceHeading] is true (default), sets the image's rotation to
+  /// the great-circle bearing from current → target at the start of the
+  /// move, so the sprite "turns" to face its direction of travel.
+  /// Useful for vehicle/aircraft overlays. The image asset must be
+  /// drawn nose-up (north) for this to look right.
   Future<bool> moveImage({
     required String id,
     required double lat,
     required double lng,
     int durationMs = 1500,
+    bool faceHeading = true,
   }) async {
     final list = _images.value;
     final idx = list.indexWhere((i) => i.id == id);
@@ -1139,9 +1146,22 @@ class MapExtension extends SessionExtension
     final start = list[idx];
     final token = (_moveTokens['img:$id'] ?? 0) + 1;
     _moveTokens['img:$id'] = token;
+    final initialRot = faceHeading
+        ? _bearingDegrees(start.lat, start.lng, lat, lng)
+        : start.rotation;
     if (durationMs <= 0) {
-      _replaceImage(id, start.copyWith(lat: lat, lng: lng));
+      _replaceImage(
+        id,
+        start.copyWith(lat: lat, lng: lng, rotation: initialRot),
+      );
       return true;
+    }
+    // Set rotation up-front (one shot at the start; the image faces the
+    // destination from frame 0 to end). Tweening rotation alongside
+    // position is rarely what you want — the image would constantly
+    // re-orient mid-flight, which looks fidgety.
+    if (faceHeading) {
+      _replaceImage(id, start.copyWith(rotation: initialRot));
     }
     final steps = (durationMs / 16).clamp(1, 360).toInt();
     final startLat = start.lat;
@@ -1161,6 +1181,65 @@ class MapExtension extends SessionExtension
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
     return true;
+  }
+
+  /// Animates the camera AND an image overlay simultaneously to the same
+  /// (lat, lng) over [durationMs]. Camera does its arc fly_to choreography
+  /// while the sprite tracks its own ground-position interpolation. They
+  /// land at the same moment.
+  ///
+  /// Use case: "follow the helicopter" cinematic flies — keep the sprite
+  /// in the viewport throughout the camera transition.
+  Future<void> flyWithImage({
+    required String imageId,
+    required double lat,
+    required double lng,
+    double? zoom,
+    double? rotation,
+    bool animated = true,
+    int? durationMs,
+    bool arc = true,
+    bool faceHeading = true,
+  }) async {
+    final start = _viewport.value;
+    final distKm = _greatCircleKm(start.lat, start.lng, lat, lng);
+    final dur = durationMs ?? _flyToDefaultMs(distKm);
+    await Future.wait([
+      flyTo(
+        lat: lat,
+        lng: lng,
+        zoom: zoom,
+        rotation: rotation,
+        animated: animated,
+        durationMs: dur,
+        arc: arc,
+      ),
+      moveImage(
+        id: imageId,
+        lat: lat,
+        lng: lng,
+        durationMs: dur,
+        faceHeading: faceHeading,
+      ),
+    ]);
+  }
+
+  /// Great-circle bearing from (lat1,lng1) → (lat2,lng2) in degrees
+  /// clockwise from north, normalized to [0, 360).
+  double _bearingDegrees(
+    double lat1,
+    double lng1,
+    double lat2,
+    double lng2,
+  ) {
+    final phi1 = lat1 * math.pi / 180;
+    final phi2 = lat2 * math.pi / 180;
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final y = math.sin(dLng) * math.cos(phi2);
+    final x = math.cos(phi1) * math.sin(phi2) -
+        math.sin(phi1) * math.cos(phi2) * math.cos(dLng);
+    final theta = math.atan2(y, x);
+    return (theta * 180 / math.pi + 360) % 360;
   }
 
   void _replaceImage(String id, ImageOverlayData replacement) {
