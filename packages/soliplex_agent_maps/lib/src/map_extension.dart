@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show EdgeInsets;
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -1310,50 +1309,17 @@ class MapExtension extends SessionExtension
     );
   }
 
-  /// Frame-aligned tween helper — invokes [onTick] with `t in [0,1]`
-  /// once per vsync until [durationMs] of real time has elapsed.
-  ///
-  /// Driven by [SchedulerBinding.scheduleFrameCallback] rather than
-  /// `Future.delayed`, so:
-  ///
-  /// - `t` is computed from real elapsed milliseconds, not step count.
-  ///   If a frame is dropped, the tween never overshoots — the next
-  ///   frame just lands at the correct `t`.
-  /// - Camera updates fire at the same cadence as Flutter's render
-  ///   pipeline (60fps; 120 on ProMotion). MarkerLayer reprojects at
-  ///   the same instant the TileLayer repaints, so no marker jitter
-  ///   from camera-vs-paint cadence drift.
-  ///
-  /// The previous implementation used `Future.delayed(16ms)` between
-  /// frames, which is microtask-scheduled — slips of 5–20ms were
-  /// common under load, producing visible "stutter" where every
-  /// marker re-projected to a noticeably-different screen position
-  /// in a single paint.
+  /// Frame-stepped tween helper — invokes [onTick] with `t in [0,1]`
+  /// at ~60fps until [durationMs] elapses.
   Future<void> _tween({
     required int durationMs,
     required void Function(double t) onTick,
-  }) {
-    if (durationMs <= 0) {
-      onTick(1);
-      return Future.value();
+  }) async {
+    final steps = (durationMs / 16).clamp(1, 240).toInt();
+    for (var i = 1; i <= steps; i++) {
+      onTick(i / steps);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
     }
-    final completer = Completer<void>();
-    final stopwatch = Stopwatch()..start();
-    void scheduleNext() {
-      SchedulerBinding.instance.scheduleFrameCallback((_) {
-        final elapsedMs = stopwatch.elapsedMicroseconds / 1000.0;
-        final t = (elapsedMs / durationMs).clamp(0.0, 1.0);
-        onTick(t);
-        if (t >= 1) {
-          completer.complete();
-        } else {
-          scheduleNext();
-        }
-      });
-    }
-
-    scheduleNext();
-    return completer.future;
   }
 
   /// Manually animates the camera. flutter_map 8 ships [MapController.move]
