@@ -4,6 +4,7 @@ library;
 export 'src/core/app_module.dart' show AppModule, ModuleRoutes;
 export 'src/core/shell.dart' show runSoliplexShell;
 export 'src/core/shell_config.dart' show ShellConfig;
+export 'src/figlet/figlet_extension.dart' show FigletExtension;
 export 'src/interfaces/auth_state.dart'
     show AuthState, Authenticated, Unauthenticated;
 export 'src/modules/auth/auth_providers.dart' show serverManagerProvider;

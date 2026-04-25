@@ -30,6 +30,7 @@ Future<void> main() async {
       extraExtensions: () async => [
         if (_montyEnabled)
           MontyRuntimeExtension(extensions: MontyExtensionSet.standard()),
+        FigletExtension(),
       ],
     ),
   );

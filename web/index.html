@@ -147,6 +147,16 @@
   <div id="loading-status">Loading...</div>
   <div id="progress-track"><div id="progress-bar"></div></div>
   <script src="flutter_bootstrap.js" async=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/figlet@1.7.0/lib/figlet.min.js"></script>
+  <script>
+    // figlet.min.js declares `const figlet = ...` at script-top, which is a
+    // lexical global and not a property of `window`/`globalThis`. Dart's
+    // `@JS('figlet')` looks up via globalThis, so we copy it explicitly.
+    window.figlet = figlet;
+    figlet.defaults({
+      fontPath: 'https://cdn.jsdelivr.net/npm/figlet@1.7.0/fonts',
+    });
+  </script>
 
 
 </body></html>
