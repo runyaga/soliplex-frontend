@@ -1257,53 +1257,65 @@ class MapExtension extends SessionExtension
     final dropPerKm = math.log(math.max(distKm, 1) / 100) / math.ln2;
     final arcZoom = math.max<double>(2, baseZoom - dropPerKm);
 
-    final phase1Ms = (durationMs * 0.25).round();
-    final phase2Ms = (durationMs * 0.50).round();
-    final phase3Ms = durationMs - phase1Ms - phase2Ms;
+    // Single-tween implementation. Earlier this was three sequential
+    // _tween() awaits (zoom out → pan → zoom in), but the await
+    // boundaries left a frame-or-two gap during which the camera
+    // held still while microtasks settled, producing visible
+    // marker-jitter at each phase transition. Collapsing into one
+    // tween with per-dimension curves driven by a global `t`
+    // eliminates the gaps — the controller now receives a fresh
+    // moveAndRotate every 16ms across the whole journey.
+    //
+    // Per-dimension curves (all over t in [0,1]):
+    //   zoom : start → arcZoom (0..0.25) → hold (0.25..0.75) → targetZoom
+    //   pan  : hold start (0..0.25) → ease-in-out to target (0.25..0.75)
+    //          → hold target (0.75..1)
+    //   rot  : linear over the entire tween
+    final dLat = target.latitude - start.lat;
+    final dLng = target.longitude - start.lng;
+    final dRot = targetRotation - start.rotation;
+    final dStartArc = arcZoom - start.zoom;
+    final dArcTarget = targetZoom - arcZoom;
 
-    // Phase 1 — zoom out, hold position. Ease-out so the lift feels
-    // committed but not jarring.
     await _tween(
-      durationMs: phase1Ms,
+      durationMs: durationMs,
       onTick: (t) {
-        final eased = 1 - math.pow(1 - t, 3).toDouble();
-        final z = start.zoom + (arcZoom - start.zoom) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (eased * 0.25);
-        try {
-          _controller.moveAndRotate(LatLng(start.lat, start.lng), z, r);
-        } on Object catch (_) {}
-      },
-    );
+        // Zoom curve: ease-out from start→arcZoom over [0, 0.25],
+        // hold over [0.25, 0.75], ease-in from arcZoom→targetZoom
+        // over [0.75, 1].
+        final double z;
+        if (t < 0.25) {
+          final localT = t / 0.25;
+          final eased = 1 - math.pow(1 - localT, 3).toDouble();
+          z = start.zoom + dStartArc * eased;
+        } else if (t > 0.75) {
+          final localT = (t - 0.75) / 0.25;
+          final eased = math.pow(localT, 3).toDouble();
+          z = arcZoom + dArcTarget * eased;
+        } else {
+          z = arcZoom;
+        }
 
-    // Phase 2 — pan at altitude. Ease-in-out is what users associate
-    // with a "scroll across the world" feel.
-    await _tween(
-      durationMs: phase2Ms,
-      onTick: (t) {
-        final eased = t < 0.5
-            ? 4 * t * t * t
-            : 1 - math.pow(-2 * t + 2, 3).toDouble() / 2;
-        final lat = start.lat + (target.latitude - start.lat) * eased;
-        final lng = start.lng + (target.longitude - start.lng) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (0.25 + eased * 0.5);
-        try {
-          _controller.moveAndRotate(LatLng(lat, lng), arcZoom, r);
-        } on Object catch (_) {}
-      },
-    );
+        // Pan curve: linear interpolation over [0.25, 0.75] only;
+        // pinned at start before, pinned at target after. Ease-in-out
+        // inside that window.
+        final double panProgress;
+        if (t <= 0.25) {
+          panProgress = 0;
+        } else if (t >= 0.75) {
+          panProgress = 1;
+        } else {
+          final localT = (t - 0.25) / 0.5;
+          panProgress = localT < 0.5
+              ? 4 * localT * localT * localT
+              : 1 - math.pow(-2 * localT + 2, 3).toDouble() / 2;
+        }
+        final lat = start.lat + dLat * panProgress;
+        final lng = start.lng + dLng * panProgress;
+        final r = start.rotation + dRot * t;
 
-    // Phase 3 — descend onto target. Ease-in so the camera settles.
-    await _tween(
-      durationMs: phase3Ms,
-      onTick: (t) {
-        final eased = math.pow(t, 3).toDouble();
-        final z = arcZoom + (targetZoom - arcZoom) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (0.75 + eased * 0.25);
         try {
-          _controller.moveAndRotate(target, z, r);
+          _controller.moveAndRotate(LatLng(lat, lng), z, r);
         } on Object catch (_) {}
       },
     );
