@@ -570,11 +570,34 @@ IconData _iconFor(String? name) {
 Widget _buildImage(ImageOverlayData img) {
   final isAsset =
       img.url.startsWith('assets/') || img.url.startsWith('packages/');
-  Widget brokenIcon(BuildContext _, Object __, StackTrace? ___) => Icon(
-        Icons.broken_image_outlined,
-        size: img.widthPx * 0.5,
-        color: Colors.red,
-      );
+  Widget brokenIcon(BuildContext context, Object error, StackTrace? stack) {
+    // Loud-and-noticeable failure: orange box with the URL printed
+    // inside, so visible problems on the map flag themselves with
+    // the actionable detail. Logs to console too.
+    debugPrint('ImageOverlay load failed url=${img.url}: $error');
+    return Container(
+      width: img.widthPx,
+      height: img.heightPx,
+      decoration: BoxDecoration(
+        color: Colors.orange.shade400,
+        border: Border.all(color: Colors.red, width: 2),
+      ),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(2),
+      child: Text(
+        'IMG\n${img.url}',
+        textAlign: TextAlign.center,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 4,
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: 8,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
   if (isAsset) {
     return Image.asset(
       img.url,
