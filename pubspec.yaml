@@ -35,6 +35,16 @@ dependencies:
   mime: ^2.0.0
   url_launcher: ^6.3.1
   web: ^1.1.1
+  # dart_monty stack — both must be direct deps:
+  # - dart_monty: brings the high-level runtime + bridge layer
+  # - dart_monty_core: required by Flutter's asset bundler so it can
+  #   resolve `packages/dart_monty_core/assets/...` (Flutter's asset
+  #   resolver does not chase transitive references — the package that
+  #   physically contains the assets must be listed directly).
+  dart_monty:
+    path: ../dart_monty
+  dart_monty_core:
+    path: ../dart_monty_core
   soliplex_agent:
     path: packages/soliplex_agent
   soliplex_agent_maps:
@@ -73,6 +83,14 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/soliplex/
+    # dart_monty_core WASM/JS bridge assets. Required for the on-device
+    # Python runtime (gated behind --dart-define=MONTY_ENABLED=true).
+    # Do not remove — Flutter's asset bundler needs the package listed
+    # by name, and these paths use the `packages/<name>/...` URI scheme
+    # that resolves against dart_monty_core's `lib/` root.
+    - packages/dart_monty_core/assets/dart_monty_core_bridge.js
+    - packages/dart_monty_core/assets/dart_monty_core_worker.js
+    - packages/dart_monty_core/assets/dart_monty_core_native.wasm
 
 flutter_native_splash:
   color: "#424242"
