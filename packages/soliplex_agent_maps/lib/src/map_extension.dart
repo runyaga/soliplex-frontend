@@ -853,13 +853,26 @@ class MapExtension extends SessionExtension
       return;
     }
 
-    // Compensate lat extent by ~2 to account for typical screen aspect
-    // (most maps wider than tall) and Mercator distortion at high
-    // latitudes.
+    // Read actual viewport width so we don't under-zoom on wide
+    // displays. At zoom z, viewport lng span = 360 × W / (256 × 2^z),
+    // so to fit `effectiveExtent` degrees we need
+    //   2^z ≥ 360 × W / (256 × effectiveExtent)
+    //   z   ≥ log2(W × 360 / (256 × effectiveExtent))
+    // Falls back to 1280px if controller hasn't been laid out yet.
+    double viewportWidth = 1280;
+    try {
+      final w = _controller.camera.size.width;
+      if (w > 0) viewportWidth = w;
+    } on Object catch (_) {}
+    // Compensate lat extent by ~2 for typical screen aspect (wider
+    // than tall) and Mercator distortion at high latitudes — pick
+    // whichever dimension dominates after compensation.
     final effectiveExtent = math.max(latExtent * 2, lngExtent) *
         (1 + paddingPct / 100);
-    // 360° → z=0; halve per zoom level. Clamp.
-    final rawZoom = math.log(360 / effectiveExtent) / math.ln2;
+    final rawZoom = math.log(
+          viewportWidth * 360 / (256 * effectiveExtent),
+        ) /
+        math.ln2;
     final zoom = rawZoom.clamp(2.0, 18.0);
     await flyTo(
       lat: centerLat,
@@ -1204,11 +1217,12 @@ class MapExtension extends SessionExtension
     final start = _viewport.value;
     final distKm = _greatCircleKm(start.lat, start.lng, lat, lng);
     final dur = durationMs ?? _flyToDefaultMs(distKm);
+    final targetZoom = zoom ?? _zoomForLeg(distKm);
     await Future.wait([
       flyTo(
         lat: lat,
         lng: lng,
-        zoom: zoom,
+        zoom: targetZoom,
         rotation: rotation,
         animated: animated,
         durationMs: dur,
@@ -1222,6 +1236,34 @@ class MapExtension extends SessionExtension
         faceHeading: faceHeading,
       ),
     ]);
+  }
+
+  /// Pick a zoom level such that a leg of [distKm] km comfortably fills
+  /// half the actual viewport width — adaptive across phone, laptop,
+  /// and 4K displays so close legs show street/neighborhood detail
+  /// while far legs land at regional scale.
+  ///
+  /// Math: at zoom z, 1 px ≈ 156.5 / 2^z km. For a leg to span
+  /// `f × W px` (fraction `f` of viewport width `W`) you need
+  /// `2^z = 156.5 × f × W / distKm`, so
+  /// `z = log2(156.5 × f × W / distKm)`.
+  ///
+  /// Falls back to a 1024×0.5 = 512px target when the controller has
+  /// not laid out yet (e.g. before the first frame).
+  ///
+  /// Clamped to [3, 13] so we never bottom out at world-wrap or punch
+  /// through OSM's `maxNativeZoom` for tiles.
+  double _zoomForLeg(double distKm) {
+    if (distKm <= 0) return 12;
+    double viewportPx = 512; // fallback before layout
+    try {
+      final w = _controller.camera.size.width;
+      if (w > 0) viewportPx = w * 0.5;
+    } on Object catch (_) {
+      // controller hasn't been laid out yet; stick with fallback
+    }
+    final raw = math.log(156.5 * viewportPx / math.max(distKm, 1)) / math.ln2;
+    return raw.clamp(3.0, 13.0);
   }
 
   /// Great-circle bearing from (lat1,lng1) → (lat2,lng2) in degrees
@@ -1456,11 +1498,17 @@ class MapExtension extends SessionExtension
     final steps = (durationMs / 16).clamp(1, 240).toInt();
     for (var i = 1; i <= steps; i++) {
       final t = i / steps;
+      // Same ease-in-out as moveImage (sprite tween) so the trailing
+      // line stays under the helicopter throughout the leg. Linear
+      // progress here makes the line lead at t<0.5 and lag at t>0.5.
+      final eased = t < 0.5
+          ? 2 * t * t
+          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
       final list = _polylines.value;
       final idx = list.indexWhere((p) => p.id == id);
       if (idx < 0) return;
       final updated = [...list];
-      updated[idx] = list[idx].copyWith(progress: t);
+      updated[idx] = list[idx].copyWith(progress: eased);
       _polylines.value = updated;
       await Future<void>.delayed(const Duration(milliseconds: 16));
     }
