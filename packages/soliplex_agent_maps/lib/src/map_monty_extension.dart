@@ -179,6 +179,71 @@ class MapMontyExtension extends MontyExtension {
         ),
         HostFunction(
           schema: HostFunctionSchema(
+            name: 'map_add_path',
+            description:
+                'Draw a polyline/path from a list of [lat, lng] points. '
+                'When animated=True, the line reveals itself over '
+                'duration_ms — useful for tour traces, flight paths, '
+                'route playbacks. Returns the path id.',
+            params: const [
+              HostParam(
+                name: 'points',
+                type: HostParamType.list,
+                description: 'List of [lat, lng] pairs.',
+              ),
+              HostParam(
+                name: 'color',
+                type: HostParamType.string,
+                isRequired: false,
+                description:
+                    'Named color (red/blue/orange/...) or #RRGGBB hex.',
+              ),
+              HostParam(
+                name: 'width',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 4,
+              ),
+              HostParam(
+                name: 'animated',
+                type: HostParamType.boolean,
+                isRequired: false,
+                defaultValue: true,
+                description:
+                    'When true, reveal the line gradually over duration_ms.',
+              ),
+              HostParam(
+                name: 'duration_ms',
+                type: HostParamType.integer,
+                isRequired: false,
+                defaultValue: 1500,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final raw = args['points'];
+            if (raw is! List) {
+              throw FormatException(
+                'map_add_path: "points" must be a list of [lat, lng] pairs',
+              );
+            }
+            final pts = <List<num>>[];
+            for (final p in raw) {
+              if (p is List && p.length >= 2 && p[0] is num && p[1] is num) {
+                pts.add([p[0] as num, p[1] as num]);
+              }
+            }
+            return _maps.addPolyline(
+              points: pts,
+              color: args['color'] as String?,
+              width: (args['width'] as num?)?.toDouble() ?? 4,
+              animated: (args['animated'] as bool?) ?? true,
+              animationDurationMs: (args['duration_ms'] as num?)?.toInt(),
+            );
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
             name: 'map_clear_markers',
             description: 'Remove every marker, polyline, and polygon.',
             params: const [],
