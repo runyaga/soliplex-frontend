@@ -103,16 +103,39 @@ or ask permission first.
 
 Each is a top-level Python function. Always use the `map_` prefix.
 
-  map_fly_to(lat, lng, zoom=?, rotation=?, animated=True, duration_ms=800)
-      Animated camera move. Long duration_ms = slow cinematic pan.
+  ## Camera
 
-  map_add_marker(lat, lng, label=?, color=?, icon=?, pulse=False)
-      Drop a pin. Returns marker id.
-      color: red blue green orange purple yellow pink black
+  map_fly_to(lat, lng, zoom=?, rotation=?, animated=True, duration_ms=?)
+      Animated camera move. For long-distance hops (>200km) the host
+      automatically arcs (zoom out, pan, zoom in) — you don't need to
+      stage it manually. duration_ms defaults to distance-aware
+      (1500ms minimum, +1.5ms/km, capped 5000ms).
+
+  map_fit_bounds(points, padding_pct=10, duration_ms=?)
+      Frame a list of [lat, lng] pairs at the smallest zoom that fits
+      them all with the requested padding. Use AFTER dropping multiple
+      markers so they're all visible.
+
+  ## Markers + paths
+
+  map_add_marker(lat, lng, label=?, color=?, icon=?, pulse=False, focus_zoom=?)
+      Drop a pin. Returns marker id. With focus_zoom set (12-14), the
+      camera flies to it iff currently zoomed out further.
+      color: red blue green orange purple yellow pink black or #RRGGBB
       icon:  place flag star home restaurant hotel local_cafe directions_walk
+
+  map_move_marker(id, lat, lng, duration_ms=1500) -> bool
+      Animate an existing marker to a new position. Re-entrant — a
+      newer move on the same id supersedes any in-flight one.
+
+  map_add_path(points, color=?, width=4, animated=True, duration_ms=1500)
+      Draw a polyline from a list of [lat, lng] points. When animated,
+      the line reveals progressively. Returns path id.
 
   map_clear_markers()
       Wipe markers, polylines, polygons.
+
+  ## Basemap + read-back
 
   map_set_basemap(style)
       style: "osm" (default), "topo", "cartodb_positron", "cartodb_dark"
@@ -123,7 +146,34 @@ Each is a top-level Python function. Always use the `map_` prefix.
   map_get_state()      -> {viewport, markerCount, polylineCount, polygonCount, basemap, lastEvent}
   map_get_bounds()     -> {north, south, east, west} or None
   map_sleep_ms(ms)     pause; Python's `time` module is NOT available.
-  map_http_get(url, headers=?) -> dict/list (auto-parses JSON), or string
+
+  ## Network
+
+  http_get_json(url, headers=?)            -> parsed JSON value (top-level)
+  http_get(url, headers=?)                 -> response body string
+      CORS-bound: only public APIs with permissive
+      Access-Control-Allow-Origin headers will succeed.
+
+  ## Geocoding (uses OpenStreetMap Nominatim — be polite, 1 req/sec)
+
+  map_geocode(query, limit=1)
+      "Tokyo" -> {lat, lng, display_name, type, importance, bbox}.
+      With limit>1, returns a list. Lookup BEFORE drawing — eliminates
+      having to memorize coordinates.
+
+  map_reverse_geocode(lat, lng)
+      Coordinates -> {lat, lng, display_name, address, type}.
+
+  ## Coordinate systems
+
+  map_mgrs_to_latlng("11SPA7234911844") -> {lat, lng}
+      MGRS military grid -> WGS84 lat/lng. Returns SW corner of the
+      grid cell. Precision implied by string length: "11S" (100km)
+      down to 5-digit pairs (1m).
+
+  map_latlng_to_mgrs(lat, lng, precision=5)
+      WGS84 lat/lng -> MGRS string. Precision: 0=100km grid, 1=10km,
+      2=1km, 3=100m, 4=10m, 5=1m.
 
 # RULES
 

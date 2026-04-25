@@ -15,6 +15,7 @@ import 'package:dart_monty/dart_monty_bridge.dart'
         HostParamType,
         MontyExtension;
 import 'package:http/http.dart' as http;
+import 'package:mgrs_dart/mgrs_dart.dart';
 
 import 'package:soliplex_agent_maps/src/map_extension.dart';
 
@@ -364,6 +365,67 @@ class MapMontyExtension extends MontyExtension {
               'place_id': raw['place_id'],
               'type': raw['type'],
             };
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_mgrs_to_latlng',
+            description:
+                'Convert an MGRS (Military Grid Reference System) string '
+                'to {lat, lng}. Returns the SW corner of the MGRS cell. '
+                'Examples: "11SPA7234911844" (1m precision), '
+                '"11SPA72341184" (10m), "11SPA7211" (100m), '
+                '"11SPA72" (10km), "11S" (100km grid).',
+            params: const [
+              HostParam(
+                name: 'mgrs',
+                type: HostParamType.string,
+                description:
+                    'MGRS string. No spaces. Precision implied by length.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final mgrs = (args['mgrs']! as String).trim();
+            try {
+              // mgrs_dart returns [lng, lat] (proj4 convention).
+              final pt = Mgrs.toPoint(mgrs);
+              return {'lat': pt[1], 'lng': pt[0]};
+            } on Object catch (e) {
+              throw FormatException('map_mgrs_to_latlng: $e');
+            }
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_latlng_to_mgrs',
+            description:
+                'Convert (lat, lng) to an MGRS grid reference string. '
+                'Precision controls trailing-digit count: 0=100km '
+                '(grid only), 1=10km, 2=1km, 3=100m, 4=10m, 5=1m '
+                '(default).',
+            params: const [
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'precision',
+                type: HostParamType.integer,
+                isRequired: false,
+                defaultValue: 5,
+                description: '0..5 — see description.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final lat = (args['lat']! as num).toDouble();
+            final lng = (args['lng']! as num).toDouble();
+            final precision =
+                ((args['precision'] as num?)?.toInt() ?? 5).clamp(0, 5);
+            try {
+              return Mgrs.forward([lng, lat], precision);
+            } on Object catch (e) {
+              throw FormatException('map_latlng_to_mgrs: $e');
+            }
           },
         ),
         HostFunction(
