@@ -808,6 +808,63 @@ class MapExtension extends SessionExtension
     _refreshState(lastEvent: 'move');
   }
 
+  /// Frames a list of points by computing the smallest viewport (center
+  /// + zoom) that contains all of them with the requested padding, then
+  /// flying there.
+  ///
+  /// Heuristic — does not account for the actual rendered widget size
+  /// (would need a layout-bound query); pads via the `paddingPct`
+  /// argument and clamps zoom to [2, 18]. Good enough for "frame these
+  /// markers" without exposing pixel math to Python.
+  Future<void> fitBounds({
+    required List<List<double>> points,
+    double paddingPct = 10,
+    int? durationMs,
+  }) async {
+    if (points.isEmpty) return;
+    var minLat = points.first[0];
+    var maxLat = points.first[0];
+    var minLng = points.first[1];
+    var maxLng = points.first[1];
+    for (final p in points) {
+      if (p.length < 2) continue;
+      if (p[0] < minLat) minLat = p[0];
+      if (p[0] > maxLat) maxLat = p[0];
+      if (p[1] < minLng) minLng = p[1];
+      if (p[1] > maxLng) maxLng = p[1];
+    }
+    final centerLat = (minLat + maxLat) / 2;
+    final centerLng = (minLng + maxLng) / 2;
+    final latExtent = (maxLat - minLat).abs();
+    final lngExtent = (maxLng - minLng).abs();
+
+    // Single point or near-zero extent — pick a sensible city-scale zoom.
+    if (latExtent < 0.001 && lngExtent < 0.001) {
+      await flyTo(
+        lat: centerLat,
+        lng: centerLng,
+        zoom: 13,
+        durationMs: durationMs,
+      );
+      return;
+    }
+
+    // Compensate lat extent by ~2 to account for typical screen aspect
+    // (most maps wider than tall) and Mercator distortion at high
+    // latitudes.
+    final effectiveExtent = math.max(latExtent * 2, lngExtent) *
+        (1 + paddingPct / 100);
+    // 360° → z=0; halve per zoom level. Clamp.
+    final rawZoom = math.log(360 / effectiveExtent) / math.ln2;
+    final zoom = rawZoom.clamp(2.0, 18.0);
+    await flyTo(
+      lat: centerLat,
+      lng: centerLng,
+      zoom: zoom,
+      durationMs: durationMs,
+    );
+  }
+
   /// Drops a marker and returns its generated id.
   ///
   /// When [focusZoom] is set, the camera flies to the new marker iff the

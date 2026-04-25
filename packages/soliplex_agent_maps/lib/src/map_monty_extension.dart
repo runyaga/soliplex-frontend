@@ -190,6 +190,62 @@ class MapMontyExtension extends MontyExtension {
         ),
         HostFunction(
           schema: HostFunctionSchema(
+            name: 'map_fit_bounds',
+            description:
+                'Frame a list of [lat, lng] points by computing the '
+                'smallest viewport (center + zoom) that contains all of '
+                'them with `padding_pct` extra space, then fly there. '
+                'Use AFTER dropping multiple markers to ensure they are '
+                'all visible. Single point or near-zero extent snaps to '
+                'zoom 13.',
+            params: const [
+              HostParam(
+                name: 'points',
+                type: HostParamType.list,
+                description:
+                    'List of [lat, lng] pairs (each a 2-element list).',
+              ),
+              HostParam(
+                name: 'padding_pct',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 10,
+                description:
+                    'Percent extra space around the bounds (10 = 10% '
+                    'padding on each side). Bigger value = wider view.',
+              ),
+              HostParam(
+                name: 'duration_ms',
+                type: HostParamType.integer,
+                isRequired: false,
+                description:
+                    'Animation duration. Defaults to distance-aware.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final raw = args['points'];
+            if (raw is! List) {
+              throw FormatException(
+                'map_fit_bounds: "points" must be a list of [lat, lng] pairs',
+              );
+            }
+            final pts = <List<double>>[];
+            for (final p in raw) {
+              if (p is List && p.length >= 2 && p[0] is num && p[1] is num) {
+                pts.add([(p[0] as num).toDouble(), (p[1] as num).toDouble()]);
+              }
+            }
+            await _maps.fitBounds(
+              points: pts,
+              paddingPct: (args['padding_pct'] as num?)?.toDouble() ?? 10,
+              durationMs: (args['duration_ms'] as num?)?.toInt(),
+            );
+            return null;
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
             name: 'map_set_basemap',
             description: 'Switch the tile layer. Valid styles: osm, topo, '
                 'cartodb_positron, cartodb_dark.',
