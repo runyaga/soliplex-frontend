@@ -57,6 +57,15 @@ heli = map_add_image(
     points[0][0], points[0][1],
     width=80, height=80,
 )
+
+# Open on the first city — camera flies in from the wide fit_bounds
+# view to where the helicopter sits. Without this the camera would
+# jump from "all four cities" straight to the SECOND city on the
+# first loop iteration, and the user would never see the helicopter
+# at its starting position.
+map_fly_to(points[0][0], points[0][1], zoom=5, duration_ms=3000)
+map_sleep_ms(1000)  # let the user register "we're at Tokyo"
+
 for lat, lng, name in points[1:]:
     # 4500ms per leg gives a cinematic "swoop" — long enough to read
     # the camera arc but not boring. face_heading rotates the sprite
