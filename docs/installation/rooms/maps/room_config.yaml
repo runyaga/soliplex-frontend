@@ -1,0 +1,15 @@
+id: "maps"
+name: "Live Maps"
+description: "Drive a flutter_map widget with Python — pin drops, fly-to, live data overlays."
+
+suggestions:
+  - "Take me on a tour of European capitals"
+  - "Show me where every airport is in Texas"
+  - "Drop a pin at the Eiffel Tower and zoom in to street level"
+  - "Plot the last hour of earthquakes from USGS"
+
+agent:
+  template_id: "default_chat"
+  system_prompt: "./prompt.txt"
+
+allow_mcp: false
