@@ -9,11 +9,11 @@
 mobile = {'lat': 30.6954, 'lng': -88.0399, 'name': 'Mobile, AL'}
 pensacola = {'lat': 30.4213, 'lng': -87.2169, 'name': 'Pensacola, FL'}
 
-# Wikimedia Commons UH-60 silhouette — public domain, permissive CORS.
-helo_url = (
-    'https://upload.wikimedia.org/wikipedia/commons/thumb/'
-    '4/4b/UH-60M_Black_Hawk.svg/120px-UH-60M_Black_Hawk.svg.png'
-)
+# Bundled helicopter sprite — served from the app's assets dir, no
+# CORS concerns. Lives at assets/maps/helicopter.png in the
+# soliplex-frontend repo. Flutter Web serves it at this relative URL
+# from the page root.
+helo_url = 'assets/maps/helicopter.png'
 
 map_set_basemap('satellite')
 map_clear_markers()

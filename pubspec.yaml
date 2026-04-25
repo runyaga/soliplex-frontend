@@ -84,6 +84,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/branding/soliplex/
+    - assets/maps/
     # dart_monty_core WASM/JS bridge assets. Required for the on-device
     # Python runtime (gated behind --dart-define=MONTY_ENABLED=true).
     # Do not remove — Flutter's asset bundler needs the package listed
