@@ -1333,12 +1333,21 @@ class MapExtension extends SessionExtension
     required int durationMs,
   }) async {
     final baseZoom = math.min(start.zoom, targetZoom);
-    final dropPerKm = math.log(math.max(distKm, 1) / 100) / math.ln2;
-    // Floor at z=3 — at z<3 OSM tiles wrap the world horizontally and
-    // you see duplicates of continents. z=3 is enough to show
-    // intercontinental journeys (~all of Europe + half of Asia fit
-    // in one viewport) without world-wrap artifacts.
-    final arcZoom = math.max<double>(3, baseZoom - dropPerKm);
+    // Drop scales with leg length, but only past ~800km. Below that the
+    // arc would zoom out for no reason; the user reads "Tokyo to Seoul"
+    // and expects the camera to stay near the cities, not pull out to
+    // continent scale and back. Curve:
+    //   distKm <=  800        → 0 (no drop, smooth pan)
+    //   distKm = 1500         → ~0.75
+    //   distKm = 5000         → ~2.20
+    //   distKm = 15000        → ~3.78
+    final ratio = distKm / 800.0;
+    final drop = ratio <= 1
+        ? 0.0
+        : math.log(ratio) / math.ln2 / 1.2;
+    // Floor at z=2 — wrap is prevented by the camera constraint in
+    // map_view, so the arc no longer needs to clamp itself.
+    final arcZoom = math.max<double>(2, baseZoom - drop);
 
     // Continuous-overlap arc — pan, zoom, and rotation all evolve
     // together throughout the whole fly with smooth curves. No phase

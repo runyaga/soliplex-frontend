@@ -28,134 +28,152 @@ class MapView extends StatelessWidget {
     final images = extension.images.watch(context);
 
     return ClipRect(
-      child: Stack(
-        children: [
-          FlutterMap(
-            mapController: extension.controller,
-            options: MapOptions(
-              initialCenter: LatLng(
-                extension.initialViewport.lat,
-                extension.initialViewport.lng,
-              ),
-              initialZoom: extension.initialViewport.zoom,
-              initialRotation: extension.initialViewport.rotation,
-              minZoom: 1,
-              maxZoom: 19,
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              // Long-press anywhere on the map drops a pulsing pin at
-              // that lat/lng. Shares the same code path as the
-              // `add_marker` ClientTool / Monty external — pins
-              // dropped this way are observable from Python and the
-              // LLM via the markers signal.
-              onLongPress: (tapPosition, point) {
-                // Fire-and-forget — long-press just drops the pin.
-                unawaited(
-                  extension.addMarker(
-                    lat: point.latitude,
-                    lng: point.longitude,
-                    pulse: true,
-                  ),
-                );
-              },
-            ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // World pixel size at zoom z is 256 * 2^z. To prevent
+          // horizontal wrap, the world must be at least as wide as
+          // the viewport. Solve: z >= log2(viewportWidth / 256).
+          // Rounded up to the next zoom level so we never wrap.
+          final wrapMin = (math.log(constraints.maxWidth / 256) / math.ln2)
+              .ceilToDouble();
+          final minZoom = math.max(1.0, wrapMin);
+          return Stack(
             children: [
-              TileLayer(
-                urlTemplate: basemap.urlTemplate,
-                subdomains: basemap.subdomains,
-                maxNativeZoom: basemap.maxNativeZoom,
-                userAgentPackageName: 'ai.soliplex.client',
-              ),
-              if (images.isNotEmpty)
-                MarkerLayer(
-                  markers: [
-                    for (final img in images)
-                      Marker(
-                        key: ValueKey('img:${img.id}'),
-                        point: LatLng(img.lat, img.lng),
-                        width: img.widthPx,
-                        height: img.heightPx,
-                        alignment: Alignment.center,
-                        child: Opacity(
-                          opacity: img.opacity,
-                          child: Transform.rotate(
-                            angle: img.rotation * 3.14159265 / 180,
-                            child: _buildImage(img),
+              FlutterMap(
+                mapController: extension.controller,
+                options: MapOptions(
+                  initialCenter: LatLng(
+                    extension.initialViewport.lat,
+                    extension.initialViewport.lng,
+                  ),
+                  initialZoom: math.max(
+                    extension.initialViewport.zoom,
+                    minZoom,
+                  ),
+                  initialRotation: extension.initialViewport.rotation,
+                  minZoom: minZoom,
+                  maxZoom: 19,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  // Long-press anywhere on the map drops a pulsing
+                  // pin at that lat/lng. Shares the same code path as
+                  // the `add_marker` ClientTool / Monty external —
+                  // pins dropped this way are observable from Python
+                  // and the LLM via the markers signal.
+                  onLongPress: (tapPosition, point) {
+                    // Fire-and-forget — long-press just drops the pin.
+                    unawaited(
+                      extension.addMarker(
+                        lat: point.latitude,
+                        lng: point.longitude,
+                        pulse: true,
+                      ),
+                    );
+                  },
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate: basemap.urlTemplate,
+                    subdomains: basemap.subdomains,
+                    maxNativeZoom: basemap.maxNativeZoom,
+                    userAgentPackageName: 'ai.soliplex.client',
+                  ),
+                  if (polygons.isNotEmpty)
+                    PolygonLayer(
+                      polygons: [
+                        for (final p in polygons)
+                          Polygon(
+                            points: p.points,
+                            color: _parseColor(
+                                  p.fillColor,
+                                  fallback:
+                                      Colors.blue.withValues(alpha: 0.2),
+                                ) ??
+                                Colors.blue.withValues(alpha: 0.2),
+                            borderColor: _parseColor(
+                                  p.strokeColor,
+                                  fallback: Colors.blue,
+                                ) ??
+                                Colors.blue,
+                            borderStrokeWidth: p.strokeWidth,
                           ),
-                        ),
-                      ),
-                  ],
-                ),
-              if (polygons.isNotEmpty)
-                PolygonLayer(
-                  polygons: [
-                    for (final p in polygons)
-                      Polygon(
-                        points: p.points,
-                        color: _parseColor(
-                              p.fillColor,
-                              fallback: Colors.blue.withValues(alpha: 0.2),
-                            ) ??
-                            Colors.blue.withValues(alpha: 0.2),
-                        borderColor: _parseColor(
-                              p.strokeColor,
-                              fallback: Colors.blue,
-                            ) ??
-                            Colors.blue,
-                        borderStrokeWidth: p.strokeWidth,
-                      ),
-                  ],
-                ),
-              if (polylines.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    for (final line in polylines)
-                      Polyline(
-                        points: _progressPoints(line),
-                        color: _parseColor(line.color, fallback: Colors.red) ??
-                            Colors.red,
-                        strokeWidth: line.width,
-                      ),
-                  ],
-                ),
-              if (markers.isNotEmpty)
-                MarkerLayer(
-                  markers: [
-                    for (final m in markers)
-                      Marker(
-                        point: LatLng(m.lat, m.lng),
-                        width: 48,
-                        height: 56,
-                        alignment: Alignment.topCenter,
-                        child: _AnimatedPin(
-                          key: ValueKey(m.id),
-                          marker: m,
-                        ),
-                      ),
-                  ],
-                ),
+                      ],
+                    ),
+                  if (polylines.isNotEmpty)
+                    PolylineLayer(
+                      polylines: [
+                        for (final line in polylines)
+                          Polyline(
+                            points: _progressPoints(line),
+                            color: _parseColor(
+                                  line.color,
+                                  fallback: Colors.red,
+                                ) ??
+                                Colors.red,
+                            strokeWidth: line.width,
+                          ),
+                      ],
+                    ),
+                  if (markers.isNotEmpty)
+                    MarkerLayer(
+                      markers: [
+                        for (final m in markers)
+                          Marker(
+                            point: LatLng(m.lat, m.lng),
+                            width: 48,
+                            height: 56,
+                            alignment: Alignment.topCenter,
+                            child: _AnimatedPin(
+                              key: ValueKey(m.id),
+                              marker: m,
+                            ),
+                          ),
+                      ],
+                    ),
+                  if (images.isNotEmpty)
+                    MarkerLayer(
+                      markers: [
+                        for (final img in images)
+                          Marker(
+                            key: ValueKey('img:${img.id}'),
+                            point: LatLng(img.lat, img.lng),
+                            width: img.widthPx,
+                            height: img.heightPx,
+                            alignment: Alignment.center,
+                            child: Opacity(
+                              opacity: img.opacity,
+                              child: Transform.rotate(
+                                angle: img.rotation * 3.14159265 / 180,
+                                child: _buildImage(img),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+              Positioned(
+                right: 4,
+                bottom: 2,
+                child: _AttributionPill(text: basemap.attribution),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: _CompassButton(extension: extension),
+              ),
+              Positioned(
+                top: 50,
+                right: 8,
+                child: _LayerSelector(extension: extension, current: basemap),
+              ),
+              Positioned(
+                top: 8,
+                left: 8,
+                child: _ZoomControls(extension: extension),
+              ),
             ],
-          ),
-          Positioned(
-            right: 4,
-            bottom: 2,
-            child: _AttributionPill(text: basemap.attribution),
-          ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: _CompassButton(extension: extension),
-          ),
-          Positioned(
-            top: 50,
-            right: 8,
-            child: _LayerSelector(extension: extension, current: basemap),
-          ),
-          Positioned(
-            top: 8,
-            left: 8,
-            child: _ZoomControls(extension: extension),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

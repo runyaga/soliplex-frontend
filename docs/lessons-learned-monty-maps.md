@@ -398,3 +398,161 @@ already-existing `map_get_view`. Now Python can:
 
 Plus the imperative writes (`map_fly_to`, `map_add_marker`, …) we
 already had. The bridge is properly bidirectional now.
+
+## 14. Chroma-keying generated sprites — magenta beats checker
+
+Image-generation models love returning PNGs with a transparency-grid
+checker baked in as opaque pixels. Two days of saturation-mask and
+flood-fill iteration showed why this is a losing fight:
+
+- **Saturation mask** (`-level low%,high%` on the HSL S channel)
+  always leaks: JPEG compression introduces saturation noise around
+  the sprite's edge, and pushing the upper bound high enough to kill
+  it eats into desaturated parts of the sprite (helicopter
+  windscreen, gunmetal panels).
+- **Corner flood-fill** with sampled checker colors only catches the
+  exact shade you sampled. JPEG dithers the checker into 4–8
+  near-identical greys with sub-1% noise. Each shade needs its own
+  flood, and the boundary anti-aliasing remains as a halo.
+
+The fix: **ask the generator for a flat magenta `#FF00FF` background**.
+Magenta is rare in real photography, so a single `-fuzz 12%
+-transparent "#FF00FF"` knocks out the background AND its
+JPEG-compressed fringe in one pass. ~75% of pixels become transparent
+and the sprite has no halo.
+
+```bash
+magick input.jpeg -resize 768x \
+  -fuzz 12% -transparent "#FF00FF" \
+  -trim +repage -resize 384x output.png
+```
+
+Verify by compositing over a non-magenta solid color (e.g. `#2a7a2a`
+green) and inspecting at 1× — any leftover magenta fringe is obvious
+when it abuts an unrelated colour.
+
+## 15. Arc-camera drop scaling — soft curve, not hard floor
+
+The original arc formula was `dropPerKm = log2(distKm / 100)`. For
+Tokyo→Seoul (1160km) that's a 3.5-level drop, which combined with a
+`max(3, ...)` floor sent the camera to zoom 3 — full continental
+view — for what should be a regional hop. Result: every leg of an
+inter-city tour did a gratuitous "out to space and back".
+
+Replacement: **soft curve with a 800km dead zone**.
+
+```dart
+final ratio = distKm / 800.0;
+final drop = ratio <= 1
+    ? 0.0
+    : math.log(ratio) / math.ln2 / 1.2;
+final arcZoom = math.max<double>(2, baseZoom - drop);
+```
+
+Drops by leg length:
+
+| Leg                     | km   | drop | arcZoom from base 5 |
+| ----------------------- | ---- | ---- | ------------------- |
+| Tokyo → Seoul           | 1160 | 0.45 | 4.55                |
+| Tokyo → Shanghai        | 1770 | 0.95 | 4.05                |
+| LA → New York           | 3940 | 1.92 | 3.08                |
+| Tokyo → Cape Town       | 14730| 3.50 | 2.00 (floored)      |
+
+Close hops glide; long-haul still pulls out cinematically.
+
+## 16. World-wrap prevention — compute `minZoom` from viewport width
+
+`flutter_map` 8 wraps the world horizontally whenever the world's
+pixel width (`256 * 2^z`) is smaller than the viewport. A static
+`minZoom` is viewport-blind: 3 is too restrictive on phones and not
+enough on a 4K monitor.
+
+`MapOptions.cameraConstraint` has the right shape conceptually
+(`CameraConstraint.contain(bounds: ...)` clips to a single Earth
+copy), but its `constrain()` returns `null` when the camera is
+zoomed too far out — and that trips this assertion the moment the
+constraint is hot-reloaded into a session whose camera doesn't
+already satisfy it:
+
+```text
+'newOptions.cameraConstraint.constrain(newCamera) == newCamera':
+MapCamera is no longer within the cameraConstraint after an option
+change.
+```
+
+The right approach is to compute the equivalent `minZoom` per-frame
+from the actual viewport width:
+
+```dart
+LayoutBuilder(
+  builder: (context, constraints) {
+    final wrapMin = (math.log(constraints.maxWidth / 256) / math.ln2)
+        .ceilToDouble();
+    final minZoom = math.max(1.0, wrapMin);
+    return FlutterMap(
+      options: MapOptions(
+        minZoom: minZoom,
+        maxZoom: 19,
+        // no cameraConstraint — minZoom alone makes wrap unreachable
+      ),
+      ...
+    );
+  },
+);
+```
+
+You also need to clamp `initialZoom` to be `>= minZoom`, since a
+config with `initialZoom: 4` lands below the wrap floor on a 1280px
+monitor.
+
+This gives the user "zoom out exactly until just before the world
+would wrap, then stop" with no assertions.
+
+## 17. Image-overlay layer order — last child wins
+
+`FlutterMap`'s `children` paints in declaration order: first child
+goes down first, last child goes on top. If you want a sprite
+(helicopter, vehicle marker) to be visible above paths and pin
+markers, put its `MarkerLayer` LAST in the list. The instinct to
+group "all the marker-shaped layers together" puts image overlays
+right after the basemap, which sandwiches them under everything else.
+
+## 18. Driving `flutter run` from a non-TTY needs a pty
+
+`flutter_tools` enables single-char keys (`r`, `R`, `q`) only when
+stdin is a TTY (`stdin.hasTerminal && terminal.singleCharMode =
+true`). Spawning `flutter run` from a background shell — e.g.
+Claude Code's `run_in_background: true` — gives flutter a pipe-stdin,
+and `R` written to that pipe is silently ignored.
+
+Two consequences:
+
+- `dart-mcp`'s `launch_app` works (it spawns its own pty internally),
+  but its schema has no way to pass `--dart-define=KEY=VALUE`, so any
+  build that depends on a compile-time flag (e.g. `MONTY_ENABLED`)
+  can't go through it.
+- A direct `flutter run --dart-define=...` from bash needs a pty
+  wrapper. `expect` works:
+
+```tcl
+#!/usr/bin/expect -f
+set timeout -1
+log_file -a /tmp/flutter_run.log
+cd /path/to/project
+spawn flutter run -d chrome --dart-define=MONTY_ENABLED=true
+set fifo [open "/tmp/flutter_cmd_fifo" "RDWR"]
+fconfigure $fifo -blocking 0 -buffering none -translation binary
+proc poll {} {
+    global fifo
+    set d [read $fifo]
+    if {[string length $d] > 0} { send -- $d }
+    after 200 poll
+}
+after 100 poll
+expect eof
+```
+
+Open the FIFO `RDWR` (not `r`) so the read end stays open even when
+no writer is connected — otherwise `read` returns EOF and the poll
+loop exits. Drive hot reload/restart from anywhere with
+`printf 'R' > /tmp/flutter_cmd_fifo`.
