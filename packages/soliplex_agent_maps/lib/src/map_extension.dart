@@ -1255,7 +1255,11 @@ class MapExtension extends SessionExtension
   }) async {
     final baseZoom = math.min(start.zoom, targetZoom);
     final dropPerKm = math.log(math.max(distKm, 1) / 100) / math.ln2;
-    final arcZoom = math.max<double>(2, baseZoom - dropPerKm);
+    // Floor at z=3 — at z<3 OSM tiles wrap the world horizontally and
+    // you see duplicates of continents. z=3 is enough to show
+    // intercontinental journeys (~all of Europe + half of Asia fit
+    // in one viewport) without world-wrap artifacts.
+    final arcZoom = math.max<double>(3, baseZoom - dropPerKm);
 
     // Continuous-overlap arc — pan, zoom, and rotation all evolve
     // together throughout the whole fly with smooth curves. No phase
