@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show EdgeInsets;
@@ -758,23 +759,50 @@ class MapExtension extends SessionExtension
     double? zoom,
     double? rotation,
     bool animated = true,
-    int durationMs = 800,
+    int? durationMs,
+    bool arc = true,
   }) async {
     final target = LatLng(lat, lng);
-    final targetZoom = zoom ?? _viewport.value.zoom;
-    final targetRot = rotation ?? _viewport.value.rotation;
-    if (!animated || durationMs <= 0) {
+    final start = _viewport.value;
+    final targetZoom = zoom ?? start.zoom;
+    final targetRot = rotation ?? start.rotation;
+
+    if (!animated) {
       try {
         _controller.moveAndRotate(target, targetZoom, targetRot);
-      } on Object catch (_) {
-        // Widget not laid out yet — drop the call rather than throwing.
-      }
+      } on Object catch (_) {}
+      _refreshState(lastEvent: 'move');
+      return;
+    }
+
+    final distKm = _greatCircleKm(start.lat, start.lng, lat, lng);
+    final dur = durationMs ?? _flyToDefaultMs(distKm);
+    if (dur <= 0) {
+      try {
+        _controller.moveAndRotate(target, targetZoom, targetRot);
+      } on Object catch (_) {}
+      _refreshState(lastEvent: 'move');
+      return;
+    }
+
+    // Arc threshold: large enough hop that snapping the camera through
+    // the journey would feel disorienting. Below 200km the linear ease
+    // looks natural and short hops never need to zoom out.
+    if (arc && distKm > 200) {
+      await _arcCamera(
+        start: start,
+        target: target,
+        targetZoom: targetZoom,
+        targetRotation: targetRot,
+        distKm: distKm,
+        durationMs: dur,
+      );
     } else {
       await _animateCamera(
         target: target,
         targetZoom: targetZoom,
         targetRotation: targetRot,
-        durationMs: durationMs,
+        durationMs: dur,
       );
     }
     _refreshState(lastEvent: 'move');
@@ -947,6 +975,125 @@ class MapExtension extends SessionExtension
   }
 
   // ---- Helpers ----------------------------------------------------------
+
+  /// Great-circle (haversine) distance between two coordinates in km.
+  /// Used by [flyTo] to decide arc-vs-linear and to pick a default
+  /// duration that scales with how far the camera is travelling.
+  double _greatCircleKm(double lat1, double lng1, double lat2, double lng2) {
+    const earthKm = 6371.0;
+    final dLat = (lat2 - lat1) * math.pi / 180;
+    final dLng = (lng2 - lng1) * math.pi / 180;
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(lat1 * math.pi / 180) *
+            math.cos(lat2 * math.pi / 180) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    return 2 * earthKm * math.asin(math.min<double>(1, math.sqrt(a)));
+  }
+
+  /// Distance-aware default fly duration.
+  ///
+  /// 1500ms minimum so a tiny adjacent move still feels deliberate;
+  /// +1.5ms per km of travel; capped at 5000ms so intercontinental
+  /// hops don't drag the user.
+  int _flyToDefaultMs(double distKm) =>
+      (1500 + distKm * 1.5).clamp(1500.0, 5000.0).toInt();
+
+  /// Three-phase arc fly: zoom out, pan at altitude, zoom in.
+  ///
+  /// At long distances a straight linear interpolation of all three
+  /// camera dimensions snaps the user through the journey at a high
+  /// zoom level — they see one tile-set whip past, not the world.
+  /// This breaks the fly into:
+  ///
+  ///   phase 1 (0–25%): start_zoom → arcZoom        (ease-out)
+  ///   phase 2 (25–75%): pan from start → target at arcZoom
+  ///                                                (ease-in-out)
+  ///   phase 3 (75–100%): arcZoom → target_zoom    (ease-in)
+  ///
+  /// Rotation interpolates across all three phases linearly so the
+  /// final orientation arrives exactly at the end.
+  ///
+  /// `arcZoom` is chosen so the journey fits visually: drop one zoom
+  /// level for every doubling of distance beyond 100km, floored at
+  /// `z=2` (whole world visible) and never higher than the lower of
+  /// the start/target zooms (zooming IN to arc would defeat the point).
+  Future<void> _arcCamera({
+    required Viewport start,
+    required LatLng target,
+    required double targetZoom,
+    required double targetRotation,
+    required double distKm,
+    required int durationMs,
+  }) async {
+    final baseZoom = math.min(start.zoom, targetZoom);
+    final dropPerKm = math.log(math.max(distKm, 1) / 100) / math.ln2;
+    final arcZoom = math.max<double>(2, baseZoom - dropPerKm);
+
+    final phase1Ms = (durationMs * 0.25).round();
+    final phase2Ms = (durationMs * 0.50).round();
+    final phase3Ms = durationMs - phase1Ms - phase2Ms;
+
+    // Phase 1 — zoom out, hold position. Ease-out so the lift feels
+    // committed but not jarring.
+    await _tween(
+      durationMs: phase1Ms,
+      onTick: (t) {
+        final eased = 1 - math.pow(1 - t, 3).toDouble();
+        final z = start.zoom + (arcZoom - start.zoom) * eased;
+        final r = start.rotation +
+            (targetRotation - start.rotation) * (eased * 0.25);
+        try {
+          _controller.moveAndRotate(LatLng(start.lat, start.lng), z, r);
+        } on Object catch (_) {}
+      },
+    );
+
+    // Phase 2 — pan at altitude. Ease-in-out is what users associate
+    // with a "scroll across the world" feel.
+    await _tween(
+      durationMs: phase2Ms,
+      onTick: (t) {
+        final eased = t < 0.5
+            ? 4 * t * t * t
+            : 1 - math.pow(-2 * t + 2, 3).toDouble() / 2;
+        final lat = start.lat + (target.latitude - start.lat) * eased;
+        final lng = start.lng + (target.longitude - start.lng) * eased;
+        final r = start.rotation +
+            (targetRotation - start.rotation) * (0.25 + eased * 0.5);
+        try {
+          _controller.moveAndRotate(LatLng(lat, lng), arcZoom, r);
+        } on Object catch (_) {}
+      },
+    );
+
+    // Phase 3 — descend onto target. Ease-in so the camera settles.
+    await _tween(
+      durationMs: phase3Ms,
+      onTick: (t) {
+        final eased = math.pow(t, 3).toDouble();
+        final z = arcZoom + (targetZoom - arcZoom) * eased;
+        final r = start.rotation +
+            (targetRotation - start.rotation) * (0.75 + eased * 0.25);
+        try {
+          _controller.moveAndRotate(target, z, r);
+        } on Object catch (_) {}
+      },
+    );
+  }
+
+  /// Frame-stepped tween helper — invokes [onTick] with `t in [0,1]`
+  /// at ~60fps until [durationMs] elapses.
+  Future<void> _tween({
+    required int durationMs,
+    required void Function(double t) onTick,
+  }) async {
+    final steps = (durationMs / 16).clamp(1, 240).toInt();
+    for (var i = 1; i <= steps; i++) {
+      onTick(i / steps);
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+  }
 
   /// Manually animates the camera. flutter_map 8 ships [MapController.move]
   /// (instant) — we drive a tween in-process so animation duration is

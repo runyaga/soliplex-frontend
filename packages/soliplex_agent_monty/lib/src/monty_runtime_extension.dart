@@ -99,6 +99,29 @@ class MontyRuntimeExtension extends SessionExtension
     _runtime = null;
   }
 
+  /// Runs Python code directly on the attached runtime, bypassing the LLM
+  /// tool path. Use this from UI surfaces (e.g. a terminal panel) where the
+  /// user pastes code and wants raw output.
+  ///
+  /// Returns the same `{value, output, error}` shape the
+  /// `run_python_on_device` tool emits (as a Dart map this time, not JSON).
+  /// Throws [StateError] if no session is currently attached.
+  Future<({Object? value, String output, Object? error})> executeUser(
+    String code,
+  ) async {
+    final runtime = _runtime;
+    if (runtime == null) {
+      throw StateError('MontyRuntimeExtension is not attached to a session');
+    }
+    final handle = runtime.execute(code);
+    final result = await handle.result;
+    return (
+      value: result.value.toJson(),
+      output: result.printOutput ?? '',
+      error: result.error?.toJson(),
+    );
+  }
+
   /// Executor for `run_python_on_device`. Always returns a JSON string.
   /// Python-level errors are returned in the payload — not thrown — so
   /// the LLM sees a completed tool call with an `error` field rather

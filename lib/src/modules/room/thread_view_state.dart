@@ -3,6 +3,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
+import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
 
 import 'execution_tracker.dart';
 import 'execution_tracker_extension.dart';
@@ -140,6 +141,12 @@ class ThreadViewState {
   /// `MapController` has something to bind to.
   MapExtension? get mapExtension =>
       _activeSession?.getExtension<MapExtension>();
+
+  /// The [MontyRuntimeExtension] attached to the active session, or null.
+  /// When non-null, the room shows a Terminal button that opens a panel
+  /// for running Python directly on-device, bypassing the LLM.
+  MontyRuntimeExtension? get montyRuntimeExtension =>
+      _activeSession?.getExtension<MontyRuntimeExtension>();
 
   /// Returns `(namespace, signal)` pairs for every stateful extension on the
   /// active session, or an empty iterable if no session is attached.

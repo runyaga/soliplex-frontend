@@ -28,7 +28,9 @@ import 'chat_input.dart';
 import 'chunk_visualization_page.dart';
 import 'document_picker.dart';
 import 'error_retry_panel.dart';
+import '../../../monty_singleton.dart';
 import 'message_timeline.dart';
+import 'terminal_panel.dart';
 import 'async_action_dialog.dart';
 import 'room_welcome.dart';
 import 'thread_sidebar.dart';
@@ -40,6 +42,17 @@ import '../upload_tracker_registry.dart';
 
 const double _sidebarWidth = 300;
 const double _wideBreakpoint = 600;
+
+/// Mirror of the `MONTY_ENABLED` compile-time flag from `lib/main.dart`.
+/// Read here so the room can gate the terminal button without plumbing
+/// the flag through state or providers. With `MONTY_ENABLED=false`
+/// (default), the button does not appear and `dart_monty` paths
+/// tree-shake out of the release binary.
+const _kMontyEnabled = bool.fromEnvironment(
+  'MONTY_ENABLED',
+  // ignore: avoid_redundant_argument_values
+  defaultValue: false,
+);
 
 /// Builds the label for the file indicator chip in the room header.
 ///
@@ -312,6 +325,18 @@ class _RoomScreenState extends State<RoomScreen> {
   void _onQuizTapped(String quizId) {
     final alias = widget.serverEntry.alias;
     context.go('/room/$alias/${widget.roomId}/quiz/$quizId');
+  }
+
+  /// Opens the Monty terminal panel.
+  ///
+  /// Uses the app-level `montyExtensionSet` singleton so it works
+  /// regardless of session attach state — no need to wait for a
+  /// conversation to start.
+  Future<void> _openMontyTerminal(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => TerminalPanel(extensionSetFactory: makeMontyExtensionSet),
+    );
   }
 
   Future<void> _showRenameDialog(String threadId, String currentName) async {
@@ -952,6 +977,12 @@ class _RoomScreenState extends State<RoomScreen> {
                   onPressed: () =>
                       setState(() => _mapDrawerOpen = !_mapDrawerOpen),
                 ),
+                if (_kMontyEnabled)
+                  IconButton(
+                    tooltip: 'Open Monty terminal',
+                    icon: const Icon(Icons.terminal),
+                    onPressed: () => _openMontyTerminal(context),
+                  ),
                 const Spacer(),
               ],
             ),
