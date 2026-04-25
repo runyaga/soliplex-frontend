@@ -157,6 +157,11 @@ class MapView extends StatelessWidget {
             child: _CompassButton(extension: extension),
           ),
           Positioned(
+            top: 50,
+            right: 8,
+            child: _LayerSelector(extension: extension, current: basemap),
+          ),
+          Positioned(
             top: 8,
             left: 8,
             child: _ZoomControls(extension: extension),
@@ -327,6 +332,82 @@ class _CompassButton extends StatelessWidget {
               size: 20,
               color: theme.colorScheme.onSurface,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Floating button that opens a basemap-style picker. Shipped layers
+/// match [BasemapStyle] — the same set Python's `map_set_basemap`
+/// accepts. Selecting a style writes through to the same signal the
+/// LLM-driven path uses, so the in-map UI and tool calls share state.
+class _LayerSelector extends StatelessWidget {
+  const _LayerSelector({required this.extension, required this.current});
+
+  final MapExtension extension;
+  final BasemapStyle current;
+
+  static const _entries = <(BasemapStyle, String, IconData)>[
+    (BasemapStyle.osm, 'OpenStreetMap', Icons.map_outlined),
+    (BasemapStyle.cartodbVoyager, 'Carto Voyager', Icons.public),
+    (BasemapStyle.cartodbPositron, 'Carto Positron (light)', Icons.light_mode),
+    (BasemapStyle.cartodbDark, 'Carto Dark', Icons.dark_mode),
+    (BasemapStyle.topo, 'OpenTopoMap', Icons.terrain),
+    (BasemapStyle.esriWorldImagery, 'Satellite (Esri)', Icons.satellite_alt),
+    (BasemapStyle.esriWorldTopo, 'Esri Topo', Icons.terrain),
+    (BasemapStyle.esriNatgeo, 'National Geographic', Icons.travel_explore),
+    (BasemapStyle.cyclosm, 'CyclOSM', Icons.directions_bike),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface.withValues(alpha: 0.9),
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: PopupMenuButton<BasemapStyle>(
+        tooltip: 'Choose basemap',
+        position: PopupMenuPosition.under,
+        onSelected: (style) => extension.setBasemapStyle(style.id),
+        itemBuilder: (context) => [
+          for (final (style, label, icon) in _entries)
+            PopupMenuItem<BasemapStyle>(
+              value: style,
+              child: Row(
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: style == current
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: style == current
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                      color: style == current
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: Icon(
+            Icons.layers_outlined,
+            size: 20,
+            color: theme.colorScheme.onSurface,
           ),
         ),
       ),
