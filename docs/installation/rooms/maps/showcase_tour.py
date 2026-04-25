@@ -16,7 +16,7 @@
 #   map_reverse_geocode    — coords → address
 #   map_set_basemap        — basemap selection
 
-map_set_basemap("osm")
+map_set_basemap("satellite")
 map_clear_markers()
 
 # ---- 1. Geocode the itinerary ----------------------------------------
@@ -58,14 +58,18 @@ heli = map_add_image(
     width=80, height=80,
 )
 for lat, lng, name in points[1:]:
-    map_fly_with_image(heli, lat, lng, zoom=5, duration_ms=3000)
-    map_sleep_ms(400)  # brief pause at each destination
+    # 4500ms per leg gives a cinematic "swoop" — long enough to read
+    # the camera arc but not boring. face_heading rotates the sprite
+    # to the great-circle bearing so you see the helicopter "turn"
+    # toward each next city.
+    map_fly_with_image(heli, lat, lng, zoom=5, duration_ms=4500)
+    map_sleep_ms(800)  # dwell at each destination
 
-# ---- 5. Trace the full route as an animated dashed line --------------
+# ---- 5. Trace the full route as an animated line ---------------------
 route = [[p[0], p[1]] for p in points]
-map_add_path(route, color="orange", width=3,
-             animated=True, duration_ms=3500)
-map_sleep_ms(3500)
+map_add_path(route, color="orange", width=4,
+             animated=True, duration_ms=4500)
+map_sleep_ms(4500)
 
 # ---- 6. Reverse-geocode the helicopter's final resting spot ----------
 final = points[-1]
