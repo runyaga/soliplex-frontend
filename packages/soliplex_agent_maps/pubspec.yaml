@@ -1,0 +1,28 @@
+name: soliplex_agent_maps
+description: flutter_map bridge for the soliplex_agent session coordinator.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+dependencies:
+  dart_monty:
+    path: ../../../dart_monty
+  flutter:
+    sdk: flutter
+  flutter_map: ^8.0.0
+  flutter_map_animations: ^0.10.0
+  http: ^1.2.0
+  latlong2: ^0.9.1
+  signals_core: ^6.2.0
+  signals_flutter: ^6.3.0
+  soliplex_agent:
+    path: ../soliplex_agent
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.0.0

@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart';
+import 'package:soliplex_agent_maps/soliplex_agent_maps.dart' show MapView;
+import '../../../maps_singleton.dart';
 import 'package:soliplex_client/soliplex_client.dart'
     show RagDocument, Room, SourceReferenceFormatting, buildDocumentFilter;
 import '../../auth/server_entry.dart';
@@ -84,6 +86,7 @@ class _RoomScreenState extends State<RoomScreen> {
   final _chatController = TextEditingController();
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
+  bool _mapDrawerOpen = false;
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -910,6 +913,34 @@ class _RoomScreenState extends State<RoomScreen> {
                 roomId: widget.roomId,
                 threadId: threadView.threadId,
               ),
+            // v0 mount of the maps integration: a single, persistent
+            // `MapView` bound to the app-level singleton `mapExtension`.
+            // The drawer state lives on this widget so the user can
+            // close it; the underlying controller and reactive state
+            // survive session attach/detach. See
+            // docs/plans/message-containers.md for the v1 refactor.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              alignment: Alignment.topCenter,
+              child: _mapDrawerOpen
+                  ? SizedBox(
+                      height: 320,
+                      child: MapView(extension: mapExtension),
+                    )
+                  : const SizedBox(width: double.infinity, height: 0),
+            ),
+            Row(
+              children: [
+                IconButton(
+                  tooltip: _mapDrawerOpen ? 'Close map' : 'Open map',
+                  icon: Icon(_mapDrawerOpen ? Icons.map : Icons.map_outlined),
+                  onPressed: () =>
+                      setState(() => _mapDrawerOpen = !_mapDrawerOpen),
+                ),
+                const Spacer(),
+              ],
+            ),
             // Debug-only surface: per-extension reactive state tree.
             // Omitted entirely in release/profile builds.
             if (kDebugMode) ExtensionStatePanel(threadView: threadView),

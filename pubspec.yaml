@@ -11,6 +11,7 @@ environment:
 
 workspace:
   - packages/soliplex_agent
+  - packages/soliplex_agent_maps
   - packages/soliplex_agent_monty
   - packages/soliplex_client
   - packages/soliplex_client_native
@@ -36,6 +37,8 @@ dependencies:
   web: ^1.1.1
   soliplex_agent:
     path: packages/soliplex_agent
+  soliplex_agent_maps:
+    path: packages/soliplex_agent_maps
   soliplex_agent_monty:
     path: packages/soliplex_agent_monty
   soliplex_client:

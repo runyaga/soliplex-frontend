@@ -1,8 +1,11 @@
 import 'package:flutter/widgets.dart';
 
+import 'package:soliplex_agent_maps/soliplex_agent_maps.dart'
+    show MapMontyExtension;
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
 import 'package:soliplex_frontend/flavors.dart';
 import 'package:soliplex_frontend/soliplex_frontend.dart';
+import 'package:soliplex_frontend/src/maps_singleton.dart';
 
 /// Compile-time flag gating the on-device Python runtime.
 ///
@@ -29,7 +32,17 @@ Future<void> main() async {
       callbackParams: callbackParams,
       extraExtensions: () async => [
         if (_montyEnabled)
-          MontyRuntimeExtension(extensions: MontyExtensionSet.standard()),
+          MontyRuntimeExtension(
+            extensions: MontyExtensionSet([
+              ...MontyExtensionSet.standard().all,
+              // Python externals to drive the same map the ClientTool
+              // surface drives. Shares the singleton MapExtension.
+              MapMontyExtension(mapExtension),
+            ]),
+          ),
+        // Singleton instance shared across sessions so the map widget
+        // and the LLM-driven controller persist.
+        mapExtension,
       ],
     ),
   );

@@ -2,6 +2,7 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
 
 import 'execution_tracker.dart';
 import 'execution_tracker_extension.dart';
@@ -133,6 +134,12 @@ class ThreadViewState {
   /// Use [respond] to resolve a pending request shown via [pendingApproval].
   HumanApprovalExtension? get approvalExtension =>
       _activeSession?.getExtension<HumanApprovalExtension>();
+
+  /// The [MapExtension] attached to the active session, or null.
+  /// Used by the room view to mount a `MapView` widget so the LLM-driven
+  /// `MapController` has something to bind to.
+  MapExtension? get mapExtension =>
+      _activeSession?.getExtension<MapExtension>();
 
   /// Returns `(namespace, signal)` pairs for every stateful extension on the
   /// active session, or an empty iterable if no session is attached.
