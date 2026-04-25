@@ -1257,53 +1257,61 @@ class MapExtension extends SessionExtension
     final dropPerKm = math.log(math.max(distKm, 1) / 100) / math.ln2;
     final arcZoom = math.max<double>(2, baseZoom - dropPerKm);
 
-    final phase1Ms = (durationMs * 0.25).round();
-    final phase2Ms = (durationMs * 0.50).round();
-    final phase3Ms = durationMs - phase1Ms - phase2Ms;
+    // Continuous-overlap arc — pan, zoom, and rotation all evolve
+    // together throughout the whole fly with smooth curves. No phase
+    // boundaries, no `await`s mid-fly, no zero-velocity stalls at
+    // handoffs.
+    //
+    // Earlier this was three sequential _tween() awaits (zoom out →
+    // pan at altitude → zoom in). At each phase boundary BOTH the
+    // leaving curve and the arriving curve had v=0 (ease-out at end +
+    // ease-in at start), and the awaits added 1-3 frames of
+    // camera-held-still gap. The combination produced visible "snap"
+    // jitter — most noticeably at t≈0.75 where the pan handed off to
+    // the descent.
+    //
+    // Replacement: ease-in-out for pan + rotation + the lerp portion
+    // of zoom across the full duration. A separate sin² envelope
+    // dips zoom down to arcZoom at t=0.5 and back up. All three
+    // motions overlap continuously. Zero velocity only at t=0 (camera
+    // was at rest) and t=1 (camera comes to rest); no middle plateau.
+    //
+    // Trade-off: instead of "out → glide → in" you get a smooth swoop.
+    // The cinematic split was producing visible boundary jumps that
+    // no amount of tween-cadence tuning could eliminate.
+    final dLat = target.latitude - start.lat;
+    final dLng = target.longitude - start.lng;
+    final dRot = targetRotation - start.rotation;
+    final dZoom = targetZoom - start.zoom;
+    final midpointZoom = (start.zoom + targetZoom) / 2;
+    final dipMag = midpointZoom - arcZoom;
 
-    // Phase 1 — zoom out, hold position. Ease-out so the lift feels
-    // committed but not jarring.
     await _tween(
-      durationMs: phase1Ms,
+      durationMs: durationMs,
       onTick: (t) {
-        final eased = 1 - math.pow(1 - t, 3).toDouble();
-        final z = start.zoom + (arcZoom - start.zoom) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (eased * 0.25);
-        try {
-          _controller.moveAndRotate(LatLng(start.lat, start.lng), z, r);
-        } on Object catch (_) {}
-      },
-    );
-
-    // Phase 2 — pan at altitude. Ease-in-out is what users associate
-    // with a "scroll across the world" feel.
-    await _tween(
-      durationMs: phase2Ms,
-      onTick: (t) {
+        // Ease-in-out cubic — same curve for pan, rotation, and the
+        // lerp portion of zoom. v=0 at t=0,1; smooth acceleration in
+        // between with peak velocity at t=0.5.
         final eased = t < 0.5
             ? 4 * t * t * t
             : 1 - math.pow(-2 * t + 2, 3).toDouble() / 2;
-        final lat = start.lat + (target.latitude - start.lat) * eased;
-        final lng = start.lng + (target.longitude - start.lng) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (0.25 + eased * 0.5);
-        try {
-          _controller.moveAndRotate(LatLng(lat, lng), arcZoom, r);
-        } on Object catch (_) {}
-      },
-    );
 
-    // Phase 3 — descend onto target. Ease-in so the camera settles.
-    await _tween(
-      durationMs: phase3Ms,
-      onTick: (t) {
-        final eased = math.pow(t, 3).toDouble();
-        final z = arcZoom + (targetZoom - arcZoom) * eased;
-        final r = start.rotation +
-            (targetRotation - start.rotation) * (0.75 + eased * 0.25);
+        final lat = start.lat + dLat * eased;
+        final lng = start.lng + dLng * eased;
+        final r = start.rotation + dRot * eased;
+
+        // Zoom: ease-in-out lerp to target, MINUS a sin² dip envelope
+        // that goes to dipMag at t=0.5. The envelope contributes zero
+        // velocity at t=0,1 and zero displacement at t=0,1, so the
+        // boundary conditions hold exactly. At t=0.5 the dip is at
+        // its deepest, putting zoom at midpoint - dipMag = arcZoom by
+        // construction.
+        final sinT = math.sin(math.pi * t);
+        final dip = dipMag * sinT * sinT;
+        final z = start.zoom + dZoom * eased - dip;
+
         try {
-          _controller.moveAndRotate(target, z, r);
+          _controller.moveAndRotate(LatLng(lat, lng), z, r);
         } on Object catch (_) {}
       },
     );
