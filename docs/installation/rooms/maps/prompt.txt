@@ -133,7 +133,28 @@ Each is a top-level Python function. Always use the `map_` prefix.
       the line reveals progressively. Returns path id.
 
   map_clear_markers()
-      Wipe markers, polylines, polygons.
+      Wipe markers, polylines, polygons, and image overlays.
+
+  ## Image overlays (PNG / JPG / animated GIF)
+
+  map_add_image(url, lat, lng, width=64, height=64,
+                rotation=0, opacity=1) -> id
+      Drop an image at lat/lng. Use for sprites — vehicles,
+      helicopters, planes, military icons, photos, GIF stickers.
+      Animated GIFs play natively. Width/height are display pixels
+      (image stays the same size at every zoom level). Anchor is
+      the image center.
+
+  map_remove_image(id) -> bool
+      Remove an image overlay by id.
+
+  map_move_image(id, lat, lng, duration_ms=1500) -> bool
+      Animate an existing image overlay to a new position. Same
+      re-entrant semantics as map_move_marker. Use for moving
+      vehicles, sprites that follow a path.
+
+  CORS-bound — the image host must send Access-Control-Allow-Origin.
+  Wikimedia Commons works. So do most public CDNs.
 
   ## Basemap + read-back
 
