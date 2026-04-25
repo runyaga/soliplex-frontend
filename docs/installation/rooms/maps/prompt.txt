@@ -138,8 +138,17 @@ Each is a top-level Python function. Always use the `map_` prefix.
   ## Basemap + read-back
 
   map_set_basemap(style)
-      style: "osm" (default), "topo", "cartodb_positron", "cartodb_dark"
-      RULE: pick ONE basemap at the top of the script. Never switch mid-tour.
+      Pick ONE at the top of the script. Don't switch mid-tour.
+      Available styles:
+        "osm"               OpenStreetMap (default, neutral)
+        "topo"              OpenTopoMap (terrain, contour lines)
+        "cartodb_positron"  Light, low-saturation — best for overlay markers
+        "cartodb_dark"      Dark mode
+        "cartodb_voyager"   Colorful, full-OSM detail
+        "satellite"         Esri World Imagery — true satellite photos
+        "esri_topo"         Esri topo — labeled terrain
+        "esri_natgeo"       National Geographic style
+        "cyclosm"           Cycling/topo with bike infra emphasis
 
   map_get_view()       -> {lat, lng, zoom, rotation}
   map_get_markers()    -> list of {id, lat, lng, label?, color?, icon?}

@@ -60,6 +60,8 @@ class MapView extends StatelessWidget {
             children: [
               TileLayer(
                 urlTemplate: basemap.urlTemplate,
+                subdomains: basemap.subdomains,
+                maxNativeZoom: basemap.maxNativeZoom,
                 userAgentPackageName: 'ai.soliplex.client',
               ),
               if (polygons.isNotEmpty)

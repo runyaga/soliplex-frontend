@@ -169,11 +169,19 @@ class PolygonData {
 }
 
 /// Tile-source basemap selection.
+///
+/// All providers below serve free, no-API-key tiles. Stamen and Mapbox
+/// styles are intentionally excluded because they require keys post-2023.
 enum BasemapStyle {
   osm,
   topo,
   cartodbPositron,
-  cartodbDark;
+  cartodbDark,
+  cartodbVoyager,
+  esriWorldImagery,   // satellite — biggest visual upgrade
+  esriWorldTopo,
+  esriNatgeo,
+  cyclosm;
 
   static BasemapStyle? parse(String value) {
     switch (value) {
@@ -185,6 +193,20 @@ enum BasemapStyle {
         return BasemapStyle.cartodbPositron;
       case 'cartodb_dark':
         return BasemapStyle.cartodbDark;
+      case 'cartodb_voyager':
+        return BasemapStyle.cartodbVoyager;
+      case 'satellite':
+      case 'esri_satellite':
+      case 'esri_imagery':
+        return BasemapStyle.esriWorldImagery;
+      case 'esri_topo':
+        return BasemapStyle.esriWorldTopo;
+      case 'esri_natgeo':
+      case 'natgeo':
+        return BasemapStyle.esriNatgeo;
+      case 'cyclosm':
+      case 'cycling':
+        return BasemapStyle.cyclosm;
     }
     return null;
   }
@@ -199,10 +221,20 @@ enum BasemapStyle {
         return 'cartodb_positron';
       case BasemapStyle.cartodbDark:
         return 'cartodb_dark';
+      case BasemapStyle.cartodbVoyager:
+        return 'cartodb_voyager';
+      case BasemapStyle.esriWorldImagery:
+        return 'esri_satellite';
+      case BasemapStyle.esriWorldTopo:
+        return 'esri_topo';
+      case BasemapStyle.esriNatgeo:
+        return 'esri_natgeo';
+      case BasemapStyle.cyclosm:
+        return 'cyclosm';
     }
   }
 
-  /// Tile-server URL template. All providers serve OSM-derived tiles.
+  /// Tile-server URL template. Templates with `{s}` need [subdomains].
   String get urlTemplate {
     switch (this) {
       case BasemapStyle.osm:
@@ -213,6 +245,58 @@ enum BasemapStyle {
         return 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
       case BasemapStyle.cartodbDark:
         return 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png';
+      case BasemapStyle.cartodbVoyager:
+        return 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/'
+            '{z}/{x}/{y}.png';
+      case BasemapStyle.esriWorldImagery:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/'
+            'World_Imagery/MapServer/tile/{z}/{y}/{x}';
+      case BasemapStyle.esriWorldTopo:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/'
+            'World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
+      case BasemapStyle.esriNatgeo:
+        return 'https://server.arcgisonline.com/ArcGIS/rest/services/'
+            'NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}';
+      case BasemapStyle.cyclosm:
+        return 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/'
+            '{z}/{x}/{y}.png';
+    }
+  }
+
+  /// Subdomains for `{s}` substitution. Empty list when the URL has no `{s}`.
+  List<String> get subdomains {
+    switch (this) {
+      case BasemapStyle.osm:
+      case BasemapStyle.topo:
+      case BasemapStyle.esriWorldImagery:
+      case BasemapStyle.esriWorldTopo:
+      case BasemapStyle.esriNatgeo:
+        return const [];
+      case BasemapStyle.cartodbPositron:
+      case BasemapStyle.cartodbDark:
+      case BasemapStyle.cartodbVoyager:
+        return const ['a', 'b', 'c', 'd'];
+      case BasemapStyle.cyclosm:
+        return const ['a', 'b', 'c'];
+    }
+  }
+
+  /// Maximum native zoom the tile provider serves at full resolution.
+  /// Above this the layer auto-magnifies (blurry but functional).
+  int get maxNativeZoom {
+    switch (this) {
+      case BasemapStyle.osm:
+      case BasemapStyle.cartodbPositron:
+      case BasemapStyle.cartodbDark:
+      case BasemapStyle.cartodbVoyager:
+      case BasemapStyle.esriWorldImagery:
+      case BasemapStyle.esriWorldTopo:
+      case BasemapStyle.esriNatgeo:
+        return 19;
+      case BasemapStyle.topo:
+        return 17;
+      case BasemapStyle.cyclosm:
+        return 18;
     }
   }
 
@@ -225,7 +309,14 @@ enum BasemapStyle {
         return '© OpenTopoMap (CC-BY-SA), © OpenStreetMap contributors';
       case BasemapStyle.cartodbPositron:
       case BasemapStyle.cartodbDark:
+      case BasemapStyle.cartodbVoyager:
         return '© CARTO, © OpenStreetMap contributors';
+      case BasemapStyle.esriWorldImagery:
+      case BasemapStyle.esriWorldTopo:
+      case BasemapStyle.esriNatgeo:
+        return 'Tiles © Esri';
+      case BasemapStyle.cyclosm:
+        return 'CyclOSM, © OpenStreetMap contributors';
     }
   }
 }
