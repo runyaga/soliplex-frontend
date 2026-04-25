@@ -10,7 +10,8 @@
 #   map_fly_to (arc)       — long-distance camera arcs
 #   map_latlng_to_mgrs     — military grid in label
 #   map_add_marker         — drop pins
-#   map_move_marker        — animate a marker between cities
+#   map_add_image          — bundled PNG sprite at lat/lng
+#   map_move_image         — animate sprite between cities
 #   map_add_path           — animated route trace
 #   map_reverse_geocode    — coords → address
 #   map_set_basemap        — basemap selection
@@ -44,17 +45,16 @@ for lat, lng, name in points:
         pulse=False,
     )
 
-# ---- 4. Spawn a helicopter and fly it through every city -------------
-heli = map_add_marker(
+# ---- 4. Spawn a helicopter sprite and fly it through every city ------
+# Uses the bundled PNG asset shipped at assets/maps/helicopter.png.
+heli = map_add_image(
+    "assets/maps/helicopter.png",
     points[0][0], points[0][1],
-    label="🚁",
-    color="red",
-    icon="flight",
-    pulse=True,
+    width=80, height=80,
 )
 for lat, lng, name in points[1:]:
     map_fly_to(lat, lng, zoom=5, duration_ms=2500)   # arc fly
-    map_move_marker(heli, lat, lng, duration_ms=2200)
+    map_move_image(heli, lat, lng, duration_ms=2200)
     map_sleep_ms(2200)
 
 # ---- 5. Trace the full route as an animated dashed line --------------
