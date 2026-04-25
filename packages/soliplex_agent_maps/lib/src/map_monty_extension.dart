@@ -156,15 +156,25 @@ class MapMontyExtension extends MontyExtension {
                 isRequired: false,
                 defaultValue: false,
               ),
+              HostParam(
+                name: 'focus_zoom',
+                type: HostParamType.number,
+                isRequired: false,
+                description:
+                    'When set, fly to the marker at this zoom level if '
+                    'the current zoom is less. Use 12-14 for "drop a '
+                    'pin and snap to it" UX without a separate fly_to.',
+              ),
             ],
           ),
-          handler: (args, ctx) async => _maps.addMarker(
+          handler: (args, ctx) => _maps.addMarker(
             lat: (args['lat']! as num).toDouble(),
             lng: (args['lng']! as num).toDouble(),
             label: args['label'] as String?,
             color: args['color'] as String?,
             icon: args['icon'] as String?,
             pulse: (args['pulse'] as bool?) ?? false,
+            focusZoom: (args['focus_zoom'] as num?)?.toDouble(),
           ),
         ),
         HostFunction(

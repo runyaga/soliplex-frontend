@@ -809,7 +809,12 @@ class MapExtension extends SessionExtension
   }
 
   /// Drops a marker and returns its generated id.
-  String addMarker({
+  ///
+  /// When [focusZoom] is set, the camera flies to the new marker iff the
+  /// current zoom is less than `focusZoom`. Use this for "drop a pin and
+  /// snap to it" — useful when the LLM wants to highlight a single
+  /// location without first having to call `flyTo`.
+  Future<String> addMarker({
     required double lat,
     required double lng,
     String? label,
@@ -817,7 +822,8 @@ class MapExtension extends SessionExtension
     String? icon,
     bool dropAnimation = true,
     bool pulse = false,
-  }) {
+    double? focusZoom,
+  }) async {
     final marker = MarkerData(
       id: _autoId('marker'),
       lat: lat,
@@ -831,6 +837,9 @@ class MapExtension extends SessionExtension
     );
     _markers.value = [..._markers.value, marker];
     _refreshState(lastEvent: 'add_marker');
+    if (focusZoom != null && _viewport.value.zoom < focusZoom) {
+      await flyTo(lat: lat, lng: lng, zoom: focusZoom);
+    }
     return marker.id;
   }
 

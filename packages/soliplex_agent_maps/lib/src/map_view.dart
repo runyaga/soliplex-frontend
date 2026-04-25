@@ -47,10 +47,13 @@ class MapView extends StatelessWidget {
               // dropped this way are observable from Python and the
               // LLM via the markers signal.
               onLongPress: (tapPosition, point) {
-                extension.addMarker(
-                  lat: point.latitude,
-                  lng: point.longitude,
-                  pulse: true,
+                // Fire-and-forget — long-press just drops the pin.
+                unawaited(
+                  extension.addMarker(
+                    lat: point.latitude,
+                    lng: point.longitude,
+                    pulse: true,
+                  ),
                 );
               },
             ),
