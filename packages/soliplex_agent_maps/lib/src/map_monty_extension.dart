@@ -4,6 +4,9 @@
 // readability at the cost of matching defaults.
 // ignore_for_file: prefer_const_constructors, avoid_redundant_argument_values
 
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:dart_monty/dart_monty_bridge.dart'
     show
         HostFunction,
@@ -11,6 +14,7 @@ import 'package:dart_monty/dart_monty_bridge.dart'
         HostParam,
         HostParamType,
         MontyExtension;
+import 'package:http/http.dart' as http;
 
 import 'package:soliplex_agent_maps/src/map_extension.dart';
 
@@ -49,9 +53,23 @@ import 'package:soliplex_agent_maps/src/map_extension.dart';
 /// ClientTool surface (polylines, polygons, geocoding, tour) and add
 /// signal-based subscriptions.
 class MapMontyExtension extends MontyExtension {
-  MapMontyExtension(this._maps);
+  MapMontyExtension(this._maps, {http.Client? httpClient})
+      : _http = httpClient ?? http.Client();
 
   final MapExtension _maps;
+  final http.Client _http;
+
+  /// Per Nominatim's usage policy: identify yourself, throttle to <=1 req/s.
+  /// We don't enforce the throttle here — Python scripts that batch should
+  /// add `map_sleep_ms(1000)` between calls.
+  static const _nominatimUserAgent = 'soliplex-frontend (dev)';
+  static const _nominatimBase = 'https://nominatim.openstreetmap.org';
+
+  @override
+  Future<void> onDispose() async {
+    _http.close();
+    await super.onDispose();
+  }
 
   @override
   String get namespace => 'map';
@@ -240,6 +258,112 @@ class MapMontyExtension extends MontyExtension {
               animated: (args['animated'] as bool?) ?? true,
               animationDurationMs: (args['duration_ms'] as num?)?.toInt(),
             );
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_geocode',
+            description:
+                'Look up a place name and return its coordinates. Uses '
+                'Nominatim (OpenStreetMap). When `limit` is 1 (default) '
+                'returns a single dict {lat, lng, display_name, type, '
+                'importance, bbox: [south, west, north, east]} or null '
+                'if no match. When `limit` > 1 returns a list of dicts '
+                "(top match first). Be polite — don't loop without "
+                '`map_sleep_ms(1000)` between calls; Nominatim caps at '
+                '~1 req/sec for the public instance.',
+            params: const [
+              HostParam(
+                name: 'query',
+                type: HostParamType.string,
+                description: 'Free-text place name (e.g. "Tokyo", '
+                    '"123 Main St, Springfield, IL", "Eiffel Tower").',
+              ),
+              HostParam(
+                name: 'limit',
+                type: HostParamType.integer,
+                isRequired: false,
+                defaultValue: 1,
+                description: 'Max results. 1 returns a single dict, '
+                    '>1 returns a list.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final query = args['query']! as String;
+            final limit = (args['limit'] as num?)?.toInt() ?? 1;
+            final uri = Uri.parse('$_nominatimBase/search').replace(
+              queryParameters: {
+                'q': query,
+                'format': 'json',
+                'limit': '$limit',
+                'addressdetails': '0',
+              },
+            );
+            final res = await _http
+                .get(uri, headers: {'User-Agent': _nominatimUserAgent})
+                .timeout(const Duration(seconds: 15));
+            if (res.statusCode != 200) {
+              throw FormatException(
+                'map_geocode: ${res.statusCode} ${res.reasonPhrase}',
+              );
+            }
+            final raw = jsonDecode(res.body);
+            if (raw is! List) return limit == 1 ? null : <Object?>[];
+            final results = [
+              for (final item in raw)
+                if (item is Map) _formatGeocodeResult(item),
+            ];
+            if (limit == 1) {
+              return results.isEmpty ? null : results.first;
+            }
+            return results;
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_reverse_geocode',
+            description:
+                'Look up the address at given coordinates. Returns a '
+                'dict {display_name, address: {country, state, city, '
+                'road, ...}, lat, lng} or null if no match. Same '
+                'Nominatim throttle: 1 req/sec.',
+            params: const [
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final lat = (args['lat']! as num).toDouble();
+            final lng = (args['lng']! as num).toDouble();
+            final uri = Uri.parse('$_nominatimBase/reverse').replace(
+              queryParameters: {
+                'lat': '$lat',
+                'lon': '$lng',
+                'format': 'json',
+                'addressdetails': '1',
+              },
+            );
+            final res = await _http
+                .get(uri, headers: {'User-Agent': _nominatimUserAgent})
+                .timeout(const Duration(seconds: 15));
+            if (res.statusCode != 200) {
+              throw FormatException(
+                'map_reverse_geocode: ${res.statusCode} ${res.reasonPhrase}',
+              );
+            }
+            final raw = jsonDecode(res.body);
+            if (raw is! Map) return null;
+            // Nominatim returns {"error": "..."} on miss.
+            if (raw.containsKey('error')) return null;
+            return {
+              'lat': double.tryParse(raw['lat']?.toString() ?? '') ?? lat,
+              'lng': double.tryParse(raw['lon']?.toString() ?? '') ?? lng,
+              'display_name': raw['display_name'],
+              'address': raw['address'] ?? <String, Object?>{},
+              'place_id': raw['place_id'],
+              'type': raw['type'],
+            };
           },
         ),
         HostFunction(
@@ -439,4 +563,31 @@ class MapMontyExtension extends MontyExtension {
           handler: (args, ctx) async => _maps.boundsJson(),
         ),
       ];
+
+  /// Reshape a Nominatim search hit into the dict Python sees.
+  Map<String, Object?> _formatGeocodeResult(Map<Object?, Object?> item) {
+    final lat = double.tryParse(item['lat']?.toString() ?? '');
+    final lng = double.tryParse(item['lon']?.toString() ?? '');
+    final bbox = item['boundingbox'];
+    List<double>? bboxDeg;
+    if (bbox is List && bbox.length == 4) {
+      // Nominatim returns [south, north, west, east] as strings —
+      // normalize to [south, west, north, east] (numerical order).
+      final s = double.tryParse(bbox[0].toString());
+      final n = double.tryParse(bbox[1].toString());
+      final w = double.tryParse(bbox[2].toString());
+      final e = double.tryParse(bbox[3].toString());
+      if (s != null && n != null && w != null && e != null) {
+        bboxDeg = [s, w, n, e];
+      }
+    }
+    return {
+      'lat': lat,
+      'lng': lng,
+      'display_name': item['display_name'],
+      'type': item['type'],
+      'importance': item['importance'],
+      if (bboxDeg != null) 'bbox': bboxDeg,
+    };
+  }
 }
