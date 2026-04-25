@@ -302,10 +302,9 @@ trivial.
 
 - **Python `import` of any non-trivial module** is hit-or-miss.
   Don't assume `math`, `random`, `json`, `urllib`, etc.
-- **HTTP from Python** doesn't work yet. We need a `monty_http_get`
-  external that wraps `package:http`. Adding it unlocks live data
-  demos (OpenSky aircraft, USGS earthquakes, ISS tracker, etc.) —
-  this is the next ~30-min win.
+- **HTTP from Python is now supported** — `http_get(url)` and
+  `http_get_json(url)` ship in `lib/src/http_monty_extension.dart`.
+  Subject to browser CORS. (Was an open item; see lesson #13 below.)
 - **Subscriptions and streams from Python to Dart state** don't exist.
   Python can `map_get_view()` to poll, but there's no
   `for vp in map_viewport_stream(): ...`. The dart_monty plan
@@ -314,6 +313,74 @@ trivial.
   document `docs/plans/message-containers.md` describes the three-way
   merge (LLM tools / Monty / AG-UI) — currently only two of three are
   live.
+
+## 13. `MontyExtensionSet` must be a factory, not a singleton
+
+Symptom (took ~30 min to find):
+
+```text
+Bad state: Cannot execute on a disposed EventLoopExtension
+```
+
+What happened: the terminal panel (in
+`lib/src/modules/room/ui/terminal_panel.dart`) opens with a fresh
+`MontyRuntime` constructed from a top-level `MontyExtensionSet` —
+seeded once in `lib/src/monty_singleton.dart`. The session-attached
+`MontyRuntimeExtension` separately constructs its own `MontyRuntime`
+from the same shared set. Two `MontyRuntime`s now hold references to
+the same extension instances (e.g. one `EventLoopExtension`,
+one `MessageBusExtension`, etc.).
+
+`MontyRuntime` takes **lifecycle ownership** of its extensions. When
+the first runtime is disposed (the terminal dialog closes, or the
+session ends), it disposes its extensions — which were *also* the
+second runtime's extensions. Next call into the surviving runtime
+fails with the disposed-state error.
+
+Fix: change the singleton to a factory:
+
+```dart
+// monty_singleton.dart
+MontyExtensionSet makeMontyExtensionSet() => MontyExtensionSet([
+      ...MontyExtensionSet.standard().all,
+      MapMontyExtension(mapExtension),
+      HttpMontyExtension(),
+    ]);
+```
+
+Each `MontyRuntime` constructor calls the factory to get a fresh set,
+so each runtime owns its own disposable instances. Only the things
+that are themselves singletons (`mapExtension` here — see lesson #6)
+are shared by reference; the wrappers around them are fresh.
+
+### General rule — singleton vs factory vs per-instance
+
+We discovered we have three distinct lifetime patterns operating in
+the same codebase:
+
+| Pattern | When | Example |
+|---|---|---|
+| **App-level singleton** | One on-screen widget, must survive session boundaries | `mapExtension` — the `MapView` widget binds to it; sessions come and go but the user keeps looking at the same map |
+| **Factory (fresh per runtime)** | Wraps something a runtime takes ownership of and disposes | `makeMontyExtensionSet()` — every `MontyRuntime` gets fresh `EventLoopExtension`, `MessageBusExtension`, etc. |
+| **Per-dialog / per-screen state** | Owned by a Flutter widget's State; lives as long as the widget | `TerminalPanel`'s internal `MontyRuntime` (built in `initState`, disposed in `dispose`) |
+
+Mixing the first two is the trap. If you have `final foo = Foo()` at
+top level and Foo is a thing-that-gets-disposed, you've built a
+singleton that only survives until the first dispose. Use a factory
+for those.
+
+### Heuristic
+
+When deciding singleton vs factory, ask:
+
+- "Will more than one consumer take ownership of this?"
+   - **Yes** → factory. Each consumer gets its own.
+- "Does the on-screen widget tied to this need to survive across
+  sessions / runs?"
+   - **Yes** → singleton (and make `onAttach`/`onDispose` idempotent
+     per lesson #6).
+- "Is this owned exclusively by one StatefulWidget?"
+   - **Yes** → just construct in `initState`. No global anything.
 
 ## What "Python can read more from the widget" got us
 
