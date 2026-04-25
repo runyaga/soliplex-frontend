@@ -28,6 +28,13 @@ class CodeBlockBuilder extends MarkdownElementBuilder {
       );
     }
 
+    if (language == 'figlet') {
+      return Semantics(
+        label: 'Figlet ASCII art',
+        child: _FigletBlock(code: code, codeStyle: this.preferredStyle),
+      );
+    }
+
     final semanticLabel =
         language == 'plaintext' ? 'Code block' : 'Code block in $language';
     return Semantics(
@@ -145,6 +152,68 @@ class _SvgCodeBlockState extends State<_SvgCodeBlock> {
             text: widget.code,
             tooltip: 'Copy SVG',
             iconSize: 16,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FigletBlock extends StatelessWidget {
+  const _FigletBlock({required this.code, required this.codeStyle});
+
+  final String code;
+  final TextStyle codeStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final figletStyle = TextStyle(
+      inherit: false,
+      fontFamily: 'RobotoMono',
+      fontSize: 14,
+      height: 1.05,
+      letterSpacing: 0,
+      wordSpacing: 0,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      color: theme.colorScheme.onSurface,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 12, top: 4),
+              child: Text(
+                'figlet',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(right: 4, top: 4),
+              child: CopyButton(
+                text: code,
+                tooltip: 'Copy ASCII art',
+                iconSize: 16,
+              ),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Text(
+              code,
+              style: figletStyle,
+              softWrap: false,
+              maxLines: null,
+            ),
           ),
         ),
       ],
