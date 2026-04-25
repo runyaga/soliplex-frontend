@@ -206,5 +206,72 @@ class MapMontyExtension extends MontyExtension {
           ),
           handler: (args, ctx) async => _maps.viewportJson(),
         ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_sleep_ms',
+            description: 'Pause script execution for the given number '
+                'of milliseconds. Useful between map_fly_to / '
+                'map_add_marker calls so the user has time to see each '
+                'step of a tour. Replaces Python `time.sleep` which is '
+                'not available in the dart_monty stdlib.',
+            params: const [
+              HostParam(name: 'ms', type: HostParamType.integer),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final ms = args['ms']! as int;
+            if (ms > 0) {
+              await Future<void>.delayed(Duration(milliseconds: ms));
+            }
+            return null;
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_get_markers',
+            description: 'List every marker currently on the map. Each '
+                'item: {id, lat, lng, label?, color?, icon?}.',
+            params: const [],
+          ),
+          handler: (args, ctx) async => _maps.markersJson(),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_get_polylines',
+            description: 'List every polyline. Each item: '
+                '{id, pointCount, color?, width}.',
+            params: const [],
+          ),
+          handler: (args, ctx) async => _maps.polylinesJson(),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_get_polygons',
+            description: 'List every polygon. Each item: '
+                '{id, pointCount, fillColor?, strokeColor?}.',
+            params: const [],
+          ),
+          handler: (args, ctx) async => _maps.polygonsJson(),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_get_state',
+            description: 'Aggregated snapshot: '
+                '{viewport, markerCount, polylineCount, polygonCount, '
+                'basemap, lastEvent}. Single call to read everything.',
+            params: const [],
+          ),
+          handler: (args, ctx) async => _maps.stateSnapshot(),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_get_bounds',
+            description: 'Visible bounds of the current camera view: '
+                '{north, south, east, west} in degrees. Returns null if '
+                'the map widget has not rendered yet.',
+            params: const [],
+          ),
+          handler: (args, ctx) async => _maps.boundsJson(),
+        ),
       ];
 }

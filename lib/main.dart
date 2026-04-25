@@ -25,6 +25,8 @@ const _montyEnabled = bool.fromEnvironment(
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // ignore: avoid_print
+  print('[boot] MONTY_ENABLED=$_montyEnabled');
   final callbackParams = CallbackParamsCapture.captureNow();
   clearCallbackUrl();
   runSoliplexShell(

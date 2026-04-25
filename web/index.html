@@ -146,6 +146,11 @@
   </picture>
   <div id="loading-status">Loading...</div>
   <div id="progress-track"><div id="progress-bar"></div></div>
+  <!-- dart_monty_core WASM bridge — provides the Python interpreter to
+       MontyRuntimeExtension on web targets. Pairs with COI headers
+       (Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy) which
+       must be set by the dev server / hosting layer. -->
+  <script src="dart_monty_core_bridge.js"></script>
   <script src="flutter_bootstrap.js" async=""></script>
 
 

@@ -919,16 +919,30 @@ class _RoomScreenState extends State<RoomScreen> {
             // close it; the underlying controller and reactive state
             // survive session attach/detach. See
             // docs/plans/message-containers.md for the v1 refactor.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              alignment: Alignment.topCenter,
-              child: _mapDrawerOpen
-                  ? SizedBox(
-                      height: 320,
-                      child: MapView(extension: mapExtension),
-                    )
-                  : const SizedBox(width: double.infinity, height: 0),
+            // The drawer is sized as a fraction of the room screen so
+            // it can never push the chat input off the bottom on small
+            // viewports. ClipRect swallows any sub-pixel overflow
+            // during the AnimatedSize tween.
+            ClipRect(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Available height in this stack slot is unbounded
+                  // here, so fall back to the screen height.
+                  final maxH = MediaQuery.of(context).size.height;
+                  final h = (maxH * 0.4).clamp(180.0, 360.0);
+                  return AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: _mapDrawerOpen
+                        ? SizedBox(
+                            height: h,
+                            child: MapView(extension: mapExtension),
+                          )
+                        : const SizedBox(width: double.infinity, height: 0),
+                  );
+                },
+              ),
             ),
             Row(
               children: [

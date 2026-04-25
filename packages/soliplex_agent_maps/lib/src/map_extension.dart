@@ -828,6 +828,124 @@ class MapExtension extends SessionExtension
   /// JSON-friendly snapshot of the current viewport.
   Map<String, Object?> viewportJson() => _viewport.value.toJson();
 
+  /// JSON snapshot of every marker currently on the map.
+  List<Map<String, Object?>> markersJson() => [
+        for (final m in _markers.value) m.toJson(),
+      ];
+
+  /// JSON snapshot of every polyline currently on the map.
+  List<Map<String, Object?>> polylinesJson() => [
+        for (final l in _polylines.value) l.toJson(),
+      ];
+
+  /// JSON snapshot of every polygon currently on the map.
+  List<Map<String, Object?>> polygonsJson() => [
+        for (final p in _polygons.value) p.toJson(),
+      ];
+
+  /// Aggregated state snapshot — viewport, counts, basemap, last event.
+  /// Same shape that flows into the `state` signal observed by
+  /// `ExtensionStatePanel`.
+  Map<String, Object?> stateSnapshot() => Map<String, Object?>.from(state);
+
+  /// Visible bounds of the current camera view, or null if the
+  /// `FlutterMap` widget hasn't laid out yet (the [MapController] cannot
+  /// compute bounds without a rendered viewport). Shape:
+  /// `{north, south, east, west}` in degrees.
+  Map<String, Object?>? boundsJson() {
+    try {
+      final b = _controller.camera.visibleBounds;
+      return <String, Object?>{
+        'north': b.north,
+        'south': b.south,
+        'east': b.east,
+        'west': b.west,
+      };
+    } on Object catch (_) {
+      return null;
+    }
+  }
+
+  /// Adds a polyline. [points] is a list of `[lat, lng]` pairs (or any
+  /// `Iterable<List<num>>`). Returns the generated id.
+  String addPolyline({
+    required List<List<num>> points,
+    String? color,
+    double width = 4,
+    bool animated = false,
+    int? animationDurationMs,
+  }) {
+    final latLngs = [
+      for (final p in points)
+        if (p.length >= 2) LatLng(p[0].toDouble(), p[1].toDouble()),
+    ];
+    final id = _autoId('polyline');
+    final line = PolylineData(
+      id: id,
+      points: latLngs,
+      color: color,
+      width: width,
+      animated: animated,
+      progress: animated ? 0 : 1,
+    );
+    _polylines.value = [..._polylines.value, line];
+    _refreshState(lastEvent: 'add_polyline');
+    if (animated) {
+      unawaited(_animatePolyline(id, animationDurationMs ?? 1500));
+    }
+    return id;
+  }
+
+  /// Adds a polygon. [points] is a list of `[lat, lng]` pairs. Returns
+  /// the generated id.
+  String addPolygon({
+    required List<List<num>> points,
+    String? fillColor,
+    String? strokeColor,
+    double strokeWidth = 2,
+  }) {
+    final latLngs = [
+      for (final p in points)
+        if (p.length >= 2) LatLng(p[0].toDouble(), p[1].toDouble()),
+    ];
+    final id = _autoId('polygon');
+    _polygons.value = [
+      ..._polygons.value,
+      PolygonData(
+        id: id,
+        points: latLngs,
+        fillColor: fillColor,
+        strokeColor: strokeColor,
+        strokeWidth: strokeWidth,
+      ),
+    ];
+    _refreshState(lastEvent: 'add_polygon');
+    return id;
+  }
+
+  /// Fits the camera to all currently-rendered markers (and polyline
+  /// vertices when fitting markers alone has fewer than 2 points).
+  /// Returns true on success, false when there's nothing to fit.
+  bool fitBoundsToCurrent({double padding = 40}) {
+    final pts = <LatLng>[
+      for (final m in _markers.value) LatLng(m.lat, m.lng),
+      for (final l in _polylines.value) ...l.points,
+    ];
+    if (pts.length < 2) return false;
+    try {
+      _controller.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds.fromPoints(pts),
+          padding: EdgeInsets.all(padding),
+        ),
+      );
+    } on Object catch (_) {
+      return false;
+    }
+    _refreshState(lastEvent: 'fit_bounds');
+    return true;
+  }
+
   // ---- Helpers ----------------------------------------------------------
 
   /// Manually animates the camera. flutter_map 8 ships [MapController.move]
