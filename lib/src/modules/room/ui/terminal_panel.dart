@@ -57,8 +57,13 @@ class _TerminalPanelState extends State<TerminalPanel> {
   }
 
   Future<void> _run() async {
-    final code = _input.text;
-    if (code.trim().isEmpty || _running) return;
+    final raw = _input.text;
+    if (raw.trim().isEmpty || _running) return;
+    // Strip common leading whitespace before executing. Pasting from
+    // markdown bullets/quotes leaves a 2- or 4-space prefix on every
+    // line, which Python rejects with "unexpected indentation". Match
+    // textwrap.dedent — show the user the version that actually ran.
+    final code = _dedent(raw);
     setState(() {
       _running = true;
       _history.add(_TerminalEntry.input(code));
@@ -89,6 +94,32 @@ class _TerminalPanelState extends State<TerminalPanel> {
         _scrollToBottom();
       }
     }
+  }
+
+  /// Mirror of Python's `textwrap.dedent` — strips the longest common
+  /// leading-whitespace prefix from every non-blank line.
+  ///
+  /// Tabs are treated as opaque single characters (no expansion). If
+  /// any non-blank line begins at column 0 the input is returned
+  /// unchanged. Blank lines never narrow the common prefix.
+  String _dedent(String src) {
+    final lines = src.split('\n');
+    int? minIndent;
+    for (final line in lines) {
+      if (line.trim().isEmpty) continue;
+      var leading = 0;
+      while (leading < line.length &&
+          (line.codeUnitAt(leading) == 0x20 ||
+              line.codeUnitAt(leading) == 0x09)) {
+        leading++;
+      }
+      if (minIndent == null || leading < minIndent) minIndent = leading;
+    }
+    if (minIndent == null || minIndent == 0) return src;
+    final n = minIndent;
+    return lines
+        .map((l) => l.length >= n ? l.substring(n) : l)
+        .join('\n');
   }
 
   void _scrollToBottom() {
