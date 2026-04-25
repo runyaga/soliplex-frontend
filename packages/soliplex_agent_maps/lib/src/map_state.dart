@@ -168,6 +168,63 @@ class PolygonData {
       };
 }
 
+/// An image (PNG, JPG, **animated GIF**) anchored at a lat/lng. Renders
+/// as a Marker with `Image.network` as its child — Flutter's Image
+/// widget handles animated GIFs natively, so dropping a helicopter GIF
+/// at a coordinate and letting it loop just works.
+@immutable
+class ImageOverlayData {
+  const ImageOverlayData({
+    required this.id,
+    required this.url,
+    required this.lat,
+    required this.lng,
+    this.widthPx = 64,
+    this.heightPx = 64,
+    this.rotation = 0,
+    this.opacity = 1,
+  });
+
+  final String id;
+  final String url;
+  final double lat;
+  final double lng;
+  final double widthPx;
+  final double heightPx;
+  final double rotation; // degrees, clockwise
+  final double opacity; // 0..1
+
+  ImageOverlayData copyWith({
+    double? lat,
+    double? lng,
+    double? widthPx,
+    double? heightPx,
+    double? rotation,
+    double? opacity,
+  }) =>
+      ImageOverlayData(
+        id: id,
+        url: url,
+        lat: lat ?? this.lat,
+        lng: lng ?? this.lng,
+        widthPx: widthPx ?? this.widthPx,
+        heightPx: heightPx ?? this.heightPx,
+        rotation: rotation ?? this.rotation,
+        opacity: opacity ?? this.opacity,
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'url': url,
+        'lat': lat,
+        'lng': lng,
+        'widthPx': widthPx,
+        'heightPx': heightPx,
+        'rotation': rotation,
+        'opacity': opacity,
+      };
+}
+
 /// Tile-source basemap selection.
 ///
 /// All providers below serve free, no-API-key tiles. Stamen and Mapbox

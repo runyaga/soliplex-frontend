@@ -25,6 +25,7 @@ class MapView extends StatelessWidget {
     final markers = extension.markers.watch(context);
     final polylines = extension.polylines.watch(context);
     final polygons = extension.polygons.watch(context);
+    final images = extension.images.watch(context);
 
     return ClipRect(
       child: Stack(
@@ -64,6 +65,37 @@ class MapView extends StatelessWidget {
                 maxNativeZoom: basemap.maxNativeZoom,
                 userAgentPackageName: 'ai.soliplex.client',
               ),
+              if (images.isNotEmpty)
+                MarkerLayer(
+                  markers: [
+                    for (final img in images)
+                      Marker(
+                        key: ValueKey('img:${img.id}'),
+                        point: LatLng(img.lat, img.lng),
+                        width: img.widthPx,
+                        height: img.heightPx,
+                        alignment: Alignment.center,
+                        child: Opacity(
+                          opacity: img.opacity,
+                          child: Transform.rotate(
+                            angle: img.rotation * 3.14159265 / 180,
+                            child: Image.network(
+                              img.url,
+                              width: img.widthPx,
+                              height: img.heightPx,
+                              fit: BoxFit.contain,
+                              gaplessPlayback: true,
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.broken_image_outlined,
+                                size: img.widthPx * 0.5,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               if (polygons.isNotEmpty)
                 PolygonLayer(
                   polygons: [

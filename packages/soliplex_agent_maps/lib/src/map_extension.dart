@@ -76,6 +76,7 @@ class MapExtension extends SessionExtension
         _markers = signal(<MarkerData>[]),
         _polylines = signal(<PolylineData>[]),
         _polygons = signal(<PolygonData>[]),
+        _images = signal(<ImageOverlayData>[]),
         _viewport = signal(initialViewport) {
     setInitialState(_buildState(lastEvent: 'init'));
   }
@@ -92,6 +93,7 @@ class MapExtension extends SessionExtension
   final Signal<List<MarkerData>> _markers;
   final Signal<List<PolylineData>> _polylines;
   final Signal<List<PolygonData>> _polygons;
+  final Signal<List<ImageOverlayData>> _images;
   final Signal<Viewport> _viewport;
 
   StreamSubscription<MapEvent>? _mapEventSub;
@@ -106,6 +108,7 @@ class MapExtension extends SessionExtension
   ReadonlySignal<List<MarkerData>> get markers => _markers.readonly();
   ReadonlySignal<List<PolylineData>> get polylines => _polylines.readonly();
   ReadonlySignal<List<PolygonData>> get polygons => _polygons.readonly();
+  ReadonlySignal<List<ImageOverlayData>> get images => _images.readonly();
   ReadonlySignal<Viewport> get viewport => _viewport.readonly();
 
   Viewport get initialViewport => _initialViewport;
@@ -178,6 +181,7 @@ class MapExtension extends SessionExtension
       'markerCount': _markers.value.length,
       'polylineCount': _polylines.value.length,
       'polygonCount': _polygons.value.length,
+      'imageCount': _images.value.length,
       'basemap': _basemap.value.id,
       'lastEvent': lastEvent,
     };
@@ -963,12 +967,13 @@ class MapExtension extends SessionExtension
     _refreshState(lastEvent: 'move_marker');
   }
 
-  /// Removes every marker, polyline, and polygon. Mirrors the
-  /// `clear_markers` ClientTool semantics.
+  /// Removes every marker, polyline, polygon, and image overlay.
+  /// Mirrors the `clear_markers` ClientTool semantics.
   void clearAll() {
     _markers.value = const [];
     _polylines.value = const [];
     _polygons.value = const [];
+    _images.value = const [];
     _refreshState(lastEvent: 'clear_markers');
   }
 
@@ -1079,6 +1084,99 @@ class MapExtension extends SessionExtension
     _refreshState(lastEvent: 'add_polygon');
     return id;
   }
+
+  /// Adds an image (PNG, JPG, **animated GIF**) anchored at lat/lng.
+  /// Returns the generated id. Width and height are in display pixels;
+  /// the image stays the same size at every zoom level.
+  String addImage({
+    required String url,
+    required double lat,
+    required double lng,
+    double widthPx = 64,
+    double heightPx = 64,
+    double rotation = 0,
+    double opacity = 1,
+  }) {
+    final id = _autoId('image');
+    _images.value = [
+      ..._images.value,
+      ImageOverlayData(
+        id: id,
+        url: url,
+        lat: lat,
+        lng: lng,
+        widthPx: widthPx,
+        heightPx: heightPx,
+        rotation: rotation,
+        opacity: opacity.clamp(0, 1).toDouble(),
+      ),
+    ];
+    _refreshState(lastEvent: 'add_image');
+    return id;
+  }
+
+  /// Removes an image overlay by id. Returns true on success.
+  bool removeImage(String id) {
+    final list = _images.value;
+    final next = [...list]..removeWhere((i) => i.id == id);
+    if (next.length == list.length) return false;
+    _images.value = next;
+    _refreshState(lastEvent: 'remove_image');
+    return true;
+  }
+
+  /// Animates an existing image overlay to a new lat/lng over [durationMs].
+  /// Same re-entrant cancellation semantics as [moveMarker].
+  Future<bool> moveImage({
+    required String id,
+    required double lat,
+    required double lng,
+    int durationMs = 1500,
+  }) async {
+    final list = _images.value;
+    final idx = list.indexWhere((i) => i.id == id);
+    if (idx < 0) return false;
+    final start = list[idx];
+    final token = (_moveTokens['img:$id'] ?? 0) + 1;
+    _moveTokens['img:$id'] = token;
+    if (durationMs <= 0) {
+      _replaceImage(id, start.copyWith(lat: lat, lng: lng));
+      return true;
+    }
+    final steps = (durationMs / 16).clamp(1, 360).toInt();
+    final startLat = start.lat;
+    final startLng = start.lng;
+    for (var i = 1; i <= steps; i++) {
+      if (_moveTokens['img:$id'] != token) return false;
+      final t = i / steps;
+      final eased = t < 0.5
+          ? 2 * t * t
+          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
+      final curLat = startLat + (lat - startLat) * eased;
+      final curLng = startLng + (lng - startLng) * eased;
+      final cur = _images.value;
+      final j = cur.indexWhere((i) => i.id == id);
+      if (j < 0) return false;
+      _replaceImage(id, cur[j].copyWith(lat: curLat, lng: curLng));
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+    }
+    return true;
+  }
+
+  void _replaceImage(String id, ImageOverlayData replacement) {
+    final list = _images.value;
+    final idx = list.indexWhere((i) => i.id == id);
+    if (idx < 0) return;
+    final next = [...list];
+    next[idx] = replacement;
+    _images.value = next;
+    _refreshState(lastEvent: 'move_image');
+  }
+
+  /// JSON snapshot of every image overlay.
+  List<Map<String, Object?>> imagesJson() => [
+        for (final i in _images.value) i.toJson(),
+      ];
 
   /// Fits the camera to all currently-rendered markers (and polyline
   /// vertices when fitting markers alone has fewer than 2 points).

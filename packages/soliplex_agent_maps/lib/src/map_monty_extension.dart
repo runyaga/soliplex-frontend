@@ -369,6 +369,101 @@ class MapMontyExtension extends MontyExtension {
         ),
         HostFunction(
           schema: HostFunctionSchema(
+            name: 'map_add_image',
+            description:
+                'Drop an image (PNG, JPG, or **animated GIF**) at lat/lng. '
+                'Returns the image id. Width/height are display pixels '
+                "(don't scale with zoom). Animated GIFs play natively. "
+                'Use for sprites: helicopters, vehicles, military icons, '
+                'pictures, GIF stickers. Anchor is the image center.',
+            params: const [
+              HostParam(
+                name: 'url',
+                type: HostParamType.string,
+                description: 'Absolute URL to the image. CORS applies.',
+              ),
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'width',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 64,
+                description: 'Display width in pixels.',
+              ),
+              HostParam(
+                name: 'height',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 64,
+                description: 'Display height in pixels.',
+              ),
+              HostParam(
+                name: 'rotation',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 0,
+                description: 'Clockwise rotation in degrees.',
+              ),
+              HostParam(
+                name: 'opacity',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 1,
+                description: '0.0 transparent .. 1.0 opaque.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async => _maps.addImage(
+            url: args['url']! as String,
+            lat: (args['lat']! as num).toDouble(),
+            lng: (args['lng']! as num).toDouble(),
+            widthPx: (args['width'] as num?)?.toDouble() ?? 64,
+            heightPx: (args['height'] as num?)?.toDouble() ?? 64,
+            rotation: (args['rotation'] as num?)?.toDouble() ?? 0,
+            opacity: (args['opacity'] as num?)?.toDouble() ?? 1,
+          ),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_remove_image',
+            description: 'Remove an image overlay by id. Returns true on '
+                'success, false if the id was not found.',
+            params: const [
+              HostParam(name: 'id', type: HostParamType.string),
+            ],
+          ),
+          handler: (args, ctx) async =>
+              _maps.removeImage(args['id']! as String),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_move_image',
+            description:
+                'Animate an existing image overlay to a new (lat, lng) '
+                'over duration_ms. Same re-entrant semantics as '
+                'map_move_marker. Returns true on success.',
+            params: const [
+              HostParam(name: 'id', type: HostParamType.string),
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'duration_ms',
+                type: HostParamType.integer,
+                isRequired: false,
+                defaultValue: 1500,
+              ),
+            ],
+          ),
+          handler: (args, ctx) => _maps.moveImage(
+            id: args['id']! as String,
+            lat: (args['lat']! as num).toDouble(),
+            lng: (args['lng']! as num).toDouble(),
+            durationMs: (args['duration_ms'] as num?)?.toInt() ?? 1500,
+          ),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
             name: 'map_mgrs_to_latlng',
             description:
                 'Convert an MGRS (Military Grid Reference System) string '
