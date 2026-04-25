@@ -79,18 +79,7 @@ class MapView extends StatelessWidget {
                           opacity: img.opacity,
                           child: Transform.rotate(
                             angle: img.rotation * 3.14159265 / 180,
-                            child: Image.network(
-                              img.url,
-                              width: img.widthPx,
-                              height: img.heightPx,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                              errorBuilder: (_, __, ___) => Icon(
-                                Icons.broken_image_outlined,
-                                size: img.widthPx * 0.5,
-                                color: Colors.red,
-                              ),
-                            ),
+                            child: _buildImage(img),
                           ),
                         ),
                       ),
@@ -567,6 +556,43 @@ IconData _iconFor(String? name) {
     default:
       return Icons.place;
   }
+}
+
+/// Picks the right Image loader for an [ImageOverlayData].
+///
+/// Flutter Web cannot reach bundled assets via `Image.network` — relative
+/// asset paths resolve against the page URL, but the binary bytes live
+/// in Flutter's asset bundle, not at any HTTP endpoint. Use `Image.asset`
+/// for URLs that look like bundle paths (starting with `assets/`).
+///
+/// Anything starting with `http://`, `https://`, or any other scheme
+/// goes through `Image.network` as before.
+Widget _buildImage(ImageOverlayData img) {
+  final isAsset =
+      img.url.startsWith('assets/') || img.url.startsWith('packages/');
+  Widget brokenIcon(BuildContext _, Object __, StackTrace? ___) => Icon(
+        Icons.broken_image_outlined,
+        size: img.widthPx * 0.5,
+        color: Colors.red,
+      );
+  if (isAsset) {
+    return Image.asset(
+      img.url,
+      width: img.widthPx,
+      height: img.heightPx,
+      fit: BoxFit.contain,
+      gaplessPlayback: true,
+      errorBuilder: brokenIcon,
+    );
+  }
+  return Image.network(
+    img.url,
+    width: img.widthPx,
+    height: img.heightPx,
+    fit: BoxFit.contain,
+    gaplessPlayback: true,
+    errorBuilder: brokenIcon,
+  );
 }
 
 Color? _parseColor(String? raw, {required Color fallback}) {

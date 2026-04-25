@@ -881,7 +881,7 @@ class MapExtension extends SessionExtension
     String? label,
     String? color,
     String? icon,
-    bool dropAnimation = true,
+    bool dropAnimation = false,
     bool pulse = false,
     double? focusZoom,
   }) async {
