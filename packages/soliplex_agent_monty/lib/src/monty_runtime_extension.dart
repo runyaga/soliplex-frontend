@@ -49,13 +49,27 @@ class MontyRuntimeExtension extends SessionExtension
         ClientTool.simple(
           name: 'run_python_on_device',
           description: "Runs Python on the user's device inside an embedded "
-              'dart_monty interpreter. Use for quick computations on '
-              'values already in the conversation, small transformations '
-              'of text the user pasted, or logic the user explicitly '
-              'asked to run locally (privacy, offline, no upload). No '
-              'filesystem, no network, no subprocesses — pure '
-              'in-process Python. Return values and print() output are '
-              'both captured.',
+              'dart_monty interpreter. Use for quick computations, small '
+              'transformations, or logic the user asked to run locally '
+              '(privacy, offline, no upload). Return values and print() '
+              'output are both captured.\n\n'
+              'Available externals depend on the host build. The '
+              'standard set includes (call WITHOUT a `monty.` prefix):\n'
+              '  http_get(url, headers?) -> str  (response body)\n'
+              '  http_get_json(url, headers?) -> Any  (parsed JSON)\n'
+              '  map_fly_to(lat, lng, zoom?, rotation?, animated?, '
+              'duration_ms?)\n'
+              '  map_add_marker(lat, lng, label?, color?, icon?, '
+              'pulse?) -> str\n'
+              '  map_clear_markers()\n'
+              '  map_set_basemap(style)\n'
+              '  map_get_view() -> {lat, lng, zoom, rotation}\n'
+              '  map_sleep_ms(ms)\n\n'
+              'No filesystem, no subprocess, no `import requests` / '
+              '`import time`. Use `http_get_json` for JSON APIs and '
+              '`map_sleep_ms` for delays. HTTP is browser-CORS-bound: '
+              'only public APIs that send permissive '
+              'Access-Control-Allow-Origin headers will succeed.',
           parameters: const {
             'type': 'object',
             'properties': {
