@@ -70,6 +70,13 @@ class AgentSession implements ToolExecutionContext {
   final SessionCoordinator _coordinator;
   final Logger _logger;
 
+  /// The runtime that owns this session.
+  ///
+  /// Exposed so `SessionContext` (and any other consumer that already
+  /// has a session reference) can reach the runtime without an extra
+  /// parameter.
+  AgentRuntime get runtime => _runtime;
+
   static const _toolTimeout = Duration(seconds: 60);
 
   final List<AgentSession> _children = [];

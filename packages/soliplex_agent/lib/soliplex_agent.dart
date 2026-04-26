@@ -61,6 +61,7 @@ export 'src/runtime/agent_session_state.dart';
 export 'src/runtime/multi_server_runtime.dart';
 export 'src/runtime/server_connection.dart';
 export 'src/runtime/server_registry.dart';
+export 'src/runtime/session_context.dart';
 export 'src/runtime/session_coordinator.dart';
 export 'src/runtime/session_extension.dart';
 export 'src/runtime/stateful_session_extension.dart';

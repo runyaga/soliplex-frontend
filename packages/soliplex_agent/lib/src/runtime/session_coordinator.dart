@@ -1,5 +1,6 @@
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_agent/src/runtime/agent_session.dart';
+import 'package:soliplex_agent/src/runtime/session_context.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/runtime/stateful_session_extension.dart';
 import 'package:soliplex_agent/src/tools/tool_registry.dart';
@@ -31,12 +32,21 @@ class SessionCoordinator {
   List<ClientTool> get tools => _extensions.expand((e) => e.tools).toList();
 
   /// Attaches all extensions to [session] in descending priority order.
+  ///
+  /// Constructs a [SessionContext] once per session and passes it to
+  /// each extension via [SessionExtension.onAttachWithContext]. The
+  /// default implementation of `onAttachWithContext` forwards to
+  /// `onAttach(ctx.session)`, so existing extensions still see the
+  /// session-only signature; new extensions can override
+  /// `onAttachWithContext` to access the runtime (and, after step 3,
+  /// the per-thread bus).
   Future<void> attachAll(AgentSession session) async {
     final ordered = List.of(_extensions)
       ..sort((a, b) => b.priority.compareTo(a.priority));
     _attachOrder = ordered;
+    final ctx = SessionContext(session: session, runtime: session.runtime);
     for (final ext in ordered) {
-      await ext.onAttach(session);
+      await ext.onAttachWithContext(ctx);
     }
   }
 
