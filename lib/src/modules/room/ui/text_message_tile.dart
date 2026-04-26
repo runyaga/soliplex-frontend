@@ -64,6 +64,43 @@ WidgetSpec? _tryParseWidgetEnvelope(String text) {
   return WidgetSpec(id: id, name: name, data: data);
 }
 
+/// Detects an assistant message whose entire body is an AG-UI
+/// wire-format event echo (`{"type": "STATE_DELTA", "delta": ...}`,
+/// `{"type": "STATE_SNAPSHOT", ...}`, etc.).
+///
+/// These show up when the server-side tool prints / returns the
+/// raw SSE event payload in addition to emitting it on the wire.
+/// The actual event has already been applied to `aguiState` by
+/// `agui_event_processor` — the chat-side text echo is noise.
+///
+/// Returns true if [text] looks like one. Caller should suppress
+/// rendering.
+bool _looksLikeAguiEventEcho(String text) {
+  var s = text.trim();
+  if (s.isEmpty) return false;
+  if (s.startsWith('```')) {
+    final firstNewline = s.indexOf('\n');
+    if (firstNewline > 0) s = s.substring(firstNewline + 1);
+    if (s.endsWith('```')) s = s.substring(0, s.length - 3);
+    s = s.trim();
+  }
+  if (!s.startsWith('{')) return false;
+  Object? decoded;
+  try {
+    decoded = jsonDecode(s);
+  } on FormatException {
+    return false;
+  }
+  if (decoded is! Map<String, dynamic>) return false;
+  final type = decoded['type'];
+  if (type is! String) return false;
+  return type.startsWith('STATE_') ||
+      type.startsWith('ACTIVITY_') ||
+      type == 'TOOL_CALL_RESULT' ||
+      type == 'RUN_FINISHED' ||
+      type == 'RUN_STARTED';
+}
+
 class TextMessageTile extends StatelessWidget {
   const TextMessageTile({
     super.key,
@@ -98,6 +135,12 @@ class TextMessageTile extends StatelessWidget {
     // render via the catalog. See _tryParseWidgetEnvelope docs.
     final widgetEnvelope =
         isUser ? null : _tryParseWidgetEnvelope(message.text);
+    final isAguiEventEcho = !isUser && _looksLikeAguiEventEcho(message.text);
+    if (isAguiEventEcho) {
+      // Suppress the entire tile — the event already drove the
+      // panel via agui_event_processor.
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
