@@ -205,7 +205,7 @@ class MapMontyExtension extends MontyExtension {
                 'Tapping the pin spawns the image overlay at '
                 '(lat + lat_offset, lng + lng_offset); a second tap '
                 'on the same pin dismisses it. Tapping a different '
-                'pin swaps to that pin\'s image. Use after a tour '
+                "pin swaps to that pin's image. Use after a tour "
                 'cleanup so the operator can recall any waypoint '
                 'photo on demand.',
             params: const [

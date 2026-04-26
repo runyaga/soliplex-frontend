@@ -264,8 +264,8 @@ class MapView extends StatelessWidget {
   }
 }
 
-/// Renders a single HUD overlay — image (when [data.url] is set), a
-/// live-ticking elapsed-time clock (when [data.tick] is true), or a
+/// Renders a single HUD overlay — image (when `data.url` is set), a
+/// live-ticking elapsed-time clock (when `data.tick` is true), or a
 /// styled static text label. Image overlays size themselves; text
 /// overlays use a translucent dark background and a stencilled
 /// monospace font so they read like operator-console furniture.
@@ -309,7 +309,7 @@ class _StaticTextHud extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
-        border: Border.all(color: fg.withValues(alpha: 0.6), width: 1),
+        border: Border.all(color: fg.withValues(alpha: 0.6)),
       ),
       child: Text(
         text,

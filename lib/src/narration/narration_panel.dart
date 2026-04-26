@@ -56,7 +56,8 @@ class _NarrationPanelState extends State<NarrationPanel> {
             ? const _Empty()
             : ListView.builder(
                 controller: _scroll,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 itemCount: entries.length,
                 itemBuilder: (_, i) => _Line(entry: entries[i]),
               ),

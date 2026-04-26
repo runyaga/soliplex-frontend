@@ -44,13 +44,25 @@ enum NarrationActor {
     final n =
         raw.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
     return switch (n) {
-      'coordinator' || 'coord' || 'hq' || 'base' || 'control' || 'dispatch' =>
+      'coordinator' ||
+      'coord' ||
+      'hq' ||
+      'base' ||
+      'control' ||
+      'dispatch' =>
         NarrationActor.coordinator,
-      'primary' || 'lead' || 'main' || 'one' || '1' =>
-        NarrationActor.primary,
-      'secondary' || 'support' || 'wing' || 'two' || '2' =>
+      'primary' || 'lead' || 'main' || 'one' || '1' => NarrationActor.primary,
+      'secondary' ||
+      'support' ||
+      'wing' ||
+      'two' ||
+      '2' =>
         NarrationActor.secondary,
-      'field' || 'ground' || 'site' || 'reporter' || 'local' =>
+      'field' ||
+      'ground' ||
+      'site' ||
+      'reporter' ||
+      'local' =>
         NarrationActor.field,
       _ => NarrationActor.primary,
     };

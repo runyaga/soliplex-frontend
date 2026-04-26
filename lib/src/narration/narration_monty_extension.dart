@@ -26,8 +26,7 @@ class NarrationMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'narrate_say',
-            description:
-                'Emit a narration line to the on-screen log. Pass '
+            description: 'Emit a narration line to the on-screen log. Pass '
                 '`actor` to attribute the line to one of the four '
                 'rendering buckets: "coordinator" | "primary" | '
                 '"secondary" | "field". Aliases (hq, dispatch, lead, '
@@ -55,8 +54,7 @@ class NarrationMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'narrate_clear',
-            description:
-                'Clear the narration log. Call at the start of a '
+            description: 'Clear the narration log. Call at the start of a '
                 'script so each run begins on a clean board.',
             params: const [],
           ),

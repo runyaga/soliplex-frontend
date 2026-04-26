@@ -260,9 +260,10 @@ enum HudAnchor { topLeft, topRight, bottomLeft, bottomRight, center }
 
 /// A screen-space overlay on top of the map.
 ///
-/// Either an image (via [url]) or a styled text label (via [text]).
-/// Text overlays render with a translucent dark background and a
-/// monospace stencil-ish look; pass [color] / [background] to override.
+/// Either an image (via the `url` field) or a styled text label (via
+/// the `text` field). Text overlays render with a translucent dark
+/// background and a monospace stencil-ish look; pass `colorHex` /
+/// `backgroundHex` to override.
 @immutable
 class HudOverlayData {
   HudOverlayData({

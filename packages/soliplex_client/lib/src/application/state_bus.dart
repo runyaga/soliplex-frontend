@@ -32,8 +32,7 @@ class StateBus {
   ///
   /// Identity changes on every replacement so listeners always fire,
   /// even when delta application produces structurally-equal maps.
-  ReadonlySignal<Map<String, dynamic>> get agentState =>
-      _agentState.readonly();
+  ReadonlySignal<Map<String, dynamic>> get agentState => _agentState.readonly();
 
   /// Replace the entire agent-state map. Call when an AG-UI
   /// `StateSnapshotEvent` arrives.

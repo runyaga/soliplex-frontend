@@ -105,7 +105,12 @@ class MapExtension extends SessionExtension
   final Signal<List<HudOverlayData>> _huds;
   final Signal<Viewport> _viewport;
 
-  StreamSubscription<MapEvent>? _mapEventSub;
+  // Held only to keep the listener registration alive for the
+  // lifetime of the singleton. We never cancel — the stream's
+  // listener stays registered as long as the controller exists, and
+  // the controller is process-lifetime in the maps_singleton path.
+  // ignore: unused_field, cancel_subscriptions
+  late final StreamSubscription<MapEvent> _mapEventSub;
   DateTime _lastGeocodeAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Controller backing the `MapView` widget.
@@ -131,10 +136,10 @@ class MapExtension extends SessionExtension
 
   @override
   Future<void> onAttach(AgentSession session) async {
-    // No-op — the event subscription is owned by the constructor so it
-    // works for non-session callers too (NIGHTFALL button, terminal
-    // panel pre-session). Kept as an override so the SessionExtension
-    // contract is honoured.
+    // No-op — the event subscription is owned by the constructor so
+    // it works for non-session callers too (one-shot script
+    // runners, terminal panels, sidecars). Kept as an override so
+    // the SessionExtension contract is honoured.
   }
 
   @override
