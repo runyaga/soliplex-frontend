@@ -9,11 +9,11 @@
 /// [WidgetCatalog.extending].
 ///
 /// **Narration** — an app-singleton [NarrationController] plus the
-/// [NarrationPanel] widget. The LLM writes via the `narrate_say`
-/// `ClientTool` declared on `NarrationPlugin`. Python access (the
-/// existing `NarrationMontyExtension`) lives in the app shell rather
-/// than here so this package stays `dart_monty`-free; Phase 2 of the
-/// reactive-bus redesign retires it.
+/// [NarrationPanel] widget. Both the LLM tool (`narrate_say`) and the
+/// Python host functions (`narrate_say`, `narrate_clear`) are declared
+/// on `NarrationPlugin`. The bridge in `soliplex_agent_monty` (Phase 2
+/// step 9) synthesizes a `MontyExtension` from the host functions
+/// automatically — this package stays `dart_monty`-free.
 library;
 
 export 'src/narration.dart';

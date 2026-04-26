@@ -4,20 +4,23 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 
 import 'narration.dart';
 
-/// A [SessionExtension] that declares the `narrate_say` LLM tool.
+/// A [SessionExtension] that exposes narration writes on two surfaces:
 ///
-/// The executor writes a narration entry into the per-thread bus at
-/// `agentState['ui']['narrations']`. The existing
-/// `NarrationProjection` (in `narration_controller.dart`) reads from
-/// the same path, so the entry flows from bus delta → projection →
-/// `NarrationController._entries` → `NarrationPanel` automatically.
+/// - **LLM tool** (`narrate_say`) declared in [tools].
+/// - **Python host functions** (`narrate_say`, `narrate_clear`)
+///   declared in [hostFunctions]. The bridge in `soliplex_agent_monty`
+///   (Phase 2 step 9) synthesizes a [`MontyExtension`] for these
+///   automatically — this plugin does not import `dart_monty`.
 ///
-/// Phase 1 step 4b — first plugin converted to the bus-write pattern.
-/// `NarrationMontyExtension` (the Python bridge) is carried forward
-/// unchanged and still calls `narrationController.add(...)`
-/// imperatively; Phase 2 retires it.
+/// Both surfaces share the same private helpers
+/// [_appendNarration] and [_clearNarrations], so the LLM-driven path
+/// and the Python-driven path mutate the bus identically. The existing
+/// `NarrationProjection` (in `narration_controller.dart`) reads
+/// `/ui/narrations`, so each entry flows: bus delta → projection →
+/// `NarrationController._entries` → `NarrationPanel`.
 ///
-/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1 step 4).
+/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1
+/// step 4 + Phase 2 step 10).
 class NarrationPlugin extends SessionExtension {
   NarrationPlugin();
 
@@ -66,6 +69,50 @@ class NarrationPlugin extends SessionExtension {
         ),
       ];
 
+  @override
+  List<HostFunction> get hostFunctions => [
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'narrate_say',
+            description: 'Emit a narration line to the on-screen log. Pass '
+                '`actor` to attribute the line to one of the four '
+                'rendering buckets: "coordinator" | "primary" | '
+                '"secondary" | "field". Aliases (hq, dispatch, lead, '
+                'support, ground, site, reporter, …) accepted; see '
+                'NarrationActor.parse. Defaults to "primary". '
+                'Returns "ok" on success.',
+            params: [
+              HostParam(name: 'text', type: HostParamType.string),
+              HostParam(
+                name: 'actor',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final text = (args['text'] as String?)?.trim() ?? '';
+            if (text.isEmpty) return 'narrate_say: empty text';
+            final actor =
+                NarrationActor.parse(args['actor'] as String?).name;
+            _appendNarration(ctx, actor: actor, text: text);
+            return 'ok';
+          },
+        ),
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'narrate_clear',
+            description: 'Clear the narration log. Call at the start of a '
+                'script so each run begins on a clean board.',
+            params: [],
+          ),
+          handler: (args, ctx) async {
+            _clearNarrations(ctx);
+            return true;
+          },
+        ),
+      ];
+
   Future<String> _executeNarrateSay(
     ToolCallInfo toolCall,
     ToolExecutionContext _,
@@ -78,6 +125,15 @@ class NarrationPlugin extends SessionExtension {
     final text = args['text']?.toString() ?? '';
     if (text.isEmpty) return 'narrate_say: empty text';
     final actor = NarrationActor.parse(args['actor']?.toString()).name;
+    _appendNarration(ctx, actor: actor, text: text);
+    return 'ok';
+  }
+
+  void _appendNarration(
+    SessionContext ctx, {
+    required String actor,
+    required String text,
+  }) {
     ctx.bus.update((current) {
       final next = Map<String, dynamic>.from(current);
       final ui = Map<String, dynamic>.from(
@@ -92,6 +148,17 @@ class NarrationPlugin extends SessionExtension {
       next['ui'] = ui;
       return next;
     });
-    return 'ok';
+  }
+
+  void _clearNarrations(SessionContext ctx) {
+    ctx.bus.update((current) {
+      final next = Map<String, dynamic>.from(current);
+      final ui = Map<String, dynamic>.from(
+        (next['ui'] as Map?)?.cast<String, dynamic>() ?? const {},
+      );
+      ui['narrations'] = const <Map<String, dynamic>>[];
+      next['ui'] = ui;
+      return next;
+    });
   }
 }

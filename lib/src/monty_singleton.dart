@@ -23,17 +23,18 @@ import 'package:soliplex_agent_maps/soliplex_agent_maps.dart'
     show MapMontyExtension;
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart'
     show MontyExtensionSet;
-import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart'
-    show narrationController;
 
 import 'http_monty_extension.dart';
 import 'maps_singleton.dart';
-import 'narration_monty_extension.dart';
 
 /// Constructs a fresh [MontyExtensionSet] for a single [MontyRuntime].
+///
+/// Narration host functions are no longer registered here — `NarrationPlugin`
+/// declares them via `hostFunctions` and the bridge in
+/// `soliplex_agent_monty` (Phase 2 step 9) synthesizes the corresponding
+/// `MontyExtension` automatically at session attach.
 MontyExtensionSet makeMontyExtensionSet() => MontyExtensionSet([
       ...MontyExtensionSet.standard().all,
       MapMontyExtension(mapExtension),
-      NarrationMontyExtension(narrationController),
       HttpMontyExtension(),
     ]);
