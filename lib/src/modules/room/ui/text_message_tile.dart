@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 
+import '../../../widget_tree/widget_catalog.dart';
+import '../../../widget_tree/widget_spec.dart';
 import '../execution_tracker.dart';
 import '../room_providers.dart';
 import 'citations_section.dart';
@@ -11,6 +15,54 @@ import 'execution/thinking_block.dart';
 import 'copy_button.dart';
 import 'feedback_buttons.dart';
 import 'markdown/flutter_markdown_plus_renderer.dart';
+
+/// Detects an assistant message whose entire body is a single
+/// `{widget_name, data}` JSON envelope (the shape the LLM emits when
+/// the genui room asks for a widget render but the `genui_render`
+/// tool isn't registered server-side and the LLM falls back to text).
+///
+/// Returns the parsed [WidgetSpec] if recognised, or null. Tolerant
+/// of leading/trailing whitespace and a single set of code-fence
+/// backticks. Strict on shape — exactly two top-level keys
+/// (`widget_name` string, `data` object) so plain text replies that
+/// happen to mention JSON aren't false positives.
+///
+/// **This is a workaround for a server-side gap.** Once the genui
+/// room registers `genui_render` as a Python tool that mutates
+/// `agui_state['ui']['widgets']`, widgets render through the proper
+/// `WidgetTreeProjection` path and this detector becomes redundant
+/// (it'll still match harmless edge cases but the canonical path
+/// runs first).
+WidgetSpec? _tryParseWidgetEnvelope(String text) {
+  var s = text.trim();
+  if (s.isEmpty) return null;
+  // Strip a single ```...``` fence (any language tag) if present.
+  if (s.startsWith('```')) {
+    final firstNewline = s.indexOf('\n');
+    if (firstNewline > 0) s = s.substring(firstNewline + 1);
+    if (s.endsWith('```')) s = s.substring(0, s.length - 3);
+    s = s.trim();
+  }
+  if (!s.startsWith('{')) return null;
+  Object? decoded;
+  try {
+    decoded = jsonDecode(s);
+  } on FormatException {
+    return null;
+  }
+  if (decoded is! Map<String, dynamic>) return null;
+  final name = decoded['widget_name'];
+  final data = decoded['data'];
+  if (name is! String || data is! Map<String, dynamic>) return null;
+  // Must be just these two keys (plus optional id) — keep the
+  // detector strict to avoid false positives.
+  final allowed = {'widget_name', 'data', 'id'};
+  if (decoded.keys.any((k) => !allowed.contains(k))) return null;
+  final id = decoded['id'] is String
+      ? decoded['id']! as String
+      : 'envelope-${name.hashCode}-${data.length}';
+  return WidgetSpec(id: id, name: name, data: data);
+}
 
 class TextMessageTile extends StatelessWidget {
   const TextMessageTile({
@@ -42,6 +94,10 @@ class TextMessageTile extends StatelessWidget {
     final isUser = message.user == ChatUser.user;
     final showFeedback = !isUser && onFeedbackSubmit != null;
     final hasTracker = executionTracker != null;
+    // Workaround: detect "LLM fell back to plain widget JSON" and
+    // render via the catalog. See _tryParseWidgetEnvelope docs.
+    final widgetEnvelope =
+        isUser ? null : _tryParseWidgetEnvelope(message.text);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,9 +144,11 @@ class TextMessageTile extends StatelessWidget {
                     color: theme.colorScheme.onPrimaryContainer,
                   ),
                 )
-              : message.text.isEmpty
-                  ? const Text('...')
-                  : FlutterMarkdownPlusRenderer(data: message.text),
+              : widgetEnvelope != null
+                  ? WidgetCatalog.standard().build(widgetEnvelope)
+                  : message.text.isEmpty
+                      ? const Text('...')
+                      : FlutterMarkdownPlusRenderer(data: message.text),
         ),
         const SizedBox(height: 4),
         Row(
