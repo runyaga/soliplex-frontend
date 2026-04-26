@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:meta/meta.dart';
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_client/src/domain/surface.dart';
@@ -25,6 +27,8 @@ class StateBus {
       : _agentState = signal(_freeze(initialAgentState));
 
   final Signal<Map<String, dynamic>> _agentState;
+  final StreamController<SurfaceEvent> _events =
+      StreamController<SurfaceEvent>.broadcast();
 
   bool _disposed = false;
 
@@ -33,6 +37,26 @@ class StateBus {
   /// Identity changes on every replacement so listeners always fire,
   /// even when delta application produces structurally-equal maps.
   ReadonlySignal<Map<String, dynamic>> get agentState => _agentState.readonly();
+
+  /// Write-back channel for surface-originated events (P6 spike).
+  ///
+  /// Subscribed by the thread host (typically `ThreadViewState`)
+  /// which forwards each event toward the agent — e.g. as a
+  /// synthetic user message, a structured tool-call argument, or
+  /// (when AG-UI grows a dedicated client→server event type) an
+  /// explicit `SurfaceEvent` frame.
+  ///
+  /// Surfaces emit via [Surface.emit] which calls [emit]; this
+  /// stream is the host-side receive end.
+  Stream<SurfaceEvent> get events => _events.stream;
+
+  /// Push a [SurfaceEvent] toward the agent. Surfaces call this
+  /// (or override [Surface.emit] which does) when the user
+  /// interacts with the rendered output.
+  void emit(SurfaceEvent event) {
+    if (_disposed) return;
+    _events.add(event);
+  }
 
   /// Replace the entire agent-state map. Call when an AG-UI
   /// `StateSnapshotEvent` arrives.
@@ -65,11 +89,13 @@ class StateBus {
   }
 
   /// Tear down. Idempotent. Disposes the underlying signal so any
-  /// derived projections produced via [project] also stop firing.
+  /// derived projections produced via [project] also stop firing,
+  /// and closes the [events] stream so subscribers complete.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
     _agentState.dispose();
+    unawaited(_events.close());
   }
 
   /// True after [dispose] has run. Visible for tests so they can

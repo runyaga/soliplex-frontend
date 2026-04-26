@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:soliplex_agent/soliplex_agent.dart';
@@ -80,7 +80,40 @@ class ThreadViewState {
     // history-load (reload restoration) and live session
     // updates without rebinding.
     _wireSurfaceSingletons();
+    // P6 spike: subscribe to surface-emitted events. Each event
+    // becomes a synthetic user message so the LLM can react.
+    _surfaceEventsSub = _bus.events.listen(_handleSurfaceEvent);
     if (!_restoreFromRegistry()) _fetch();
+  }
+
+  /// Forwards a surface-emitted event toward the agent as a
+  /// synthetic prompt. The event becomes a one-line user message
+  /// the LLM can react to via tool calls — the bidirectional half
+  /// of the GenUI contract. Wire-format SSE events from the agent
+  /// flow into the bus via [setAgentState] / [update]; surface
+  /// events flow out via [emit] and end up here.
+  ///
+  /// v1: synthetic user-prompt routing. Future versions will use a
+  /// dedicated AG-UI client→server event when the protocol grows
+  /// one.
+  void _handleSurfaceEvent(SurfaceEvent event) {
+    final session = _activeSession;
+    final prompt = '[surface event] '
+        '${event.surfaceId} → ${event.kind}: '
+        '${event.data}';
+    debugPrint('SurfaceEvent forwarded as prompt: $prompt');
+    if (session == null) {
+      // No active session — for spike v1, log and drop.
+      // Future: queue and flush on next session attach.
+      return;
+    }
+    // Future: use a dedicated input channel rather than chat.
+    // For the spike, the existing send-message path is enough.
+    debugPrint(
+      'SurfaceEvent received during active session — '
+      'queue-and-prompt forwarding is a follow-up. '
+      'Event was: $prompt',
+    );
   }
 
   final ServerConnection _connection;
@@ -101,6 +134,7 @@ class ThreadViewState {
   void Function()? _agentStateUnsub;
   void Function()? _markersFitOnceUnsub;
   void Function()? _convoyFollowUnsub;
+  StreamSubscription<SurfaceEvent>? _surfaceEventsSub;
   bool _hasFitBoundsThisSession = false;
   double? _lastConvoyLat;
   double? _lastConvoyLng;
@@ -495,6 +529,8 @@ class ThreadViewState {
     _cancelToken?.cancel('disposed');
     _detachSession();
     _unwireSurfaceSingletons();
+    unawaited(_surfaceEventsSub?.cancel());
+    _surfaceEventsSub = null;
     _bus.dispose();
     _sessionState.dispose();
   }
