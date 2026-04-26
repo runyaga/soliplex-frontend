@@ -5,6 +5,9 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
 
+import '../../widget_tree/widget_spec.dart';
+import '../../widget_tree/widget_tree_projection.dart';
+
 import 'execution_tracker.dart';
 import 'execution_tracker_extension.dart';
 import 'historical_replay.dart';
@@ -101,6 +104,17 @@ class ThreadViewState {
   /// application/state_bus.dart`.
   StateBus _bus = StateBus();
   StateBus get bus => _bus;
+
+  /// Projected widget tree from the bus — driven by
+  /// `agentState['ui']['widgets']`. Widgets render via
+  /// [WidgetTreePanel]; empty list = panel collapses.
+  ///
+  /// The signal is recomputed on every bus replacement (every
+  /// session attach), so the room view rebinds to the live
+  /// projection automatically.
+  late ReadonlySignal<List<WidgetSpec>> _widgetsSignal =
+      _bus.project<List<WidgetSpec>>(const WidgetTreeProjection());
+  ReadonlySignal<List<WidgetSpec>> get widgets => _widgetsSignal;
 
   final SessionSpawner _spawner = SessionSpawner();
 
@@ -237,6 +251,9 @@ class ThreadViewState {
     // Pipe the session's agentState signal into the bus. Projections
     // registered on the bus auto-update on every emission.
     _bus = StateBus(initialAgentState: session.agentState.value);
+    _widgetsSignal = _bus.project<List<WidgetSpec>>(
+      const WidgetTreeProjection(),
+    );
     _agentStateUnsub = session.agentState.subscribe(_bus.setAgentState);
   }
 
@@ -303,6 +320,9 @@ class ThreadViewState {
     // firing; a fresh bus is created on next attach.
     _bus.dispose();
     _bus = StateBus();
+    _widgetsSignal = _bus.project<List<WidgetSpec>>(
+      const WidgetTreeProjection(),
+    );
   }
 
   bool _restoreFromRegistry() {

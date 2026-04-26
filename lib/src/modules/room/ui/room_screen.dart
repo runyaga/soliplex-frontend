@@ -42,6 +42,8 @@ import '../../../narration/narration.dart';
 import '../../../narration/narration_controller.dart';
 import '../../../narration/narration_panel.dart';
 import '../../../narration_singleton.dart';
+import '../../../widget_tree/widget_catalog.dart';
+import '../../../widget_tree/widget_tree_panel.dart';
 import 'package:soliplex_client/soliplex_client.dart' show StateBus;
 import 'message_timeline.dart';
 import 'terminal_panel.dart';
@@ -115,6 +117,12 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _filesExpanded = false;
   bool _mapDrawerOpen = false;
   bool _aidDemoRunning = false;
+
+  /// Catalog used to render agent-emitted widgets via
+  /// `agentState['ui']['widgets']`. Built-ins ship in
+  /// `widget_catalog.dart`; this is where app-specific widgets
+  /// would be layered via `.extending(...)`.
+  final WidgetCatalog _widgetCatalog = WidgetCatalog.standard();
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -1052,6 +1060,18 @@ class _RoomScreenState extends State<RoomScreen> {
                         : const SizedBox(width: double.infinity, height: 0),
                   );
                 },
+              ),
+            ),
+            // GenUI widget tree — driven by agent-emitted state under
+            // `ui.widgets`. Renders nothing when the projection is
+            // empty, so the slot collapses for non-genui rooms.
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: SingleChildScrollView(
+                child: WidgetTreePanel(
+                  specs: threadView.widgets,
+                  catalog: _widgetCatalog,
+                ),
               ),
             ),
             Row(

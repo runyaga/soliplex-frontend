@@ -117,9 +117,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
     }
     if (minIndent == null || minIndent == 0) return src;
     final n = minIndent;
-    return lines
-        .map((l) => l.length >= n ? l.substring(n) : l)
-        .join('\n');
+    return lines.map((l) => l.length >= n ? l.substring(n) : l).join('\n');
   }
 
   void _scrollToBottom() {
@@ -147,9 +145,7 @@ class _TerminalPanelState extends State<TerminalPanel> {
           children: [
             _Header(
               onClose: () => Navigator.of(context).pop(),
-              onClear: _history.isEmpty
-                  ? null
-                  : () => setState(_history.clear),
+              onClear: _history.isEmpty ? null : () => setState(_history.clear),
             ),
             Expanded(
               child: ColoredBox(
