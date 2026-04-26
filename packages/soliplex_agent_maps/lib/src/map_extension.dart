@@ -1094,6 +1094,28 @@ class MapExtension extends SessionExtension
   void Function()? _hudsProjectionUnsub;
   void Function()? _polylinesProjectionUnsub;
 
+  /// Image ids whose tweening is owned by an external follower
+  /// (typically `ThreadViewState`'s camera-follow loop using
+  /// [flyWithImage]). The projection diff-apply snaps these ids
+  /// instead of running its own [moveImage], so the two paths
+  /// don't race / cancel each other.
+  ///
+  /// Add via [registerExternalSpriteFollower]; remove via
+  /// [unregisterExternalSpriteFollower].
+  final Set<String> _externallyFollowedSpriteIds = <String>{};
+
+  /// Tell the diff-apply to skip its tween for [id] because some
+  /// other code is animating both camera and sprite in lockstep.
+  /// Idempotent.
+  void registerExternalSpriteFollower(String id) {
+    _externallyFollowedSpriteIds.add(id);
+  }
+
+  /// Stop suppressing the diff-apply tween for [id]. Idempotent.
+  void unregisterExternalSpriteFollower(String id) {
+    _externallyFollowedSpriteIds.remove(id);
+  }
+
   /// Generic projection forwarder — forwards every emission of
   /// [projected] into [sink]. Returns the unsubscribe handle so
   /// the caller can store it and call again to detach.
@@ -1171,8 +1193,12 @@ class MapExtension extends SessionExtension
     }
 
     // Tween moves on existing sprites. moveImage's default
-    // durationMs (1500) is what we want.
+    // durationMs (1500) is what we want. Skip ids that an
+    // external follower (e.g. ThreadViewState's flyWithImage
+    // camera-follow) is animating in lockstep — racing the
+    // two tweens cancels them mid-way and produces jitter.
     for (final target in tweenTargets) {
+      if (_externallyFollowedSpriteIds.contains(target.id)) continue;
       unawaited(
         moveImage(
           id: target.id,

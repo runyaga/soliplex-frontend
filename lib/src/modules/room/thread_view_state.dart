@@ -349,8 +349,13 @@ class ThreadViewState {
     // convoy's id-1 sprite moves to a new position, fly the
     // camera with it for the cinematic arc — the sprite tween
     // and the camera arc finish in lockstep via flyWithImage.
+    // Tell MapExtension to suppress its own diff-apply tween
+    // for this id so the two paths don't race.
     _lastConvoyLat = null;
     _lastConvoyLng = null;
+    maps_singleton.mapExtension.registerExternalSpriteFollower(
+      'convoy-1',
+    );
     _convoyFollowUnsub = spritesSignal.subscribe((sprites) {
       final convoy = sprites.cast<ImageOverlayData?>().firstWhere(
             (s) => s?.id == 'convoy-1',
@@ -383,6 +388,7 @@ class ThreadViewState {
     _markersFitOnceUnsub = null;
     _convoyFollowUnsub?.call();
     _convoyFollowUnsub = null;
+    maps_singleton.mapExtension.unregisterExternalSpriteFollower('convoy-1');
     narrationController.unwireProjection();
     maps_singleton.mapExtension.unwireAllProjections();
   }
