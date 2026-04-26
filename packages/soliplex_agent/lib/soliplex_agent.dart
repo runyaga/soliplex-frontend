@@ -70,4 +70,5 @@ export 'src/runtime/tool_approval_extension.dart';
 // ── Scripting ──
 export 'src/scripting/script_environment.dart';
 // ── Tools ──
+export 'src/tools/tool_execution_context.dart';
 export 'src/tools/tool_registry.dart';

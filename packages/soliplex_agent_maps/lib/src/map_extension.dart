@@ -9,13 +9,6 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
-// ToolExecutionContext is not re-exported from soliplex_agent's public
-// barrel; reach into src/ for the type annotation, mirroring
-// MontyRuntimeExtension.
-// ignore: implementation_imports
-import 'package:soliplex_agent/src/tools/tool_execution_context.dart'
-    show ToolExecutionContext;
-
 import 'package:soliplex_agent_maps/src/map_state.dart';
 
 /// Result of parsing a tool call's arguments.

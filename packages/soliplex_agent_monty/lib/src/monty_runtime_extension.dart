@@ -5,10 +5,6 @@ import 'package:dart_monty/dart_monty.dart' show MontyRuntime;
 import 'package:dart_monty/dart_monty_bridge.dart' show ExtensionCoordinator;
 import 'package:soliplex_agent/soliplex_agent.dart';
 // ToolExecutionContext is not re-exported from soliplex_agent's public
-// barrel; reach into src/ for the type annotation.
-// ignore: implementation_imports
-import 'package:soliplex_agent/src/tools/tool_execution_context.dart'
-    show ToolExecutionContext;
 import 'package:soliplex_agent_monty/src/monty_extension_set.dart';
 
 /// Bridges a [MontyRuntime] into a soliplex [AgentSession].

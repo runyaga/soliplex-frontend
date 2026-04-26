@@ -19,6 +19,7 @@ library;
 export 'src/narration.dart';
 export 'src/narration_controller.dart';
 export 'src/narration_panel.dart';
+export 'src/narration_plugin.dart';
 export 'src/narration_singleton.dart';
 export 'src/widget_catalog.dart';
 export 'src/widget_spec.dart';
