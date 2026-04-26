@@ -347,6 +347,16 @@ class AgentSession implements ToolExecutionContext {
   void _onStateChange(RunState runState) {
     if (_disposed) return;
     _runStateSignal.value = runState;
+    // Phase 1 step 3c — forward the new agent state into the
+    // per-thread bus. AG-UI events were already applied to the
+    // conversation by `processEvent`; this propagates the result so
+    // bus consumers (projections, render targets) see it on every
+    // state-altering event without each consumer re-listening to
+    // the orchestrator.
+    final next = _aguiStateOf(runState);
+    if (next != null) {
+      bus.setAgentState(next);
+    }
     switch (runState) {
       case RunningState():
         _state = AgentSessionState.running;

@@ -148,7 +148,10 @@ AgentSession createSession({
   // `SessionContext` plumbing introduced in step 3b. Tests that
   // pass their own real `runtime` are unaffected.
   if (effectiveRuntime is MockAgentRuntime) {
-    when(() => effectiveRuntime.ensureThreadState(any()))
+    registerFallbackValue(
+      const (serverId: 'fb', roomId: 'fb', threadId: 'fb'),
+    );
+    when(() => effectiveRuntime.ensureThreadState(any<ThreadKey>()))
         .thenReturn(ThreadState());
   }
   return AgentSession(
