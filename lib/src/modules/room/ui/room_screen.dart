@@ -947,6 +947,7 @@ class _RoomScreenState extends State<RoomScreen> {
     final streaming = threadView.streamingState.watch(context);
     final sendError = threadView.lastSendError.watch(context);
     final lastSurfaceEvent = threadView.lastSurfaceEvent.watch(context);
+    final threadSessionState = threadView.sessionState.watch(context);
     final attachEnabled = room?.enableAttachments ?? false;
 
     _restoreUnsentText(sendError?.unsentText);
@@ -1127,7 +1128,15 @@ class _RoomScreenState extends State<RoomScreen> {
                     onPressed: () => _openMontyTerminal(context),
                   ),
                 TextButton.icon(
-                  onPressed: _aidDemoRunning
+                  // Gate the demo on the absence of a live session.
+                  // The demo wires the singleton mapExtension /
+                  // narrationController to its OWN free-standing
+                  // bus; if a live session is also wired, the
+                  // demo's `unwireAllProjections()` in finally{}
+                  // would tear down the live session's wiring
+                  // permanently. Disable the button while a
+                  // session is active to prevent the stomp.
+                  onPressed: (_aidDemoRunning || threadSessionState != null)
                       ? null
                       : () => _runAidDistributionDemo(context),
                   icon: _aidDemoRunning

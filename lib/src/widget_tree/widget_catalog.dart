@@ -120,18 +120,48 @@ class _UnknownWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Loud banner instead of a quiet red label — silent failures
+    // were a sharp edge per the architecture review. The user
+    // should immediately see "the agent asked for a widget the
+    // catalog doesn't know about."
     return Container(
-      padding: const EdgeInsets.all(8),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        border: Border.all(color: theme.colorScheme.outlineVariant),
+        color: theme.colorScheme.errorContainer,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
-        'Unknown widget: $name',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.error,
-          fontFamily: 'monospace',
-        ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 18,
+            color: theme.colorScheme.onErrorContainer,
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text.rich(
+              TextSpan(
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+                children: [
+                  const TextSpan(
+                    text: 'Unknown widget ',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: name,
+                    style: const TextStyle(fontFamily: 'monospace'),
+                  ),
+                  const TextSpan(
+                    text: ' — not registered in WidgetCatalog',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

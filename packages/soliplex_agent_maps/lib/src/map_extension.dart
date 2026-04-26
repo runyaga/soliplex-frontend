@@ -1094,16 +1094,29 @@ class MapExtension extends SessionExtension
   void Function()? _hudsProjectionUnsub;
   void Function()? _polylinesProjectionUnsub;
 
+  /// Generic projection forwarder — forwards every emission of
+  /// [projected] into [sink]. Returns the unsubscribe handle so
+  /// the caller can store it and call again to detach.
+  ///
+  /// All non-image surface wires (markers, huds, polylines) use
+  /// this. Image wires use [wireImagesProjection] because they
+  /// need diff-apply tweening.
+  void Function()? _wireProjection<T>(
+    Signal<List<T>> sink,
+    ReadonlySignal<List<T>>? projected,
+  ) {
+    if (projected == null) return null;
+    sink.value = projected.value;
+    return projected.subscribe((v) {
+      sink.value = v;
+      _refreshState(lastEvent: 'projection');
+    });
+  }
+
   /// Wire a projected [MarkerData] list into the markers signal.
   void wireMarkersProjection(ReadonlySignal<List<MarkerData>>? projected) {
     _markersProjectionUnsub?.call();
-    _markersProjectionUnsub = null;
-    if (projected == null) return;
-    _markers.value = projected.value;
-    _markersProjectionUnsub = projected.subscribe((v) {
-      _markers.value = v;
-      _refreshState(lastEvent: 'projection');
-    });
+    _markersProjectionUnsub = _wireProjection(_markers, projected);
   }
 
   /// Wire a projected [ImageOverlayData] list (sprites) into the
@@ -1180,13 +1193,7 @@ class MapExtension extends SessionExtension
   /// 50ms tick is rendered on the Dart side regardless.
   void wireHudsProjection(ReadonlySignal<List<HudOverlayData>>? projected) {
     _hudsProjectionUnsub?.call();
-    _hudsProjectionUnsub = null;
-    if (projected == null) return;
-    _huds.value = projected.value;
-    _hudsProjectionUnsub = projected.subscribe((v) {
-      _huds.value = v;
-      _refreshState(lastEvent: 'projection');
-    });
+    _hudsProjectionUnsub = _wireProjection(_huds, projected);
   }
 
   /// Wire a projected [PolylineData] list into the polylines signal.
@@ -1194,13 +1201,7 @@ class MapExtension extends SessionExtension
     ReadonlySignal<List<PolylineData>>? projected,
   ) {
     _polylinesProjectionUnsub?.call();
-    _polylinesProjectionUnsub = null;
-    if (projected == null) return;
-    _polylines.value = projected.value;
-    _polylinesProjectionUnsub = projected.subscribe((v) {
-      _polylines.value = v;
-      _refreshState(lastEvent: 'projection');
-    });
+    _polylinesProjectionUnsub = _wireProjection(_polylines, projected);
   }
 
   /// Detach all wired projections; imperative writes resume.
