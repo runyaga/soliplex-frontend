@@ -5,9 +5,8 @@ import 'package:dart_monty/dart_monty_bridge.dart'
         HostParam,
         HostParamType,
         MontyExtension;
-
-import 'narration.dart';
-import 'narration_controller.dart';
+import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart'
+    show NarrationActor, NarrationController;
 
 /// Exposes Python externals for emitting narration log lines from
 /// scripts. Wraps the [NarrationController] singleton — a fresh

@@ -13,7 +13,6 @@ workspace:
   - packages/soliplex_agent
   - packages/soliplex_agent_maps
   - packages/soliplex_agent_monty
-  - packages/soliplex_agent_narration
   - packages/soliplex_agent_widgets
   - packages/soliplex_client
   - packages/soliplex_client_native
@@ -55,8 +54,6 @@ dependencies:
     path: packages/soliplex_agent_maps
   soliplex_agent_monty:
     path: packages/soliplex_agent_monty
-  soliplex_agent_narration:
-    path: packages/soliplex_agent_narration
   soliplex_agent_widgets:
     path: packages/soliplex_agent_widgets
   soliplex_client:

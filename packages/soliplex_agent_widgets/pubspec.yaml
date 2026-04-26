@@ -1,5 +1,5 @@
 name: soliplex_agent_widgets
-description: Generic widget-tree surface for soliplex_agent — catalog-driven rendering of agent-emitted widget specs (e.g. InfoCard, StatChip).
+description: Widget-tree and narration surfaces for soliplex_agent — catalog-driven rendering of agent-emitted widget specs (InfoCard, StatChip) plus the narration log surface (NarrationController, NarrationPanel). Pure Dart/Flutter; no dart_monty dependency. Python bridges (e.g. NarrationMontyExtension) live in the app shell until Phase 2 retires them.
 version: 0.1.0
 publish_to: none
 resolution: workspace
@@ -14,6 +14,8 @@ dependencies:
   meta: ^1.16.0
   signals_core: ^6.2.0
   signals_flutter: ^6.3.0
+  soliplex_agent:
+    path: ../soliplex_agent
   soliplex_client:
     path: ../soliplex_client
 

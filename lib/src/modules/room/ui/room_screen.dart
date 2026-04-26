@@ -36,7 +36,6 @@ import 'chat_input.dart';
 import 'chunk_visualization_page.dart';
 import 'document_picker.dart';
 import 'error_retry_panel.dart';
-import 'package:soliplex_agent_narration/soliplex_agent_narration.dart';
 import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart';
 
 import '../../../demo/aid_distribution_replay.dart';
