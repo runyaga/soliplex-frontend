@@ -65,6 +65,7 @@ export 'src/runtime/session_context.dart';
 export 'src/runtime/session_coordinator.dart';
 export 'src/runtime/session_extension.dart';
 export 'src/runtime/stateful_session_extension.dart';
+export 'src/runtime/thread_state.dart';
 export 'src/runtime/tool_approval_extension.dart';
 // ── Scripting ──
 export 'src/scripting/script_environment.dart';
