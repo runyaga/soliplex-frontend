@@ -2,18 +2,16 @@ import 'dart:convert';
 
 import 'package:soliplex_agent/soliplex_agent.dart';
 
-/// A [SessionExtension] that declares LLM tools writing the per-thread
-/// bus at `agentState['ui']['map']`.
+/// A [SessionExtension] exposing bus-write map operations on two
+/// surfaces: LLM `tools` and Python `hostFunctions`.
 ///
-/// Phase 1 step 5 — first map operations converted to the bus-write
-/// pattern. The existing `MapExtension` singleton (and its imperative
-/// tool surface like `add_marker`) is carried forward; both
-/// `MapMontyExtension` (Python bridge) and the legacy LLM tools on
-/// `MapExtension` keep working unchanged. Phase 2 retires them in
-/// favor of the bus-write path established here.
+/// All three operations — `set_site`, `clear_sites`, `move_convoy_to` —
+/// are declared on both surfaces and delegate to the same private
+/// helpers, so the LLM-driven path and the Python-driven path mutate
+/// the bus identically.
 ///
-/// The bus paths used by [MapPlugin] are the same the existing
-/// projections in `map_projections.dart` already read:
+/// The bus paths used here are the same the existing projections in
+/// `map_projections.dart` already read:
 ///
 /// - `set_site` / `clear_sites` → `/ui/map/sites` (read by
 ///   `MapMarkersProjection`)
@@ -23,7 +21,16 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 /// So bus-write tools feed the same render pipeline AG-UI server
 /// state events feed today, with no projection changes required.
 ///
-/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1 step 5).
+/// The bridge in `soliplex_agent_monty` (Phase 2 step 9) synthesizes
+/// a `MontyExtension` from [hostFunctions] automatically — this
+/// package stays `dart_monty`-free.
+///
+/// `MapMontyExtension` (the legacy singleton-driving Python bridge for
+/// `map_fly_to` / `map_add_marker` / etc.) is unchanged and still
+/// registered separately. Phase 2 cleanup retires it.
+///
+/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1 step 5
+/// + Phase 2 step 10).
 class MapPlugin extends SessionExtension {
   MapPlugin();
 
@@ -100,6 +107,84 @@ class MapPlugin extends SessionExtension {
         ),
       ];
 
+  @override
+  List<HostFunction> get hostFunctions => [
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'set_site',
+            description: 'Add or update a site marker on the map. '
+                'Status flips colors: "served" → green, anything else '
+                '→ orange. Returns the site id on success.',
+            params: [
+              HostParam(name: 'id', type: HostParamType.string),
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'name',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'status',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final id = args['id']! as String;
+            final lat = (args['lat']! as num).toDouble();
+            final lng = (args['lng']! as num).toDouble();
+            _setSite(
+              ctx,
+              id: id,
+              lat: lat,
+              lng: lng,
+              name: args['name'] as String?,
+              status: args['status'] as String?,
+            );
+            return id;
+          },
+        ),
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'clear_sites',
+            description: 'Remove every site from the map.',
+          ),
+          handler: (args, ctx) async {
+            _clearSites(ctx);
+            return true;
+          },
+        ),
+        HostFunction(
+          schema: const HostFunctionSchema(
+            name: 'move_convoy_to',
+            description: 'Move the convoy sprite to a lat/lng. The '
+                'sprite tween picks up the new position from the bus.',
+            params: [
+              HostParam(name: 'lat', type: HostParamType.number),
+              HostParam(name: 'lng', type: HostParamType.number),
+              HostParam(
+                name: 'heading',
+                type: HostParamType.number,
+                isRequired: false,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            _moveConvoyTo(
+              ctx,
+              lat: (args['lat']! as num).toDouble(),
+              lng: (args['lng']! as num).toDouble(),
+              heading: args['heading'] is num
+                  ? (args['heading']! as num).toDouble()
+                  : null,
+            );
+            return true;
+          },
+        ),
+      ];
+
   Future<String> _executeSetSite(
     ToolCallInfo toolCall,
     ToolExecutionContext _,
@@ -116,12 +201,65 @@ class MapPlugin extends SessionExtension {
     if (lat is! num || lng is! num) {
       return 'set_site: "lat" and "lng" are required numbers';
     }
+    final rawName = args['name'];
+    final rawStatus = args['status'];
+    _setSite(
+      ctx,
+      id: id,
+      lat: lat.toDouble(),
+      lng: lng.toDouble(),
+      name: rawName is String ? rawName : null,
+      status: rawStatus is String ? rawStatus : null,
+    );
+    return jsonEncode({'ok': true, 'id': id});
+  }
+
+  Future<String> _executeClearSites(
+    ToolCallInfo toolCall,
+    ToolExecutionContext _,
+  ) async {
+    final ctx = _ctx;
+    if (ctx == null) return 'clear_sites: plugin not attached';
+    _clearSites(ctx);
+    return jsonEncode({'ok': true});
+  }
+
+  Future<String> _executeMoveConvoyTo(
+    ToolCallInfo toolCall,
+    ToolExecutionContext _,
+  ) async {
+    final ctx = _ctx;
+    if (ctx == null) return 'move_convoy_to: plugin not attached';
+    final args = _decodeArgs(toolCall);
+    final lat = args['lat'];
+    final lng = args['lng'];
+    if (lat is! num || lng is! num) {
+      return 'move_convoy_to: "lat" and "lng" are required numbers';
+    }
+    final heading = args['heading'];
+    _moveConvoyTo(
+      ctx,
+      lat: lat.toDouble(),
+      lng: lng.toDouble(),
+      heading: heading is num ? heading.toDouble() : null,
+    );
+    return jsonEncode({'ok': true});
+  }
+
+  void _setSite(
+    SessionContext ctx, {
+    required String id,
+    required double lat,
+    required double lng,
+    String? name,
+    String? status,
+  }) {
     final site = <String, dynamic>{
       'id': id,
-      'lat': lat.toDouble(),
-      'lng': lng.toDouble(),
-      if (args['name'] is String) 'name': args['name'],
-      if (args['status'] is String) 'status': args['status'],
+      'lat': lat,
+      'lng': lng,
+      if (name != null) 'name': name,
+      if (status != null) 'status': status,
     };
     ctx.bus.update((current) {
       final next = Map<String, dynamic>.from(current);
@@ -142,15 +280,9 @@ class MapPlugin extends SessionExtension {
       next['ui'] = ui;
       return next;
     });
-    return jsonEncode({'ok': true, 'id': id});
   }
 
-  Future<String> _executeClearSites(
-    ToolCallInfo toolCall,
-    ToolExecutionContext _,
-  ) async {
-    final ctx = _ctx;
-    if (ctx == null) return 'clear_sites: plugin not attached';
+  void _clearSites(SessionContext ctx) {
     ctx.bus.update((current) {
       final next = Map<String, dynamic>.from(current);
       final ui = _mapAt(next, 'ui');
@@ -160,26 +292,18 @@ class MapPlugin extends SessionExtension {
       next['ui'] = ui;
       return next;
     });
-    return jsonEncode({'ok': true});
   }
 
-  Future<String> _executeMoveConvoyTo(
-    ToolCallInfo toolCall,
-    ToolExecutionContext _,
-  ) async {
-    final ctx = _ctx;
-    if (ctx == null) return 'move_convoy_to: plugin not attached';
-    final args = _decodeArgs(toolCall);
-    final lat = args['lat'];
-    final lng = args['lng'];
-    if (lat is! num || lng is! num) {
-      return 'move_convoy_to: "lat" and "lng" are required numbers';
-    }
-    final heading = args['heading'];
+  void _moveConvoyTo(
+    SessionContext ctx, {
+    required double lat,
+    required double lng,
+    double? heading,
+  }) {
     final convoy = <String, dynamic>{
-      'lat': lat.toDouble(),
-      'lng': lng.toDouble(),
-      if (heading is num) 'heading': heading.toDouble(),
+      'lat': lat,
+      'lng': lng,
+      if (heading != null) 'heading': heading,
     };
     ctx.bus.update((current) {
       final next = Map<String, dynamic>.from(current);
@@ -190,7 +314,6 @@ class MapPlugin extends SessionExtension {
       next['ui'] = ui;
       return next;
     });
-    return jsonEncode({'ok': true});
   }
 
   static Map<String, Object?> _decodeArgs(ToolCallInfo toolCall) {
