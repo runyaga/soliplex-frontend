@@ -1108,15 +1108,68 @@ class MapExtension extends SessionExtension
 
   /// Wire a projected [ImageOverlayData] list (sprites) into the
   /// images signal.
+  ///
+  /// Smart diff: when an existing sprite (matched by id) shows up
+  /// at a new lat/lng, animate via [moveImage] instead of snapping.
+  /// Adds new sprites and removes departing ones immediately.
+  ///
+  /// Tween duration is hard-coded at 1500ms. Future: carry the
+  /// duration in agent state if scenarios need different speeds.
   void wireImagesProjection(ReadonlySignal<List<ImageOverlayData>>? projected) {
     _imagesProjectionUnsub?.call();
     _imagesProjectionUnsub = null;
     if (projected == null) return;
     _images.value = projected.value;
-    _imagesProjectionUnsub = projected.subscribe((v) {
-      _images.value = v;
-      _refreshState(lastEvent: 'projection');
-    });
+    _imagesProjectionUnsub = projected.subscribe(_diffApplyImages);
+  }
+
+  void _diffApplyImages(List<ImageOverlayData> next) {
+    final oldById = {for (final img in _images.value) img.id: img};
+    final newIds = {for (final img in next) img.id};
+
+    // Add new sprites + non-position changes (URL, size, opacity)
+    // immediately. Animate position changes via moveImage.
+    final additions = <ImageOverlayData>[];
+    final tweenTargets = <ImageOverlayData>[];
+    for (final img in next) {
+      final old = oldById[img.id];
+      if (old == null) {
+        additions.add(img);
+        continue;
+      }
+      final positionChanged = old.lat != img.lat || old.lng != img.lng;
+      final otherChanged = old.url != img.url ||
+          old.widthPx != img.widthPx ||
+          old.heightPx != img.heightPx ||
+          old.opacity != img.opacity;
+      if (positionChanged) tweenTargets.add(img);
+      if (otherChanged && !positionChanged) {
+        // Non-position update — replace in place.
+        _replaceImage(img.id, img);
+      }
+    }
+
+    // Snap-add new sprites and snap-remove departed ones.
+    if (additions.isNotEmpty ||
+        oldById.keys.any((id) => !newIds.contains(id))) {
+      final kept =
+          _images.value.where((img) => newIds.contains(img.id)).toList();
+      _images.value = [...kept, ...additions];
+    }
+
+    // Tween moves on existing sprites. moveImage's default
+    // durationMs (1500) is what we want.
+    for (final target in tweenTargets) {
+      unawaited(
+        moveImage(
+          id: target.id,
+          lat: target.lat,
+          lng: target.lng,
+        ),
+      );
+    }
+
+    _refreshState(lastEvent: 'projection');
   }
 
   /// Wire a projected [HudOverlayData] list into the huds signal.

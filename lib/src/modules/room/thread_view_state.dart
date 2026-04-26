@@ -95,7 +95,10 @@ class ThreadViewState {
   void Function()? _runStateUnsub;
   void Function()? _agentStateUnsub;
   void Function()? _markersFitOnceUnsub;
+  void Function()? _convoyFollowUnsub;
   bool _hasFitBoundsThisSession = false;
+  double? _lastConvoyLat;
+  double? _lastConvoyLng;
   bool _isDisposed = false;
 
   /// Per-thread reactive bus mirroring AG-UI agent state.
@@ -306,11 +309,44 @@ class ThreadViewState {
         ),
       );
     });
+    // Camera-follow the primary sprite (convoy). When the
+    // convoy's id-1 sprite moves to a new position, fly the
+    // camera with it for the cinematic arc — the sprite tween
+    // and the camera arc finish in lockstep via flyWithImage.
+    _lastConvoyLat = null;
+    _lastConvoyLng = null;
+    _convoyFollowUnsub = spritesSignal.subscribe((sprites) {
+      final convoy = sprites.cast<ImageOverlayData?>().firstWhere(
+            (s) => s?.id == 'convoy-1',
+            orElse: () => null,
+          );
+      if (convoy == null) return;
+      // Skip if position didn't change (same delta replays etc.)
+      if (_lastConvoyLat == convoy.lat && _lastConvoyLng == convoy.lng) {
+        return;
+      }
+      // Skip the very first emission (initial pose) — fitBounds
+      // already framed the scene; flying immediately fights it.
+      final hasPrior = _lastConvoyLat != null;
+      _lastConvoyLat = convoy.lat;
+      _lastConvoyLng = convoy.lng;
+      if (!hasPrior) return;
+      unawaited(
+        maps_singleton.mapExtension.flyWithImage(
+          imageId: convoy.id,
+          lat: convoy.lat,
+          lng: convoy.lng,
+          durationMs: 1500,
+        ),
+      );
+    });
   }
 
   void _unwireSurfaceSingletons() {
     _markersFitOnceUnsub?.call();
     _markersFitOnceUnsub = null;
+    _convoyFollowUnsub?.call();
+    _convoyFollowUnsub = null;
     narrationController.unwireProjection();
     maps_singleton.mapExtension.unwireAllProjections();
   }
