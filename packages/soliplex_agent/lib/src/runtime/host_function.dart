@@ -15,7 +15,7 @@ import 'package:soliplex_agent/src/runtime/session_context.dart';
 ///     params: [
 ///       dart_monty.HostParam(
 ///         name: 'lat',
-///         type: dart_monty.HostParamType.float,
+///         type: dart_monty.HostParamType.number,
 ///       ),
 ///     ],
 ///   ),
@@ -26,7 +26,7 @@ import 'package:soliplex_agent/src/runtime/session_context.dart';
 /// HostFunction(
 ///   schema: HostFunctionSchema(
 ///     name: 'add_marker',
-///     params: [HostParam(name: 'lat', type: HostParamType.float)],
+///     params: [HostParam(name: 'lat', type: HostParamType.number)],
 ///   ),
 ///   handler: (args, ctx) async => ...,
 /// );
@@ -132,13 +132,18 @@ class HostParam {
   /// Defaults to `true`.
   final bool isRequired;
 
-  Map<String, Object?> _toJsonSchemaProperty() => <String, Object?>{
-        'type': _jsonSchemaTypeName(type),
-        if (description.isNotEmpty) 'description': description,
-      };
+  Map<String, Object?> _toJsonSchemaProperty() {
+    final typeName = _jsonSchemaTypeName(type);
+    return <String, Object?>{
+      if (typeName != null) 'type': typeName,
+      if (description.isNotEmpty) 'description': description,
+    };
+  }
 }
 
-/// Parameter primitive types, mirroring `dart_monty.HostParamType`.
+/// Parameter primitive types, mirroring `dart_monty.HostParamType`
+/// member-for-member (string / integer / number / boolean / list /
+/// map / any) so the bridge does not need a mapping table.
 enum HostParamType {
   /// Dart `String`.
   string,
@@ -146,17 +151,21 @@ enum HostParamType {
   /// Dart `int`.
   integer,
 
-  /// Dart `double` / `num`.
-  float,
+  /// Dart `num` (`int` or `double`). Maps to JSON Schema `"number"`.
+  number,
 
   /// Dart `bool`.
   boolean,
 
-  /// Dart `List`.
-  array,
+  /// Dart `List<Object?>`. Maps to JSON Schema `"array"`.
+  list,
 
-  /// Dart `Map`.
-  object,
+  /// Dart `Map<String, Object?>`. Maps to JSON Schema `"object"`.
+  map,
+
+  /// Any type — passes through validation untyped. Maps to a
+  /// schema with no `"type"` key (unconstrained).
+  any,
 }
 
 /// Async handler signature for [HostFunction]. Receives the decoded
@@ -166,19 +175,22 @@ typedef HostFunctionHandler = Future<Object?> Function(
   SessionContext ctx,
 );
 
-String _jsonSchemaTypeName(HostParamType type) {
+String? _jsonSchemaTypeName(HostParamType type) {
   switch (type) {
     case HostParamType.string:
       return 'string';
     case HostParamType.integer:
       return 'integer';
-    case HostParamType.float:
+    case HostParamType.number:
       return 'number';
     case HostParamType.boolean:
       return 'boolean';
-    case HostParamType.array:
+    case HostParamType.list:
       return 'array';
-    case HostParamType.object:
+    case HostParamType.map:
       return 'object';
+    case HostParamType.any:
+      // Unconstrained — JSON Schema omits the `type` key.
+      return null;
   }
 }
