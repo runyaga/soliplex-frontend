@@ -198,6 +198,67 @@ class MapMontyExtension extends MontyExtension {
         ),
         HostFunction(
           schema: HostFunctionSchema(
+            name: 'map_set_marker_tap_image',
+            description:
+                'Attach a "tap to show photo" action to a marker. '
+                'Tapping the pin spawns the image overlay at '
+                '(lat + lat_offset, lng + lng_offset); a second tap '
+                'on the same pin dismisses it. Tapping a different '
+                'pin swaps to that pin\'s image. Use after a tour '
+                'cleanup so the operator can recall any waypoint '
+                'photo on demand.',
+            params: const [
+              HostParam(name: 'marker_id', type: HostParamType.string),
+              HostParam(
+                name: 'url',
+                type: HostParamType.string,
+                description:
+                    'Image URL or bundled asset path (assets/...).',
+              ),
+              HostParam(
+                name: 'lat_offset',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 0.05,
+                description:
+                    'Degrees offset NORTH of the pin to anchor the '
+                    'photo. Match what you used during the tour.',
+              ),
+              HostParam(
+                name: 'lng_offset',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 0.05,
+                description: 'Degrees offset EAST of the pin.',
+              ),
+              HostParam(
+                name: 'width',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 140,
+              ),
+              HostParam(
+                name: 'height',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 140,
+              ),
+            ],
+          ),
+          handler: (args, ctx) async {
+            final ok = _maps.setMarkerTapImage(
+              markerId: args['marker_id']! as String,
+              url: args['url']! as String,
+              latOffset: (args['lat_offset'] as num?)?.toDouble() ?? 0.05,
+              lngOffset: (args['lng_offset'] as num?)?.toDouble() ?? 0.05,
+              width: (args['width'] as num?)?.toDouble() ?? 140,
+              height: (args['height'] as num?)?.toDouble() ?? 140,
+            );
+            return ok;
+          },
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
             name: 'map_add_path',
             description:
                 'Draw a polyline/path from a list of [lat, lng] points. '
@@ -440,12 +501,16 @@ class MapMontyExtension extends MontyExtension {
           schema: HostFunctionSchema(
             name: 'map_move_image',
             description:
-                'Animate an existing image overlay to a new (lat, lng) '
-                'over duration_ms. Same re-entrant semantics as '
-                'map_move_marker. By default rotates the sprite to face '
-                'the direction of travel (great-circle bearing). Image '
-                'must be drawn nose-up (north) for face_heading to look '
-                'right. Returns true on success.',
+                'Kick off an animation that moves an existing image '
+                'overlay to a new (lat, lng) over duration_ms and '
+                'return immediately. Fire-and-forget, like '
+                'map_add_path — the call returns at once while the '
+                'tween runs in the background. Use map_sleep_ms to '
+                'wait for arrival. Same re-entrant semantics as '
+                'map_move_marker. By default rotates the sprite to '
+                'face the direction of travel (great-circle bearing). '
+                'Image must be drawn nose-up (north) for face_heading '
+                'to look right. Returns true.',
             params: const [
               HostParam(name: 'id', type: HostParamType.string),
               HostParam(name: 'lat', type: HostParamType.number),
@@ -466,13 +531,18 @@ class MapMontyExtension extends MontyExtension {
               ),
             ],
           ),
-          handler: (args, ctx) => _maps.moveImage(
-            id: args['id']! as String,
-            lat: (args['lat']! as num).toDouble(),
-            lng: (args['lng']! as num).toDouble(),
-            durationMs: (args['duration_ms'] as num?)?.toInt() ?? 1500,
-            faceHeading: (args['face_heading'] as bool?) ?? true,
-          ),
+          handler: (args, ctx) async {
+            unawaited(
+              _maps.moveImage(
+                id: args['id']! as String,
+                lat: (args['lat']! as num).toDouble(),
+                lng: (args['lng']! as num).toDouble(),
+                durationMs: (args['duration_ms'] as num?)?.toInt() ?? 1500,
+                faceHeading: (args['face_heading'] as bool?) ?? true,
+              ),
+            );
+            return true;
+          },
         ),
         HostFunction(
           schema: HostFunctionSchema(

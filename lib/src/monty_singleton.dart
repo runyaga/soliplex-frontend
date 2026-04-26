@@ -26,10 +26,13 @@ import 'package:soliplex_agent_monty/soliplex_agent_monty.dart'
 
 import 'http_monty_extension.dart';
 import 'maps_singleton.dart';
+import 'narration/narration_monty_extension.dart';
+import 'narration_singleton.dart';
 
 /// Constructs a fresh [MontyExtensionSet] for a single [MontyRuntime].
 MontyExtensionSet makeMontyExtensionSet() => MontyExtensionSet([
       ...MontyExtensionSet.standard().all,
       MapMontyExtension(mapExtension),
+      NarrationMontyExtension(narrationController),
       HttpMontyExtension(),
     ]);

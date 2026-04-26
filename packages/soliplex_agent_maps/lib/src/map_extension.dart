@@ -79,6 +79,13 @@ class MapExtension extends SessionExtension
         _images = signal(<ImageOverlayData>[]),
         _viewport = signal(initialViewport) {
     setInitialState(_buildState(lastEvent: 'init'));
+    // Subscribe to the controller's event stream eagerly. Events only
+    // fire when a MapView is mounted, but the listener must be live
+    // BEFORE that — otherwise non-session-driven runtimes (e.g. the
+    // NIGHTFALL button or any direct MontyRuntime caller) never see
+    // _viewport update, and their distance/zoom math reads (0,0) for
+    // every leg → every fly arcs through world-center.
+    _mapEventSub = _controller.mapEventStream.listen(_onMapEvent);
   }
 
   final Viewport _initialViewport;
@@ -121,23 +128,18 @@ class MapExtension extends SessionExtension
 
   @override
   Future<void> onAttach(AgentSession session) async {
-    // Idempotent — the same instance may attach to many sessions over
-    // time when used as an app-level singleton. Cancel any prior
-    // subscription before resubscribing to the controller's event
-    // stream.
-    await _mapEventSub?.cancel();
-    _mapEventSub = _controller.mapEventStream.listen(_onMapEvent);
+    // No-op — the event subscription is owned by the constructor so it
+    // works for non-session callers too (NIGHTFALL button, terminal
+    // panel pre-session). Kept as an override so the SessionExtension
+    // contract is honoured.
   }
 
   @override
   void onDispose() {
-    // Cancel only the per-session subscription. Controllers, the HTTP
-    // client, and inner signals are intentionally retained so the same
-    // [MapExtension] instance can be reused across sessions (singleton
-    // pattern in `lib/src/maps_singleton.dart`). The widget bound to
-    // this controller stays alive across session boundaries.
-    unawaited(_mapEventSub?.cancel());
-    _mapEventSub = null;
+    // Keep the event subscription alive across session boundaries —
+    // the singleton pattern in `lib/src/maps_singleton.dart` reuses
+    // this instance across sessions and non-session direct callers.
+    // Subscriptions are torn down only when the process exits.
     super.onDispose();
   }
 
@@ -915,6 +917,85 @@ class MapExtension extends SessionExtension
       await flyTo(lat: lat, lng: lng, zoom: focusZoom);
     }
     return marker.id;
+  }
+
+  /// Attaches a tap action to an existing marker. When the marker is
+  /// tapped, the framework spawns the configured image overlay; a
+  /// second tap on the same marker dismisses it. Tapping a different
+  /// marker swaps to that marker's image.
+  ///
+  /// Returns true on success, false if no marker matches [markerId].
+  bool setMarkerTapImage({
+    required String markerId,
+    required String url,
+    double latOffset = 0.05,
+    double lngOffset = 0.05,
+    double width = 140,
+    double height = 140,
+  }) {
+    final list = _markers.value;
+    final idx = list.indexWhere((m) => m.id == markerId);
+    if (idx < 0) return false;
+    final updated = [...list];
+    updated[idx] = list[idx].copyWith(
+      tapImage: TapImageAction(
+        url: url,
+        latOffset: latOffset,
+        lngOffset: lngOffset,
+        width: width,
+        height: height,
+      ),
+    );
+    _markers.value = updated;
+    _refreshState(lastEvent: 'set_marker_tap_image');
+    return true;
+  }
+
+  /// Marker currently showing its tap-image (only one at a time).
+  String? _tappedMarkerId;
+  String? _tappedImageOverlayId;
+
+  /// Called from the marker tap GestureDetector. Toggles the image
+  /// overlay for [markerId]: tap shows, second tap on same marker
+  /// hides, tap on a different marker swaps.
+  void onMarkerTapped(String markerId) {
+    final list = _markers.value;
+    final marker = list.firstWhere(
+      (m) => m.id == markerId,
+      orElse: () => const MarkerData(id: '', lat: 0, lng: 0),
+    );
+    if (marker.id.isEmpty) return;
+    final action = marker.tapImage;
+    if (action == null) return;
+
+    // Always tear down the previously shown image (if any).
+    final prevId = _tappedImageOverlayId;
+    if (prevId != null) {
+      removeImage(prevId);
+      _tappedImageOverlayId = null;
+    }
+    final prevMarker = _tappedMarkerId;
+    _tappedMarkerId = null;
+
+    // If they tapped the SAME marker that was showing, leave it
+    // dismissed. Otherwise spawn the new image.
+    if (prevMarker == markerId) return;
+
+    final imgId = _autoId('img');
+    _images.value = [
+      ..._images.value,
+      ImageOverlayData(
+        id: imgId,
+        url: action.url,
+        lat: marker.lat + action.latOffset,
+        lng: marker.lng + action.lngOffset,
+        widthPx: action.width,
+        heightPx: action.height,
+      ),
+    ];
+    _tappedImageOverlayId = imgId;
+    _tappedMarkerId = markerId;
+    _refreshState(lastEvent: 'tap_marker');
   }
 
   /// Per-marker move-cancellation tokens. Each call to [moveMarker]

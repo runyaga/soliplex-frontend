@@ -119,12 +119,18 @@ class MapView extends StatelessWidget {
                         for (final m in markers)
                           Marker(
                             point: LatLng(m.lat, m.lng),
-                            width: 48,
-                            height: 56,
+                            width: 120,
+                            height: 90,
                             alignment: Alignment.topCenter,
-                            child: _AnimatedPin(
-                              key: ValueKey(m.id),
-                              marker: m,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: m.tapImage == null
+                                  ? null
+                                  : () => extension.onMarkerTapped(m.id),
+                              child: _AnimatedPin(
+                                key: ValueKey(m.id),
+                                marker: m,
+                              ),
                             ),
                           ),
                       ],

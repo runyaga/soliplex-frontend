@@ -50,6 +50,7 @@ class MarkerData {
     this.dropAnimation = true,
     this.pulse = false,
     this.createdAtMs,
+    this.tapImage,
   });
 
   final String id;
@@ -73,6 +74,10 @@ class MarkerData {
   /// hint, not for ordering.
   final int? createdAtMs;
 
+  /// When set, tapping the marker spawns this image overlay (and a
+  /// second tap dismisses it).
+  final TapImageAction? tapImage;
+
   MarkerData copyWith({
     double? lat,
     double? lng,
@@ -81,6 +86,7 @@ class MarkerData {
     String? icon,
     bool? dropAnimation,
     bool? pulse,
+    TapImageAction? tapImage,
   }) =>
       MarkerData(
         id: id,
@@ -92,6 +98,7 @@ class MarkerData {
         dropAnimation: dropAnimation ?? this.dropAnimation,
         pulse: pulse ?? this.pulse,
         createdAtMs: createdAtMs,
+        tapImage: tapImage ?? this.tapImage,
       );
 
   Map<String, Object?> toJson() => {
@@ -102,6 +109,24 @@ class MarkerData {
         if (color != null) 'color': color,
         if (icon != null) 'icon': icon,
       };
+}
+
+/// Spec for an image overlay that spawns when a marker is tapped.
+@immutable
+class TapImageAction {
+  const TapImageAction({
+    required this.url,
+    this.lngOffset = 0.05,
+    this.latOffset = 0.05,
+    this.width = 140,
+    this.height = 140,
+  });
+
+  final String url;
+  final double latOffset;
+  final double lngOffset;
+  final double width;
+  final double height;
 }
 
 /// A polyline drawn on the map.

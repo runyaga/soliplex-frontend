@@ -29,6 +29,7 @@ import 'chunk_visualization_page.dart';
 import 'document_picker.dart';
 import 'error_retry_panel.dart';
 import '../../../monty_singleton.dart';
+import '../../../narration/narration_panel.dart';
 import 'message_timeline.dart';
 import 'terminal_panel.dart';
 import 'async_action_dialog.dart';
@@ -338,6 +339,7 @@ class _RoomScreenState extends State<RoomScreen> {
       builder: (_) => TerminalPanel(extensionSetFactory: makeMontyExtensionSet),
     );
   }
+
 
   Future<void> _showRenameDialog(String threadId, String currentName) async {
     await showDialog<void>(
@@ -960,9 +962,18 @@ class _RoomScreenState extends State<RoomScreen> {
                     curve: Curves.easeOut,
                     alignment: Alignment.topCenter,
                     child: _mapDrawerOpen
-                        ? SizedBox(
-                            height: h,
-                            child: MapView(extension: mapExtension),
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                height: h,
+                                child: MapView(extension: mapExtension),
+                              ),
+                              SizedBox(
+                                height: 160,
+                                child: const NarrationPanel(),
+                              ),
+                            ],
                           )
                         : const SizedBox(width: double.infinity, height: 0),
                   );
