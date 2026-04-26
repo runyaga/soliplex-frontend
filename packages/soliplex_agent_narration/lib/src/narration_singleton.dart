@@ -4,6 +4,6 @@
 /// any non-session direct caller — appear in the same UI.
 library;
 
-import 'narration/narration_controller.dart';
+import 'narration_controller.dart';
 
 final NarrationController narrationController = NarrationController();

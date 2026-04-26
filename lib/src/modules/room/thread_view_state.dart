@@ -4,11 +4,9 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
+import 'package:soliplex_agent_narration/soliplex_agent_narration.dart';
 
 import '../../maps_singleton.dart' as maps_singleton;
-import '../../narration/narration.dart';
-import '../../narration/narration_controller.dart';
-import '../../narration_singleton.dart';
 import '../../widget_tree/widget_spec.dart';
 import '../../widget_tree/widget_tree_projection.dart';
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 
-import '../narration_singleton.dart';
 import 'narration.dart';
+import 'narration_singleton.dart';
 
 /// Narration log. A scrolling panel that sits below the map drawer
 /// and shows running script chatter, attributed to one of four
