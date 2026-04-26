@@ -28,8 +28,13 @@ import 'chat_input.dart';
 import 'chunk_visualization_page.dart';
 import 'document_picker.dart';
 import 'error_retry_panel.dart';
+import '../../../demo/aid_distribution_replay.dart';
 import '../../../monty_singleton.dart';
+import '../../../narration/narration.dart';
+import '../../../narration/narration_controller.dart';
 import '../../../narration/narration_panel.dart';
+import '../../../narration_singleton.dart';
+import 'package:soliplex_client/soliplex_client.dart' show StateBus;
 import 'message_timeline.dart';
 import 'terminal_panel.dart';
 import 'async_action_dialog.dart';
@@ -101,6 +106,7 @@ class _RoomScreenState extends State<RoomScreen> {
   final _chatFocusNode = FocusNode();
   bool _filesExpanded = false;
   bool _mapDrawerOpen = false;
+  bool _aidDemoRunning = false;
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -340,6 +346,50 @@ class _RoomScreenState extends State<RoomScreen> {
     );
   }
 
+  /// Runs the AID DISTRIBUTION GenUI demo on a free-standing
+  /// [StateBus]. Drives the narration panel from agent-state
+  /// projections, no Python script and no backend involvement.
+  ///
+  /// Wires the [narrationController] singleton to a
+  /// [NarrationProjection] over the demo bus for the duration of
+  /// the run, then unwires when the replay finishes (or on error).
+  /// This proves the full Surface + StateBus + StateProjection
+  /// pipeline end-to-end.
+  Future<void> _runAidDistributionDemo(BuildContext context) async {
+    if (_aidDemoRunning) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (!_mapDrawerOpen) {
+      setState(() => _mapDrawerOpen = true);
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    setState(() => _aidDemoRunning = true);
+    final bus = StateBus();
+    final projected = bus.project<List<Narration>>(
+      const NarrationProjection(),
+    );
+    narrationController
+      ..clear()
+      ..wireProjection(projected);
+    try {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('AID DISTRIBUTION — running…'),
+        duration: Duration(seconds: 2),
+      ));
+      await runAidDistributionReplay(bus);
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(
+        content: Text('AID DISTRIBUTION — complete'),
+        duration: Duration(seconds: 3),
+      ));
+    } on Object catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Replay failed: $e')));
+    } finally {
+      narrationController.unwireProjection();
+      bus.dispose();
+      if (mounted) setState(() => _aidDemoRunning = false);
+    }
+  }
 
   Future<void> _showRenameDialog(String threadId, String currentName) async {
     await showDialog<void>(
@@ -994,6 +1044,19 @@ class _RoomScreenState extends State<RoomScreen> {
                     icon: const Icon(Icons.terminal),
                     onPressed: () => _openMontyTerminal(context),
                   ),
+                TextButton.icon(
+                  onPressed: _aidDemoRunning
+                      ? null
+                      : () => _runAidDistributionDemo(context),
+                  icon: _aidDemoRunning
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.local_shipping_outlined, size: 18),
+                  label: const Text('AID DISTRIBUTION'),
+                ),
                 const Spacer(),
               ],
             ),
