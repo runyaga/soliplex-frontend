@@ -94,6 +94,8 @@ class ThreadViewState {
   AgentSession? _activeSession;
   void Function()? _runStateUnsub;
   void Function()? _agentStateUnsub;
+  void Function()? _markersFitOnceUnsub;
+  bool _hasFitBoundsThisSession = false;
   bool _isDisposed = false;
 
   /// Per-thread reactive bus mirroring AG-UI agent state.
@@ -287,9 +289,28 @@ class ThreadViewState {
       ..wireMarkersProjection(markersSignal)
       ..wireImagesProjection(spritesSignal)
       ..wireHudsProjection(hudsSignal);
+    // Auto-fit the camera to the markers ONCE per session, when
+    // the first non-empty marker list arrives. Camera stays under
+    // user control after that — subsequent deltas (status flips,
+    // convoy moves) leave the viewport alone.
+    _hasFitBoundsThisSession = false;
+    _markersFitOnceUnsub = markersSignal.subscribe((markers) {
+      if (_hasFitBoundsThisSession || markers.isEmpty) return;
+      _hasFitBoundsThisSession = true;
+      unawaited(
+        maps_singleton.mapExtension.fitBounds(
+          points: [
+            for (final m in markers) [m.lat, m.lng],
+          ],
+          paddingPct: 18,
+        ),
+      );
+    });
   }
 
   void _unwireSurfaceSingletons() {
+    _markersFitOnceUnsub?.call();
+    _markersFitOnceUnsub = null;
     narrationController.unwireProjection();
     maps_singleton.mapExtension.unwireAllProjections();
   }
