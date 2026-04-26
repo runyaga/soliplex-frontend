@@ -34,8 +34,8 @@ class MapView extends StatelessWidget {
           // horizontal wrap, the world must be at least as wide as
           // the viewport. Solve: z >= log2(viewportWidth / 256).
           // Rounded up to the next zoom level so we never wrap.
-          final wrapMin = (math.log(constraints.maxWidth / 256) / math.ln2)
-              .ceilToDouble();
+          final wrapMin =
+              (math.log(constraints.maxWidth / 256) / math.ln2).ceilToDouble();
           final minZoom = math.max(1.0, wrapMin);
           return Stack(
             children: [
@@ -85,8 +85,7 @@ class MapView extends StatelessWidget {
                             points: p.points,
                             color: _parseColor(
                                   p.fillColor,
-                                  fallback:
-                                      Colors.blue.withValues(alpha: 0.2),
+                                  fallback: Colors.blue.withValues(alpha: 0.2),
                                 ) ??
                                 Colors.blue.withValues(alpha: 0.2),
                             borderColor: _parseColor(
@@ -299,9 +298,8 @@ class _StaticTextHud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = data.colorHex != null
-        ? Color(data.colorHex!)
-        : const Color(0xFFE6EDF3);
+    final fg =
+        data.colorHex != null ? Color(data.colorHex!) : const Color(0xFFE6EDF3);
     final bg = data.backgroundHex != null
         ? Color(data.backgroundHex!)
         : const Color(0xCC0B0E12);
@@ -357,9 +355,8 @@ class _LiveClockHudState extends State<_LiveClockHud> {
   }
 
   String _format() {
-    final realMs = DateTime.now()
-        .difference(widget.data.createdAt)
-        .inMilliseconds;
+    final realMs =
+        DateTime.now().difference(widget.data.createdAt).inMilliseconds;
     final scaledSec = (realMs * widget.data.timeScale / 1000)
         .round()
         .clamp(0, 99 * 3600 + 59 * 60 + 59);

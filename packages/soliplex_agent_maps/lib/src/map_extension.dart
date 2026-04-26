@@ -877,8 +877,8 @@ class MapExtension extends SessionExtension
     // Compensate lat extent by ~2 for typical screen aspect (wider
     // than tall) and Mercator distortion at high latitudes — pick
     // whichever dimension dominates after compensation.
-    final effectiveExtent = math.max(latExtent * 2, lngExtent) *
-        (1 + paddingPct / 100);
+    final effectiveExtent =
+        math.max(latExtent * 2, lngExtent) * (1 + paddingPct / 100);
     final rawZoom = math.log(
           viewportWidth * 360 / (256 * effectiveExtent),
         ) /
@@ -1045,9 +1045,8 @@ class MapExtension extends SessionExtension
       if (_moveTokens[id] != token) return false; // newer move took over
       final t = i / steps;
       // Ease-in-out so the marker accelerates then settles.
-      final eased = t < 0.5
-          ? 2 * t * t
-          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
+      final eased =
+          t < 0.5 ? 2 * t * t : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
       final curLat = startLat + (lat - startLat) * eased;
       final curLng = startLng + (lng - startLng) * eased;
       final cur = _markers.value;
@@ -1077,6 +1076,86 @@ class MapExtension extends SessionExtension
     _polygons.value = const [];
     _images.value = const [];
     _refreshState(lastEvent: 'clear_markers');
+  }
+
+  // ---- Surface projection wires ------------------------------------------
+  //
+  // GenUI integration. Each wire forwards every emission of the
+  // supplied `ReadonlySignal<List<X>>` into the corresponding
+  // internal data signal. While wired, imperative add/remove still
+  // work — last writer per signal wins. Pass null to detach.
+  //
+  // Caller owns the projected signal (typically obtained from a
+  // StateBus.project<...> over a StateProjection). Wire on session
+  // attach, unwire on detach.
+
+  void Function()? _markersProjectionUnsub;
+  void Function()? _imagesProjectionUnsub;
+  void Function()? _hudsProjectionUnsub;
+  void Function()? _polylinesProjectionUnsub;
+
+  /// Wire a projected [MarkerData] list into the markers signal.
+  void wireMarkersProjection(ReadonlySignal<List<MarkerData>>? projected) {
+    _markersProjectionUnsub?.call();
+    _markersProjectionUnsub = null;
+    if (projected == null) return;
+    _markers.value = projected.value;
+    _markersProjectionUnsub = projected.subscribe((v) {
+      _markers.value = v;
+      _refreshState(lastEvent: 'projection');
+    });
+  }
+
+  /// Wire a projected [ImageOverlayData] list (sprites) into the
+  /// images signal.
+  void wireImagesProjection(ReadonlySignal<List<ImageOverlayData>>? projected) {
+    _imagesProjectionUnsub?.call();
+    _imagesProjectionUnsub = null;
+    if (projected == null) return;
+    _images.value = projected.value;
+    _imagesProjectionUnsub = projected.subscribe((v) {
+      _images.value = v;
+      _refreshState(lastEvent: 'projection');
+    });
+  }
+
+  /// Wire a projected [HudOverlayData] list into the huds signal.
+  ///
+  /// Note: Dart-side ticking clocks (HUDs created with `tick: true`)
+  /// should be added imperatively in addition to the projection,
+  /// since the projection only carries agent-emitted state — the
+  /// 50ms tick is rendered on the Dart side regardless.
+  void wireHudsProjection(ReadonlySignal<List<HudOverlayData>>? projected) {
+    _hudsProjectionUnsub?.call();
+    _hudsProjectionUnsub = null;
+    if (projected == null) return;
+    _huds.value = projected.value;
+    _hudsProjectionUnsub = projected.subscribe((v) {
+      _huds.value = v;
+      _refreshState(lastEvent: 'projection');
+    });
+  }
+
+  /// Wire a projected [PolylineData] list into the polylines signal.
+  void wirePolylinesProjection(
+    ReadonlySignal<List<PolylineData>>? projected,
+  ) {
+    _polylinesProjectionUnsub?.call();
+    _polylinesProjectionUnsub = null;
+    if (projected == null) return;
+    _polylines.value = projected.value;
+    _polylinesProjectionUnsub = projected.subscribe((v) {
+      _polylines.value = v;
+      _refreshState(lastEvent: 'projection');
+    });
+  }
+
+  /// Detach all wired projections; imperative writes resume.
+  void unwireAllProjections() {
+    wireMarkersProjection(null);
+    wireImagesProjection(null);
+    wireHudsProjection(null);
+    wirePolylinesProjection(null);
   }
 
   /// Switches the visible tile layer. Returns false if [name] does not
@@ -1320,9 +1399,8 @@ class MapExtension extends SessionExtension
     for (var i = 1; i <= steps; i++) {
       if (_moveTokens['img:$id'] != token) return false;
       final t = i / steps;
-      final eased = t < 0.5
-          ? 2 * t * t
-          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
+      final eased =
+          t < 0.5 ? 2 * t * t : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
       final curLat = startLat + (lat - startLat) * eased;
       final curLng = startLng + (lng - startLng) * eased;
       final cur = _images.value;
@@ -1522,9 +1600,7 @@ class MapExtension extends SessionExtension
     //   distKm = 5000         → ~2.20
     //   distKm = 15000        → ~3.78
     final ratio = distKm / 800.0;
-    final drop = ratio <= 1
-        ? 0.0
-        : math.log(ratio) / math.ln2 / 1.2;
+    final drop = ratio <= 1 ? 0.0 : math.log(ratio) / math.ln2 / 1.2;
     // Floor at z=2 — wrap is prevented by the camera constraint in
     // map_view, so the arc no longer needs to clamp itself.
     final arcZoom = math.max<double>(2, baseZoom - drop);
@@ -1639,9 +1715,8 @@ class MapExtension extends SessionExtension
       // Same ease-in-out as moveImage (sprite tween) so the trailing
       // line stays under the helicopter throughout the leg. Linear
       // progress here makes the line lead at t<0.5 and lag at t>0.5.
-      final eased = t < 0.5
-          ? 2 * t * t
-          : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
+      final eased =
+          t < 0.5 ? 2 * t * t : 1 - math.pow(-2 * t + 2, 2).toDouble() / 2;
       final list = _polylines.value;
       final idx = list.indexWhere((p) => p.id == id);
       if (idx < 0) return;

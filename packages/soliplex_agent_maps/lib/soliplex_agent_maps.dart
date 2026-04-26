@@ -9,5 +9,6 @@ library;
 
 export 'src/map_extension.dart';
 export 'src/map_monty_extension.dart';
+export 'src/map_projections.dart';
 export 'src/map_state.dart';
 export 'src/map_view.dart';

@@ -7,7 +7,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart';
-import 'package:soliplex_agent_maps/soliplex_agent_maps.dart' show MapView;
+import 'package:soliplex_agent_maps/soliplex_agent_maps.dart'
+    show
+        HudOverlayData,
+        ImageOverlayData,
+        MapHudProjection,
+        MapMarkersProjection,
+        MapSpritesProjection,
+        MapView,
+        MarkerData;
 import '../../../maps_singleton.dart';
 import 'package:soliplex_client/soliplex_client.dart'
     show RagDocument, Room, SourceReferenceFormatting, buildDocumentFilter;
@@ -364,18 +372,33 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     setState(() => _aidDemoRunning = true);
     final bus = StateBus();
-    final projected = bus.project<List<Narration>>(
+    final narrationSignal = bus.project<List<Narration>>(
       const NarrationProjection(),
+    );
+    final markersSignal = bus.project<List<MarkerData>>(
+      const MapMarkersProjection(),
+    );
+    final spritesSignal = bus.project<List<ImageOverlayData>>(
+      const MapSpritesProjection(),
+    );
+    final hudsSignal = bus.project<List<HudOverlayData>>(
+      const MapHudProjection(),
     );
     narrationController
       ..clear()
-      ..wireProjection(projected);
+      ..wireProjection(narrationSignal);
+    mapExtension
+      ..clearAll()
+      ..clearHuds()
+      ..wireMarkersProjection(markersSignal)
+      ..wireImagesProjection(spritesSignal)
+      ..wireHudsProjection(hudsSignal);
     try {
       messenger.showSnackBar(const SnackBar(
         content: Text('AID DISTRIBUTION — running…'),
         duration: Duration(seconds: 2),
       ));
-      await runAidDistributionReplay(bus);
+      await runAidDistributionReplay(bus, map: mapExtension);
       if (!mounted) return;
       messenger.showSnackBar(const SnackBar(
         content: Text('AID DISTRIBUTION — complete'),
@@ -386,6 +409,7 @@ class _RoomScreenState extends State<RoomScreen> {
       messenger.showSnackBar(SnackBar(content: Text('Replay failed: $e')));
     } finally {
       narrationController.unwireProjection();
+      mapExtension.unwireAllProjections();
       bus.dispose();
       if (mounted) setState(() => _aidDemoRunning = false);
     }

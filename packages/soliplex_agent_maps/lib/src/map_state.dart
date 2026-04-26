@@ -335,7 +335,7 @@ enum BasemapStyle {
   cartodbPositron,
   cartodbDark,
   cartodbVoyager,
-  esriWorldImagery,   // satellite — biggest visual upgrade
+  esriWorldImagery, // satellite — biggest visual upgrade
   esriWorldTopo,
   esriNatgeo,
   cyclosm;

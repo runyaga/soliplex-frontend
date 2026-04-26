@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:soliplex_agent_maps/soliplex_agent_maps.dart'
+    show HudAnchor, MapExtension;
 import 'package:soliplex_client/soliplex_client.dart' show StateBus;
 
 /// Compressed timeline driver for the AID DISTRIBUTION GenUI demo.
@@ -19,6 +21,7 @@ Future<void> runAidDistributionReplay(
   StateBus bus, {
   Duration tick = const Duration(milliseconds: 700),
   Completer<void>? cancel,
+  MapExtension? map,
 }) async {
   // Northern District: a fictionalized humanitarian-relief scenario.
   // Coordinates are illustrative — fictional region, civilian-only
@@ -103,6 +106,26 @@ Future<void> runAidDistributionReplay(
   }
 
   // ---- Opening pose --------------------------------------------------------
+  // Imperative map drive (P4 will move this to a MapProjection over
+  // the same agent state). For now, paint pins + HUD + sprite by
+  // hand so the demo has something visible to back the narration.
+  // Camera flight + the live ticking clock are still imperative —
+  // those concerns aren't carried in agent state (camera is the
+  // viewer's, not the agent's; the clock is a Dart-side ticker).
+  // Markers, sprites, HUD banners are all driven by projections
+  // over agent state — see room_screen.dart wireMarkers /
+  // wireImages / wireHuds calls.
+  if (map != null) {
+    await map.flyTo(lat: hubLat, lng: hubLng, zoom: 8, durationMs: 1200);
+    map.addHud(
+      anchor: HudAnchor.bottomRight,
+      colorHex: 0xFF66C7FF,
+      backgroundHex: 0xCC0B0E12,
+      tick: true,
+      timeScale: 30,
+    );
+  }
+
   bus.setAgentState(
     snapshot(
       convoyLat: hubLat,
@@ -140,6 +163,14 @@ Future<void> runAidDistributionReplay(
     final site = sites[i];
     final lat = site['lat']! as double;
     final lng = site['lng']! as double;
+    final fromLat = i == 0 ? hubLat : sites[i - 1]['lat']! as double;
+    final fromLng = i == 0 ? hubLng : sites[i - 1]['lng']! as double;
+
+    // Camera flight is the viewer's concern, not the agent's —
+    // keep this imperative even after the projection refactor.
+    if (map != null) {
+      unawaited(map.flyTo(lat: lat, lng: lng, zoom: 9, durationMs: 2400));
+    }
 
     // Approach (3 micro-steps for a smooth-ish track)
     for (var t = 1; t <= 3; t++) {
@@ -147,8 +178,8 @@ Future<void> runAidDistributionReplay(
       final f = t / 3;
       bus.setAgentState(
         snapshot(
-          convoyLat: hubLat + (lat - hubLat) * f,
-          convoyLng: hubLng + (lng - hubLng) * f,
+          convoyLat: fromLat + (lat - fromLat) * f,
+          convoyLng: fromLng + (lng - fromLng) * f,
           convoyHeading: i * 90 + 30,
           banner: 'En route to ${site['name']}',
           tonnage: tonnage,
@@ -193,6 +224,11 @@ Future<void> runAidDistributionReplay(
 
   // ---- Return to hub -------------------------------------------------------
   log('primary', 'Last camp served. Returning to hub.');
+  if (map != null) {
+    unawaited(
+      map.flyTo(lat: hubLat, lng: hubLng, zoom: 8, durationMs: 2200),
+    );
+  }
   for (var t = 1; t <= 3; t++) {
     if (isCancelled()) return;
     final f = t / 3;

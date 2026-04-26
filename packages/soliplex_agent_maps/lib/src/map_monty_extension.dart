@@ -200,8 +200,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_set_marker_tap_image',
-            description:
-                'Attach a "tap to show photo" action to a marker. '
+            description: 'Attach a "tap to show photo" action to a marker. '
                 'Tapping the pin spawns the image overlay at '
                 '(lat + lat_offset, lng + lng_offset); a second tap '
                 'on the same pin dismisses it. Tapping a different '
@@ -213,16 +212,14 @@ class MapMontyExtension extends MontyExtension {
               HostParam(
                 name: 'url',
                 type: HostParamType.string,
-                description:
-                    'Image URL or bundled asset path (assets/...).',
+                description: 'Image URL or bundled asset path (assets/...).',
               ),
               HostParam(
                 name: 'lat_offset',
                 type: HostParamType.number,
                 isRequired: false,
                 defaultValue: 0.05,
-                description:
-                    'Degrees offset NORTH of the pin to anchor the '
+                description: 'Degrees offset NORTH of the pin to anchor the '
                     'photo. Match what you used during the tour.',
               ),
               HostParam(
@@ -363,9 +360,9 @@ class MapMontyExtension extends MontyExtension {
                 'addressdetails': '0',
               },
             );
-            final res = await _http
-                .get(uri, headers: {'User-Agent': _nominatimUserAgent})
-                .timeout(const Duration(seconds: 15));
+            final res = await _http.get(uri, headers: {
+              'User-Agent': _nominatimUserAgent
+            }).timeout(const Duration(seconds: 15));
             if (res.statusCode != 200) {
               throw FormatException(
                 'map_geocode: ${res.statusCode} ${res.reasonPhrase}',
@@ -386,8 +383,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_reverse_geocode',
-            description:
-                'Look up the address at given coordinates. Returns a '
+            description: 'Look up the address at given coordinates. Returns a '
                 'dict {display_name, address: {country, state, city, '
                 'road, ...}, lat, lng} or null if no match. Same '
                 'Nominatim throttle: 1 req/sec.',
@@ -407,9 +403,9 @@ class MapMontyExtension extends MontyExtension {
                 'addressdetails': '1',
               },
             );
-            final res = await _http
-                .get(uri, headers: {'User-Agent': _nominatimUserAgent})
-                .timeout(const Duration(seconds: 15));
+            final res = await _http.get(uri, headers: {
+              'User-Agent': _nominatimUserAgent
+            }).timeout(const Duration(seconds: 15));
             if (res.statusCode != 200) {
               throw FormatException(
                 'map_reverse_geocode: ${res.statusCode} ${res.reasonPhrase}',
@@ -501,8 +497,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_move_image',
-            description:
-                'Kick off an animation that moves an existing image '
+            description: 'Kick off an animation that moves an existing image '
                 'overlay to a new (lat, lng) over duration_ms and '
                 'return immediately. Fire-and-forget, like '
                 'map_add_path — the call returns at once while the '
@@ -579,8 +574,7 @@ class MapMontyExtension extends MontyExtension {
                 name: 'duration_ms',
                 type: HostParamType.integer,
                 isRequired: false,
-                description:
-                    'Defaults to distance-aware (same as map_fly_to).',
+                description: 'Defaults to distance-aware (same as map_fly_to).',
               ),
               HostParam(
                 name: 'face_heading',
@@ -635,8 +629,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_latlng_to_mgrs',
-            description:
-                'Convert (lat, lng) to an MGRS grid reference string. '
+            description: 'Convert (lat, lng) to an MGRS grid reference string. '
                 'Precision controls trailing-digit count: 0=100km '
                 '(grid only), 1=10km, 2=1km, 3=100m, 4=10m, 5=1m '
                 '(default).',
@@ -667,8 +660,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_move_marker',
-            description:
-                'Animate an existing marker from its current position '
+            description: 'Animate an existing marker from its current position '
                 'to a new (lat, lng) over duration_ms. Returns True on '
                 'success, False if the marker id was not found. Useful '
                 'for moving vehicles, helicopter sprites, or a tour '
@@ -678,8 +670,7 @@ class MapMontyExtension extends MontyExtension {
               HostParam(
                 name: 'id',
                 type: HostParamType.string,
-                description:
-                    'Marker id returned by map_add_marker.',
+                description: 'Marker id returned by map_add_marker.',
               ),
               HostParam(name: 'lat', type: HostParamType.number),
               HostParam(name: 'lng', type: HostParamType.number),
@@ -712,8 +703,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_fit_bounds',
-            description:
-                'Frame a list of [lat, lng] points by computing the '
+            description: 'Frame a list of [lat, lng] points by computing the '
                 'smallest viewport (center + zoom) that contains all of '
                 'them with `padding_pct` extra space, then fly there. '
                 'Use AFTER dropping multiple markers to ensure they are '
@@ -731,16 +721,14 @@ class MapMontyExtension extends MontyExtension {
                 type: HostParamType.number,
                 isRequired: false,
                 defaultValue: 10,
-                description:
-                    'Percent extra space around the bounds (10 = 10% '
+                description: 'Percent extra space around the bounds (10 = 10% '
                     'padding on each side). Bigger value = wider view.',
               ),
               HostParam(
                 name: 'duration_ms',
                 type: HostParamType.integer,
                 isRequired: false,
-                description:
-                    'Animation duration. Defaults to distance-aware.',
+                description: 'Animation duration. Defaults to distance-aware.',
               ),
             ],
           ),
@@ -863,8 +851,7 @@ class MapMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'map_add_hud',
-            description:
-                'Add a screen-space HUD overlay above the map. Pass '
+            description: 'Add a screen-space HUD overlay above the map. Pass '
                 'either `text` (styled label — classified stamp, '
                 'callsign card, mission clock) or `url` (image asset). '
                 'Anchor is one of: tl|tr|bl|br|c (top-left, top-right, '
@@ -954,8 +941,7 @@ class MapMontyExtension extends MontyExtension {
               HostParam(name: 'id', type: HostParamType.string),
             ],
           ),
-          handler: (args, ctx) async =>
-              _maps.removeHud(args['id']! as String),
+          handler: (args, ctx) async => _maps.removeHud(args['id']! as String),
         ),
         HostFunction(
           schema: HostFunctionSchema(
