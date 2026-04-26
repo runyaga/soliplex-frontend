@@ -1,4 +1,5 @@
 import 'package:soliplex_agent/src/runtime/agent_session.dart';
+import 'package:soliplex_agent/src/runtime/host_function.dart';
 import 'package:soliplex_agent/src/runtime/session_context.dart';
 import 'package:soliplex_agent/src/tools/tool_registry.dart';
 
@@ -49,6 +50,19 @@ abstract class SessionExtension {
   /// Returned tools are merged into the session's [ToolRegistry] during
   /// [onAttach]. The list must be stable after [onAttach] completes.
   List<ClientTool> get tools;
+
+  /// Foreign-runtime-callable functions this extension provides.
+  ///
+  /// Returned [HostFunction]s are picked up by the foreign-runtime
+  /// bridge (e.g. `MontyHostPlugin` in `soliplex_agent_monty`), which
+  /// translates them 1:1 into the runtime's native host-function shape
+  /// and registers them per-session. The default empty list means the
+  /// extension exposes no host functions — only LLM [tools].
+  ///
+  /// The list must be stable after [onAttachWithContext] completes.
+  ///
+  /// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 2 step 8).
+  List<HostFunction> get hostFunctions => const [];
 
   /// Called when the session is disposed. Must be idempotent.
   void onDispose();
