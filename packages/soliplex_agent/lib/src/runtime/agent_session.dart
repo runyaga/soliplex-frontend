@@ -121,19 +121,17 @@ class AgentSession implements ToolExecutionContext {
   /// Reactive signal tracking the agent's `aguiState` map across the
   /// session lifetime.
   ///
-  /// Sourced from the conversation's `aguiState` on every [RunState]
-  /// change. Empty when no conversation has accumulated yet (Idle
-  /// state, or a Failed/Cancelled state with no conversation).
+  /// View of the per-thread [bus]'s `agentState` signal. The bus is
+  /// fed by `_onStateChange` on every [RunState] transition, so
+  /// `session.agentState` and `bus.agentState` see the same snapshot
+  /// at all times — no parallel compute path.
   ///
-  /// This is the seam between the AG-UI streaming pipeline (which
-  /// already applies `StateSnapshotEvent` / `StateDeltaEvent` into
-  /// `Conversation.aguiState`) and the GenUI surface layer in
-  /// `soliplex_client`'s `StateBus`. Hosts pass the most recent
-  /// value here into `StateBus.setAgentState(...)`.
-  late final ReadonlySignal<Map<String, dynamic>> agentState = computed(() {
-    final state = _runStateSignal.value;
-    return _aguiStateOf(state) ?? const <String, dynamic>{};
-  });
+  /// Hosts that previously subscribed to this signal and forwarded
+  /// values into a separate `StateBus` no longer need to: the bus is
+  /// already the source. Subscribe to `bus.agentState` directly when
+  /// reaching the bus is more natural (e.g. inside `bus.project(...)`
+  /// projections).
+  late final ReadonlySignal<Map<String, dynamic>> agentState = bus.agentState;
 
   /// The per-thread reactive bus this session writes into. Owned by
   /// the runtime; survives session boundaries within the thread's
