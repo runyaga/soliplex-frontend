@@ -51,7 +51,13 @@ enum NarrationActor {
       'control' ||
       'dispatch' =>
         NarrationActor.coordinator,
-      'primary' || 'lead' || 'main' || 'one' || '1' => NarrationActor.primary,
+      'primary' ||
+      'lead' ||
+      'main' ||
+      'one' ||
+      '1' ||
+      'convoy' =>
+        NarrationActor.primary,
       'secondary' ||
       'support' ||
       'wing' ||
