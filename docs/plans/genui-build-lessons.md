@@ -170,3 +170,175 @@ no UI layer or domain layer was rewritten.
 - Original container sketch: `docs/plans/message-containers.md`
 - Strategy / containers lessons (deleted in disentangle, captured
   in plan Appendix B's lifecycle docs).
+
+---
+
+# Addendum — lessons from end-to-end integration with the server
+
+Captured after the P0–P5 framework hit a real backend (the AID
+DISTRIBUTION room on `aid-distribution` branch in
+`/Users/runyaga/dev/soliplex-aid/`). The handoff doc at
+`/Users/runyaga/dev/plans/genui-frontend-handoff.md` carries the
+running diagnosis log; this section distills what's worth
+remembering after the bugs were fixed.
+
+## 8. Surface singletons need auto-wire on session attach
+
+The original P3 demo button explicitly wired the singletons
+(`narrationController`, `mapExtension`) against a free-standing
+bus. Real sessions never wired them — agent state events flowed
+to `aguiState`, the per-thread bus updated, but no projection
+was registered against the singletons. **The chat showed
+delta JSON; the panels stayed blank.**
+
+Fix: `ThreadViewState._wireSurfaceSingletons()` runs on every
+session attach, projecting the bus into the four singletons and
+unwiring on detach. The demo button still works because it
+operates on its own bus and clears/wires before/after.
+
+**Lesson for redesign:** singleton bridges from a session's
+agent state to UI controllers must be the runtime's
+responsibility, not the demo's. Discover-and-wire on attach
+is the only correct default.
+
+## 9. State must outlive sessions for reload to work
+
+First version: bus was created on session attach, disposed on
+detach. Browser reload meant: load thread history → no session
+→ no bus → no panels rehydrate. Even though `ThreadHistory.
+aguiState` arrived from the server, nothing was reading it.
+
+Fix: bus is per-`ThreadViewState`, lives across attach/detach,
+disposed only in `dispose()`. `_fetch().then()` seeds it from
+`history.aguiState` directly. Subsequent session attaches
+*feed* the existing bus instead of replacing it.
+
+**Lesson for redesign:** the reactive substrate (bus +
+projections) must follow the *thread's* lifecycle, not the
+session's. Sessions come and go; the agent's state survives
+both attach/detach and full reload. The bus shape must match
+the state shape, not the session shape.
+
+## 10. Camera and clock are viewer concerns, not agent state
+
+When the convoy moved (state delta updated `ui.map.convoy.lat`),
+the sprite was teleporting because the wire layer just replaced
+the images list. Fixed by detecting per-id position changes and
+routing through the existing `moveImage` tween (lessons 5b/5c
+foreshadowed this).
+
+Camera follow is a *separate* concern: the agent doesn't say
+"the camera should fly here" — that's the *viewer* deciding what
+to look at. We solved it in `ThreadViewState` by subscribing to
+the convoy sprite's signal and calling `flyWithImage` on
+position change. The agent state stays free of camera fields.
+
+The same separation kept the live-tick clock simple: agent emits
+`ui.hud.elapsed_minutes` (advisory); the actual on-screen clock
+is a Dart-side Timer with `time_scale`.
+
+**Lesson:** any UI element whose *update cadence* is decoupled
+from agent emissions belongs on the viewer side. Camera
+following, animation easing, tween durations, scroll position,
+hover states — all viewer. Agent emits *what is*; viewer
+interprets *how to show it*.
+
+## 11. The Watch-bound-to-old-signal trap (revisited)
+
+Already captured as P5 lesson #2 but it bit a SECOND time on
+sprite-tween implementation. When `_diffApplyImages` calls
+`moveImage` (which mutates the same `_images` signal), the
+panel's Watch correctly observes the in-progress tween because
+the signal *instance* is stable. Conversely, if we'd swapped
+`_images` for a new signal during projection, every per-frame
+tween update would have been invisible.
+
+**Single stable signal that's forwarded to** is the canonical
+shape for any reactive surface in this stack. `signals_flutter`'s
+`Watch` doesn't follow signal-instance swaps; it tracks the
+exact signal it observed at first read.
+
+## 12. LLMs hallucinate from prompt examples, not state
+
+The most surprising failure mode: even after the server emitted
+the right snapshot, the LLM picked the *wrong coordinates* from
+prompt examples baked into the system message ("memorise these:
+hub at 12.0, 102.0"). When the seed coords moved, the prompt
+became a lie the LLM still believed.
+
+Two fixes layered together:
+1. **Strip baked numbers from prompts.** Replace coord examples
+   with id-based examples ("the hub's id is `hub`").
+2. **Force tool calls for reads.** Add a parallel "you MUST call
+   `agui_state` (or `where_is_convoy`) before answering any
+   read-back question." Without this, the LLM answers from
+   conversation memory.
+
+**Lesson:** the *agent state* is the source of truth, not the
+prompt. Prompts should describe *behaviour* and *vocabularies*
+(tool names, id namespaces) but never carry *values* the agent
+might emit later. Force the LLM through tools for both reads
+and writes.
+
+## 13. Tool design: prefer id-based over coord-based
+
+`move_convoy(lat, lng, heading)` was the obvious shape but it
+forced the LLM to pick lat/lng. The LLM picks from training data,
+prompt examples, conversation memory — anything but live state.
+
+Adding `move_convoy_to_site(site_id)` that looks up coords
+from current state inverted the responsibility: the LLM
+chooses the *intent* (`'camp-alpha'`); the tool reads state
+to compute coords. The LLM never has to know lat/lng.
+
+Same pattern for `serve_site(site_id, ...)` (wraps
+`set_site_status` but spares the LLM from having to know
+"served" is the magic string).
+
+**Lesson:** every coordinate / numeric / enum-string value the
+LLM has to pick is a hallucination opportunity. Wrap with
+id-based or intent-based tools that the LLM can pick from a
+small vocabulary, and have the tool look up the live values
+itself.
+
+## 14. Stack-of-commits-as-PRs really does scale
+
+Fourteen commits on `genui/framework-only`, each one logically
+a single PR. Reviewing each commit's diff in isolation is
+straightforward; reviewing the cumulative state is too. The
+trade-offs we hit:
+
+- **Cleanup commits** (`dd2a0fa` format, `2af3e08` signal-
+  stability fix) live alongside the features they touch.
+  Worth squashing into the parent before the formal review,
+  but useful while iterating.
+- **Test fallbacks live alongside the feature they support.**
+  E.g. the text-envelope detector and the ToolCall-args
+  detector are both no-ops once the proper state path lands —
+  they shipped together because the value of the demo working
+  *now* outweighed the cleanup cost.
+- **Backend coordination via shared doc.** The handoff doc at
+  `~/dev/plans/genui-frontend-handoff.md` got *six* dated
+  reply sections as the integration progressed. Each captured
+  the live state of "what works, what's broken, what either
+  side needs from the other." Future similar work should
+  start with such a doc, not retrofit one.
+
+## 15. Multi-agent coordination patterns that worked
+
+Frontend + server developed in parallel via:
+
+1. **Shared plan + handoff doc** — single source of truth for
+   the contract (`agentState['ui']` shape, naming, behaviours).
+2. **Backend agents spawned via `Agent` tool** — three rounds
+   so far (initial implementation, coord fix, state-read
+   mandate). Each completed in 3–8 minutes, returned a
+   structured report with commit SHAs and curl evidence.
+3. **Ping-pong via the handoff doc** — frontend appends a
+   dated reply when it observes a backend gap; backend reads,
+   fixes, reports back. Six rounds of this in this session;
+   each round narrowed the gap.
+
+**Lesson:** asynchronous parallel agents with a shared
+narrative doc beats synchronous pair-programming for
+client/server work where the contract is the bottleneck.
