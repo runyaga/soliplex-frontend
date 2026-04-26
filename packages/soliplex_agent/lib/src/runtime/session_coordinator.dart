@@ -44,7 +44,12 @@ class SessionCoordinator {
     final ordered = List.of(_extensions)
       ..sort((a, b) => b.priority.compareTo(a.priority));
     _attachOrder = ordered;
-    final ctx = SessionContext(session: session, runtime: session.runtime);
+    if (ordered.isEmpty) return;
+    final ctx = SessionContext(
+      session: session,
+      runtime: session.runtime,
+      bus: session.bus,
+    );
     for (final ext in ordered) {
       await ext.onAttachWithContext(ctx);
     }

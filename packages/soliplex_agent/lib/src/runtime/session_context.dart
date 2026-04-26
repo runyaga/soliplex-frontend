@@ -3,6 +3,7 @@ import 'package:soliplex_agent/src/runtime/agent_runtime.dart';
 import 'package:soliplex_agent/src/runtime/agent_session.dart';
 import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
+import 'package:soliplex_client/soliplex_client.dart' show StateBus;
 
 /// Per-session execution context passed to
 /// [SessionExtension.onAttachWithContext].
@@ -13,24 +14,32 @@ import 'package:soliplex_agent/src/runtime/session_extension.dart';
 /// - [runtime] — the [AgentRuntime] that owns the session, used for
 ///   spawning children, looking up other sessions, or accessing
 ///   per-runtime state.
+/// - [bus] — the per-thread reactive document. Handlers write state
+///   via `bus.applyDelta(...)` (or `bus.update(...)` /
+///   `bus.setAgentState(...)`) and read derived signals via
+///   `bus.project(...)`. The bus survives session boundaries within
+///   a thread.
 ///
-/// In Phase 1 step 3 of the reactive-bus redesign this gains a
-/// per-thread `bus` reference; in Phase 2 it becomes the object plugin
-/// `hostFunctions` receive. For now the context is intentionally
-/// minimal — the additive surface lands first, the new fields land
-/// alongside the changes that need them.
-///
-/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1 step 2).
+/// Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 1
+/// steps 2 + 3b).
 @immutable
 class SessionContext {
   /// Constructs a context bound to a single [session]. Callers should
   /// not construct contexts directly; the [SessionCoordinator] creates
   /// one per session during [SessionCoordinator.attachAll].
-  const SessionContext({required this.session, required this.runtime});
+  const SessionContext({
+    required this.session,
+    required this.runtime,
+    required this.bus,
+  });
 
   /// The session this context is bound to.
   final AgentSession session;
 
   /// The runtime that owns [session].
   final AgentRuntime runtime;
+
+  /// The per-thread reactive bus. Owned by the runtime; survives
+  /// session boundaries within the thread's lifetime.
+  final StateBus bus;
 }

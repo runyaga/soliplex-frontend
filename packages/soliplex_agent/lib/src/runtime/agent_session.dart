@@ -77,6 +77,14 @@ class AgentSession implements ToolExecutionContext {
   /// parameter.
   AgentRuntime get runtime => _runtime;
 
+  /// The per-thread reactive bus this session writes into. Owned by
+  /// the runtime; survives session boundaries within the thread's
+  /// lifetime.
+  ///
+  /// Phase 1 step 3b — first-class accessor that resolves to the
+  /// `ThreadState.bus` for this session's `threadKey`.
+  StateBus get bus => _runtime.ensureThreadState(threadKey).bus;
+
   static const _toolTimeout = Duration(seconds: 60);
 
   final List<AgentSession> _children = [];

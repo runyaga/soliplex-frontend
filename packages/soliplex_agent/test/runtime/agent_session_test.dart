@@ -143,11 +143,19 @@ AgentSession createSession({
     toolRegistry: registry,
     logger: logger,
   );
+  final effectiveRuntime = runtime ?? MockAgentRuntime();
+  // Stub ensureThreadState — needed by `AgentSession.bus` and the
+  // `SessionContext` plumbing introduced in step 3b. Tests that
+  // pass their own real `runtime` are unaffected.
+  if (effectiveRuntime is MockAgentRuntime) {
+    when(() => effectiveRuntime.ensureThreadState(any()))
+        .thenReturn(ThreadState());
+  }
   return AgentSession(
     threadKey: _key,
     ephemeral: ephemeral,
     depth: 0,
-    runtime: runtime ?? MockAgentRuntime(),
+    runtime: effectiveRuntime,
     orchestrator: orchestrator,
     toolRegistry: registry,
     coordinator: SessionCoordinator(extensions),
