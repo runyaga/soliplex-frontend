@@ -1,0 +1,38 @@
+id: "aid_distribution"
+name: "Aid Distribution"
+description: "Humanitarian-relief GenUI demo — convoys, supply hubs, displaced-persons camps."
+
+suggestions:
+  - "Begin the mission"
+  - "Move the convoy to Camp Alpha"
+  - "Camp Alpha served — 5000 L water, 800 kg food, 40 medkits"
+  - "Update the banner to 'Convoy en route to Camp Bravo'"
+  - "Reset the mission"
+
+agent:
+  template_id: "default_chat"
+  system_prompt: "./prompt.txt"
+
+agui_feature_names:
+  - "ui"
+
+allow_mcp: false
+
+tools:
+  - tool_name: "soliplex.aid_distribution.tools.start_mission"
+  - tool_name: "soliplex.aid_distribution.tools.add_narration"
+  - tool_name: "soliplex.aid_distribution.tools.set_hud"
+  # Read-only state look-up. The prompt instructs the LLM to
+  # call this whenever it needs to see the live world.
+  - tool_name: "soliplex.tools.agui_state"
+  # Id-based tools — coords looked up from live state so the LLM
+  # never has to pass lat/lng. The legacy raw-coord tools
+  # (`move_convoy`, `set_site_status`) are intentionally NOT
+  # registered: gpt-oss kept hallucinating coords and falling
+  # through their schemas. The functions still exist in
+  # `tools.py` for any future raw-coord caller.
+  - tool_name: "soliplex.aid_distribution.tools.move_convoy_to_site"
+  - tool_name: "soliplex.aid_distribution.tools.serve_site"
+  # Read-only — answers "where is the convoy?" with the nearest
+  # site_id, sparing the LLM from doing lat/lng matching.
+  - tool_name: "soliplex.aid_distribution.tools.where_is_convoy"
