@@ -1,0 +1,22 @@
+name: soliplex_agent_widgets
+description: Generic widget-tree surface for soliplex_agent — catalog-driven rendering of agent-emitted widget specs (e.g. InfoCard, StatChip).
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.16.0
+  signals_core: ^6.2.0
+  signals_flutter: ^6.3.0
+  soliplex_client:
+    path: ../soliplex_client
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

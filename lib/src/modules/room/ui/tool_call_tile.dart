@@ -2,9 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
-
-import '../../../widget_tree/widget_catalog.dart';
-import '../../../widget_tree/widget_spec.dart';
+import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart';
 
 /// Tool names whose arguments should be rendered as widgets via the
 /// catalog instead of the generic tool-call envelope.

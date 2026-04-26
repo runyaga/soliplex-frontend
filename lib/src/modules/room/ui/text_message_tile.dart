@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart';
 
-import '../../../widget_tree/widget_catalog.dart';
-import '../../../widget_tree/widget_spec.dart';
 import '../execution_tracker.dart';
 import '../room_providers.dart';
 import 'citations_section.dart';

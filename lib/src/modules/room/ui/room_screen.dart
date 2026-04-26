@@ -37,11 +37,10 @@ import 'chunk_visualization_page.dart';
 import 'document_picker.dart';
 import 'error_retry_panel.dart';
 import 'package:soliplex_agent_narration/soliplex_agent_narration.dart';
+import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart';
 
 import '../../../demo/aid_distribution_replay.dart';
 import '../../../monty_singleton.dart';
-import '../../../widget_tree/widget_catalog.dart';
-import '../../../widget_tree/widget_tree_panel.dart';
 import 'package:soliplex_client/soliplex_client.dart'
     show StateBus, SurfaceEvent;
 import 'message_timeline.dart';

@@ -5,10 +5,9 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
 import 'package:soliplex_agent_narration/soliplex_agent_narration.dart';
+import 'package:soliplex_agent_widgets/soliplex_agent_widgets.dart';
 
 import '../../maps_singleton.dart' as maps_singleton;
-import '../../widget_tree/widget_spec.dart';
-import '../../widget_tree/widget_tree_projection.dart';
 
 import 'execution_tracker.dart';
 import 'execution_tracker_extension.dart';
