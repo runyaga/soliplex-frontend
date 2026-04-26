@@ -1,5 +1,21 @@
 # Message containers — rich widgets inline in chat messages
 
+> **Status: historical / superseded.** The core problem this doc set out
+> to solve (rich, persistent, multi-writer state behind chat-driven UI)
+> is now addressed by `reactive-bus-redesign.md` — the per-thread
+> `StateBus` replaces the `Container` / `ContainerRegistry` pattern, and
+> the unified `SessionExtension` model (tools + hostFunctions on one
+> type, bridged to dart_monty) replaces the parallel `MapExtension` /
+> `MapMontyExtension` wiring. The "three input pathways converge"
+> design collapses to one path: `bus.applyDelta(...)`.
+>
+> The one piece worth preserving is the **inline-on-message rendering
+> via `` ```container `` fence**. That ships as a post-v1 follow-on
+> after the reactive-bus foundation lands (~1 day of work) and consumes
+> the bus rather than building parallel infrastructure.
+>
+> Kept for historical context. **Do not implement as written.**
+
 ## Problem
 
 We have two kinds of LLM-driven UI living in the room today:
