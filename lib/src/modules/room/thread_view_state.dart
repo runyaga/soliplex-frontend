@@ -86,7 +86,21 @@ class ThreadViewState {
   CancelToken? _cancelToken;
   AgentSession? _activeSession;
   void Function()? _runStateUnsub;
+  void Function()? _agentStateUnsub;
   bool _isDisposed = false;
+
+  /// Per-thread reactive bus mirroring AG-UI agent state.
+  ///
+  /// Re-created on every session attach because each AgentSession has
+  /// its own agentState signal we pipe through. Surfaces register
+  /// projections via `bus.project(...)` and read the returned signal;
+  /// the projection re-runs whenever the agent emits a state event.
+  ///
+  /// This is the seam between the AG-UI streaming pipeline and the
+  /// GenUI surface layer. See `packages/soliplex_client/lib/src/
+  /// application/state_bus.dart`.
+  StateBus _bus = StateBus();
+  StateBus get bus => _bus;
 
   final SessionSpawner _spawner = SessionSpawner();
 
@@ -220,6 +234,10 @@ class ThreadViewState {
     _activeSession = session;
     _sessionState.value = session.state;
     _runStateUnsub = session.runState.subscribe(_onRunState);
+    // Pipe the session's agentState signal into the bus. Projections
+    // registered on the bus auto-update on every emission.
+    _bus = StateBus(initialAgentState: session.agentState.value);
+    _agentStateUnsub = session.agentState.subscribe(_bus.setAgentState);
   }
 
   void _onRunState(RunState runState) {
@@ -276,9 +294,15 @@ class ThreadViewState {
     }
     _runStateUnsub?.call();
     _runStateUnsub = null;
+    _agentStateUnsub?.call();
+    _agentStateUnsub = null;
     _activeSession = null;
     _streamingState.value = null;
     _sessionState.value = null;
+    // Tear down the bus so any registered projection signals stop
+    // firing; a fresh bus is created on next attach.
+    _bus.dispose();
+    _bus = StateBus();
   }
 
   bool _restoreFromRegistry() {
@@ -347,6 +371,7 @@ class ThreadViewState {
     _isDisposed = true;
     _cancelToken?.cancel('disposed');
     _detachSession();
+    _bus.dispose();
     _sessionState.dispose();
   }
 }
