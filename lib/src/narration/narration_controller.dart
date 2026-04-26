@@ -43,14 +43,16 @@ class NarrationProjection extends StateProjection<List<Narration>> {
 /// `narrate_say(...)` external and the `NarrationPanel` widget
 /// read/write the same signal regardless of session attach state.
 ///
-/// Two input paths feed [entries]:
+/// One stable [entries] signal is the only thing widgets watch. Two
+/// input paths feed it:
 ///
 /// - **Imperative** ([add] / [clear]) — used by the Python external,
-///   the demo replay, and any direct caller. Always available.
+///   the demo replay, and any direct caller. Always available when
+///   no projection is wired.
 /// - **Projection** ([wireProjection]) — when wired, the controller
-///   replaces [entries] with the projected signal so UI surfaces
-///   stay in sync with agent-side state. Conforms to [Surface] for
-///   the GenUI plan.
+///   subscribes to the projected signal and forwards each emission
+///   into [entries]. Imperative writes are dropped while wired.
+///   Conforms to [Surface] for the GenUI plan.
 ///
 /// State is intentionally ephemeral — clearing on demo restart or
 /// page reload is fine. If persistence becomes a real ask, this is
@@ -59,49 +61,51 @@ class NarrationController implements Surface<List<Narration>> {
   /// Construct with [maxEntries] capacity for the imperative buffer.
   NarrationController({this.maxEntries = 64});
 
-  /// Buffer ceiling for [add]; ignored when a projection is wired
-  /// (the projected list is the source of truth in that mode).
+  /// Buffer ceiling for [add]; ignored while a projection is wired
+  /// (the agent owns history in that mode).
   final int maxEntries;
 
-  final Signal<List<Narration>> _imperative = signal(const <Narration>[]);
+  /// The single stable signal widgets watch. Never replaced —
+  /// only its value changes, whether driven by [add] or by a wired
+  /// projection forwarding through [wireProjection].
+  final Signal<List<Narration>> _entries = signal(const <Narration>[]);
 
-  /// When non-null, [entries] reads from this projected signal
-  /// instead of the imperative buffer.
-  ReadonlySignal<List<Narration>>? _projected;
+  /// When non-null, [add] is dropped because the agent owns state.
   void Function()? _projectedUnsub;
 
   @override
   String get id => 'narration';
 
   @override
-  ReadonlySignal<List<Narration>> get state => entries;
+  ReadonlySignal<List<Narration>> get state => _entries.readonly();
 
-  /// No-op write-back. Narration is read-only from the UI side; user
-  /// interactions (clicking a line, etc.) don't push events to the
-  /// agent in v1. P6 will revisit when interactive surfaces ship.
-  @override
-  void emit(SurfaceEvent event) {}
-
-  /// Read-only feed for widgets. Shows the projected state when a
-  /// projection has been wired; otherwise the imperative buffer.
-  ReadonlySignal<List<Narration>> get entries => _projected ?? _imperative;
+  /// Read-only feed for widgets — the same stable signal whether
+  /// driven imperatively or by a projection.
+  ReadonlySignal<List<Narration>> get entries => _entries.readonly();
 
   int _seq = 0;
 
-  /// Wire a projected source. The controller's [entries] signal
-  /// becomes the projection's output until [unwireProjection] is
-  /// called or a different projection replaces it.
+  /// Wire a projected source. The controller forwards every
+  /// emission from [projected] into [entries]. Imperative writes
+  /// are dropped while a projection is wired. Pass `null` (or call
+  /// [unwireProjection]) to detach.
   ///
-  /// Pass `null` to detach the current projection (equivalent to
-  /// [unwireProjection]).
+  /// The first emission also seeds [entries] synchronously, so the
+  /// panel renders any current projection state immediately.
   void wireProjection(ReadonlySignal<List<Narration>>? projected) {
     _projectedUnsub?.call();
     _projectedUnsub = null;
-    _projected = projected;
+    if (projected == null) return;
+    // Seed synchronously with the projection's current value.
+    _entries.value = projected.value;
+    _projectedUnsub = projected.subscribe((value) {
+      _entries.value = value;
+    });
   }
 
-  /// Detach the current projection if any. Imperative buffer
-  /// resumes as the source.
+  /// Detach the current projection if any. Imperative writes
+  /// resume; the [entries] signal keeps its last value until
+  /// [add] / [clear] is called.
   void unwireProjection() => wireProjection(null);
 
   /// Append a single narration line. Trims oldest when [maxEntries] is
@@ -115,27 +119,33 @@ class NarrationController implements Surface<List<Narration>> {
       text: text,
       createdAt: DateTime.now(),
     );
-    if (_projected != null) return entry;
-    final next = [..._imperative.value, entry];
+    if (_projectedUnsub != null) return entry;
+    final next = [..._entries.value, entry];
     if (next.length > maxEntries) {
       next.removeRange(0, next.length - maxEntries);
     }
-    _imperative.value = next;
+    _entries.value = next;
     return entry;
   }
 
   /// Reset the log. Called on script start so each demo run begins
-  /// with a clean board. Only clears the imperative buffer; a wired
-  /// projection is left alone.
+  /// with a clean board. No-op when a projection is wired (the
+  /// agent owns state in that mode).
   void clear() {
-    _imperative.value = const <Narration>[];
+    if (_projectedUnsub != null) return;
+    _entries.value = const <Narration>[];
   }
+
+  /// No-op write-back. Narration is read-only from the UI side; user
+  /// interactions (clicking a line, etc.) don't push events to the
+  /// agent in v1. P6 will revisit when interactive surfaces ship.
+  @override
+  void emit(SurfaceEvent event) {}
 
   @override
   void dispose() {
     _projectedUnsub?.call();
     _projectedUnsub = null;
-    _projected = null;
-    _imperative.dispose();
+    _entries.dispose();
   }
 }
