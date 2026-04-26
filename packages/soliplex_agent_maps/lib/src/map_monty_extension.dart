@@ -18,6 +18,7 @@ import 'package:http/http.dart' as http;
 import 'package:mgrs_dart/mgrs_dart.dart';
 
 import 'package:soliplex_agent_maps/src/map_extension.dart';
+import 'package:soliplex_agent_maps/src/map_state.dart' show HudAnchor;
 
 /// Bridges the singleton [MapExtension] into a `dart_monty` runtime so
 /// Python scripts (run via `run_python_on_device`) can drive the same
@@ -859,7 +860,153 @@ class MapMontyExtension extends MontyExtension {
           ),
           handler: (args, ctx) async => _maps.boundsJson(),
         ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_add_hud',
+            description:
+                'Add a screen-space HUD overlay above the map. Pass '
+                'either `text` (styled label — classified stamp, '
+                'callsign card, mission clock) or `url` (image asset). '
+                'Anchor is one of: tl|tr|bl|br|c (top-left, top-right, '
+                'bottom-left, bottom-right, center). Margin is in '
+                'pixels from the anchor edge. `color` and `background` '
+                'accept hex strings like "#FF8800" or "#80000000" '
+                '(the latter is half-transparent black). Returns the '
+                'HUD id for later removal.',
+            params: const [
+              HostParam(
+                name: 'text',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'url',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'anchor',
+                type: HostParamType.string,
+                isRequired: false,
+                defaultValue: 'tl',
+              ),
+              HostParam(
+                name: 'margin',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 16,
+              ),
+              HostParam(
+                name: 'color',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'background',
+                type: HostParamType.string,
+                isRequired: false,
+              ),
+              HostParam(
+                name: 'font_size',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 13,
+              ),
+              HostParam(
+                name: 'tick',
+                type: HostParamType.boolean,
+                isRequired: false,
+                defaultValue: false,
+                description: 'When true, ignore `text` and render a '
+                    'live-ticking "T+HH:MM:SS" elapsed-time clock '
+                    'that updates every second. Used for mission '
+                    'clocks that should keep time even while the '
+                    'script is sleeping.',
+              ),
+              HostParam(
+                name: 'time_scale',
+                type: HostParamType.number,
+                isRequired: false,
+                defaultValue: 1,
+                description: 'Multiplier on real elapsed time when '
+                    'tick=True. 1.0 = real time. 300.0 compresses a '
+                    '5-hour mission into ~60 seconds of demo runtime.',
+              ),
+            ],
+          ),
+          handler: (args, ctx) async => _maps.addHud(
+            anchor: _parseAnchor(args['anchor'] as String?),
+            url: args['url'] as String?,
+            text: args['text'] as String?,
+            margin: (args['margin'] as num?)?.toDouble() ?? 16,
+            colorHex: _parseHex(args['color'] as String?),
+            backgroundHex: _parseHex(args['background'] as String?),
+            fontSize: (args['font_size'] as num?)?.toDouble() ?? 13,
+            tick: (args['tick'] as bool?) ?? false,
+            timeScale: (args['time_scale'] as num?)?.toDouble() ?? 1.0,
+          ),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_remove_hud',
+            description: 'Remove a HUD overlay by id. Returns true.',
+            params: const [
+              HostParam(name: 'id', type: HostParamType.string),
+            ],
+          ),
+          handler: (args, ctx) async =>
+              _maps.removeHud(args['id']! as String),
+        ),
+        HostFunction(
+          schema: HostFunctionSchema(
+            name: 'map_clear_huds',
+            description: 'Wipe every HUD overlay.',
+            params: const [],
+          ),
+          handler: (args, ctx) async {
+            _maps.clearHuds();
+            return true;
+          },
+        ),
       ];
+
+  HudAnchor _parseAnchor(String? raw) {
+    switch ((raw ?? 'tl').toLowerCase()) {
+      case 'tr':
+      case 'top-right':
+      case 'topright':
+        return HudAnchor.topRight;
+      case 'bl':
+      case 'bottom-left':
+      case 'bottomleft':
+        return HudAnchor.bottomLeft;
+      case 'br':
+      case 'bottom-right':
+      case 'bottomright':
+        return HudAnchor.bottomRight;
+      case 'c':
+      case 'center':
+        return HudAnchor.center;
+      case 'tl':
+      case 'top-left':
+      case 'topleft':
+      default:
+        return HudAnchor.topLeft;
+    }
+  }
+
+  /// Parse a CSS-style hex color string ("#RRGGBB" or "#AARRGGBB") into
+  /// a 0xAARRGGBB int. Returns null on bad input so the renderer falls
+  /// back to its default.
+  int? _parseHex(String? raw) {
+    if (raw == null) return null;
+    var s = raw.trim();
+    if (s.isEmpty) return null;
+    if (s.startsWith('#')) s = s.substring(1);
+    if (s.length == 6) s = 'FF$s';
+    if (s.length != 8) return null;
+    return int.tryParse(s, radix: 16);
+  }
 
   /// Reshape a Nominatim search hit into the dict Python sees.
   Map<String, Object?> _formatGeocodeResult(Map<Object?, Object?> item) {

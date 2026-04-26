@@ -77,6 +77,7 @@ class MapExtension extends SessionExtension
         _polylines = signal(<PolylineData>[]),
         _polygons = signal(<PolygonData>[]),
         _images = signal(<ImageOverlayData>[]),
+        _huds = signal(<HudOverlayData>[]),
         _viewport = signal(initialViewport) {
     setInitialState(_buildState(lastEvent: 'init'));
     // Subscribe to the controller's event stream eagerly. Events only
@@ -101,6 +102,7 @@ class MapExtension extends SessionExtension
   final Signal<List<PolylineData>> _polylines;
   final Signal<List<PolygonData>> _polygons;
   final Signal<List<ImageOverlayData>> _images;
+  final Signal<List<HudOverlayData>> _huds;
   final Signal<Viewport> _viewport;
 
   StreamSubscription<MapEvent>? _mapEventSub;
@@ -116,6 +118,7 @@ class MapExtension extends SessionExtension
   ReadonlySignal<List<PolylineData>> get polylines => _polylines.readonly();
   ReadonlySignal<List<PolygonData>> get polygons => _polygons.readonly();
   ReadonlySignal<List<ImageOverlayData>> get images => _images.readonly();
+  ReadonlySignal<List<HudOverlayData>> get huds => _huds.readonly();
   ReadonlySignal<Viewport> get viewport => _viewport.readonly();
 
   Viewport get initialViewport => _initialViewport;
@@ -1217,6 +1220,55 @@ class MapExtension extends SessionExtension
     _images.value = next;
     _refreshState(lastEvent: 'remove_image');
     return true;
+  }
+
+  /// Adds a screen-space HUD overlay rendered above the map. Either
+  /// [url] (image) or [text] (styled label) must be set; if both are
+  /// passed the image wins. Returns the new HUD's id.
+  String addHud({
+    required HudAnchor anchor,
+    String? url,
+    String? text,
+    double margin = 16,
+    int? colorHex,
+    int? backgroundHex,
+    double fontSize = 13,
+    bool tick = false,
+    double timeScale = 1.0,
+  }) {
+    final id = _autoId('hud');
+    final hud = HudOverlayData(
+      id: id,
+      anchor: anchor,
+      url: url,
+      text: text,
+      margin: margin,
+      colorHex: colorHex,
+      backgroundHex: backgroundHex,
+      fontSize: fontSize,
+      tick: tick,
+      timeScale: timeScale,
+    );
+    _huds.value = [..._huds.value, hud];
+    _refreshState(lastEvent: 'add_hud');
+    return id;
+  }
+
+  /// Removes a HUD overlay by id. Returns true on success.
+  bool removeHud(String id) {
+    final list = _huds.value;
+    final next = [...list]..removeWhere((h) => h.id == id);
+    if (next.length == list.length) return false;
+    _huds.value = next;
+    _refreshState(lastEvent: 'remove_hud');
+    return true;
+  }
+
+  /// Wipes every HUD overlay.
+  void clearHuds() {
+    if (_huds.value.isEmpty) return;
+    _huds.value = const <HudOverlayData>[];
+    _refreshState(lastEvent: 'clear_huds');
   }
 
   /// Animates an existing image overlay to a new lat/lng over [durationMs].

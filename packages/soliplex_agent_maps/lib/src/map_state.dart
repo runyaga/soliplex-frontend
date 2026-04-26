@@ -250,6 +250,80 @@ class ImageOverlayData {
       };
 }
 
+/// Anchor corner for screen-space HUD overlays.
+///
+/// HUDs render in a [Stack] above the map, glued to a screen-space
+/// position so they don't pan/zoom with the camera. Useful for the
+/// classified stamp, callsign card, mission clock, and similar
+/// "operator-console" furniture.
+enum HudAnchor { topLeft, topRight, bottomLeft, bottomRight, center }
+
+/// A screen-space overlay on top of the map.
+///
+/// Either an image (via [url]) or a styled text label (via [text]).
+/// Text overlays render with a translucent dark background and a
+/// monospace stencil-ish look; pass [color] / [background] to override.
+@immutable
+class HudOverlayData {
+  HudOverlayData({
+    required this.id,
+    required this.anchor,
+    this.url,
+    this.text,
+    this.margin = 16,
+    this.colorHex,
+    this.backgroundHex,
+    this.fontSize = 13,
+    this.tick = false,
+    this.timeScale = 1.0,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final String id;
+  final HudAnchor anchor;
+  final String? url;
+  final String? text;
+  final double margin;
+
+  /// When true, the renderer ignores [text] and shows a self-ticking
+  /// "T+HH:MM:SS" elapsed-time label that updates every second
+  /// regardless of what the script is doing. Use for mission clocks.
+  final bool tick;
+
+  /// Multiplier on real elapsed time. `1.0` = real time. `300.0`
+  /// compresses a 5-hour mission into ~60 seconds of wall-clock demo.
+  /// Only used when [tick] is true.
+  final double timeScale;
+
+  /// Wall-clock time the HUD was created. The live-ticking renderer
+  /// computes elapsed = (now - createdAt) * timeScale.
+  final DateTime createdAt;
+
+  /// Foreground color for text overlays, encoded as 0xAARRGGBB. If
+  /// null, renderer picks a sensible default per anchor.
+  final int? colorHex;
+
+  /// Background color for text overlays, encoded as 0xAARRGGBB. If
+  /// null, renderer picks a translucent dark default.
+  final int? backgroundHex;
+
+  final double fontSize;
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'anchor': anchor.name,
+        'url': url,
+        'text': text,
+        'margin': margin,
+        'colorHex': colorHex,
+        'backgroundHex': backgroundHex,
+        'fontSize': fontSize,
+        'tick': tick,
+        'timeScale': timeScale,
+        'createdAtMs': createdAt.millisecondsSinceEpoch,
+      };
+}
+
 /// Tile-source basemap selection.
 ///
 /// All providers below serve free, no-API-key tiles. Stamen and Mapbox

@@ -177,11 +177,48 @@ class MapView extends StatelessWidget {
                 left: 8,
                 child: _ZoomControls(extension: extension),
               ),
+              ..._buildHuds(extension),
             ],
           );
         },
       ),
     );
+  }
+
+  /// Watch the HUD signal and return a list of Positioned widgets for
+  /// the Stack. Each HUD anchors to one of five screen-space corners.
+  /// Rendered last so it sits above markers and overlays.
+  List<Widget> _buildHuds(MapExtension extension) {
+    final huds = extension.huds.value;
+    if (huds.isEmpty) return const [];
+    return [
+      for (final h in huds)
+        switch (h.anchor) {
+          HudAnchor.topLeft => Positioned(
+              top: h.margin,
+              left: h.margin,
+              child: _HudChild(data: h),
+            ),
+          HudAnchor.topRight => Positioned(
+              top: h.margin,
+              right: h.margin,
+              child: _HudChild(data: h),
+            ),
+          HudAnchor.bottomLeft => Positioned(
+              bottom: h.margin,
+              left: h.margin,
+              child: _HudChild(data: h),
+            ),
+          HudAnchor.bottomRight => Positioned(
+              bottom: h.margin,
+              right: h.margin,
+              child: _HudChild(data: h),
+            ),
+          HudAnchor.center => Positioned.fill(
+              child: Center(child: _HudChild(data: h)),
+            ),
+        },
+    ];
   }
 
   /// Returns the visible portion of an animated polyline given its
@@ -224,6 +261,119 @@ class MapView extends StatelessWidget {
       }
     }
     return out;
+  }
+}
+
+/// Renders a single HUD overlay — image (when [data.url] is set), a
+/// live-ticking elapsed-time clock (when [data.tick] is true), or a
+/// styled static text label. Image overlays size themselves; text
+/// overlays use a translucent dark background and a stencilled
+/// monospace font so they read like operator-console furniture.
+class _HudChild extends StatelessWidget {
+  const _HudChild({required this.data});
+
+  final HudOverlayData data;
+
+  @override
+  Widget build(BuildContext context) {
+    if (data.url != null) {
+      return Image.network(
+        data.url!,
+        errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+      );
+    }
+    if (data.tick) {
+      return _LiveClockHud(data: data);
+    }
+    return _StaticTextHud(data: data, text: data.text ?? '');
+  }
+}
+
+/// Renders the styled-text shell for a HUD; shared between static and
+/// live-ticking variants.
+class _StaticTextHud extends StatelessWidget {
+  const _StaticTextHud({required this.data, required this.text});
+
+  final HudOverlayData data;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = data.colorHex != null
+        ? Color(data.colorHex!)
+        : const Color(0xFFE6EDF3);
+    final bg = data.backgroundHex != null
+        ? Color(data.backgroundHex!)
+        : const Color(0xCC0B0E12);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: fg.withValues(alpha: 0.6), width: 1),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: fg,
+          fontFamily: 'monospace',
+          fontSize: data.fontSize,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+}
+
+/// HUD that ticks itself — a 1Hz Timer drives a setState so the
+/// elapsed time stays current independently of the script.
+class _LiveClockHud extends StatefulWidget {
+  const _LiveClockHud({required this.data});
+
+  final HudOverlayData data;
+
+  @override
+  State<_LiveClockHud> createState() => _LiveClockHudState();
+}
+
+class _LiveClockHudState extends State<_LiveClockHud> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Tick at ~20Hz so the seconds digit moves smoothly even when
+    // [timeScale] is large. At 300x compression this shows ~15-second
+    // jumps per real frame, which still reads as a live clock.
+    _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  String _format() {
+    final realMs = DateTime.now()
+        .difference(widget.data.createdAt)
+        .inMilliseconds;
+    final scaledSec = (realMs * widget.data.timeScale / 1000)
+        .round()
+        .clamp(0, 99 * 3600 + 59 * 60 + 59);
+    final h = scaledSec ~/ 3600;
+    final m = (scaledSec % 3600) ~/ 60;
+    final sec = scaledSec % 60;
+    return 'T+${h.toString().padLeft(2, '0')}:'
+        '${m.toString().padLeft(2, '0')}:'
+        '${sec.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _StaticTextHud(data: widget.data, text: _format());
   }
 }
 
