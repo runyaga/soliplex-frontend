@@ -15,9 +15,18 @@ import 'package:soliplex_agent_maps/src/map_state.dart';
 /// turns — tool calls update it imperatively via the extension's
 /// [MapController] and reactive signals.
 class MapView extends StatelessWidget {
-  const MapView({required this.extension, super.key});
+  const MapView({
+    required this.extension,
+    this.onMarkerTap,
+    super.key,
+  });
 
   final MapExtension extension;
+
+  /// Optional tap handler — called when a marker is tapped if no
+  /// `tapImage` action is set. Use to bridge map taps to the
+  /// host's surface-event bus (P6 write-back path).
+  final void Function(MarkerData marker)? onMarkerTap;
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +132,13 @@ class MapView extends StatelessWidget {
                             alignment: Alignment.topCenter,
                             child: GestureDetector(
                               behavior: HitTestBehavior.translucent,
-                              onTap: m.tapImage == null
-                                  ? null
-                                  : () => extension.onMarkerTapped(m.id),
+                              onTap: () {
+                                if (m.tapImage != null) {
+                                  extension.onMarkerTapped(m.id);
+                                  return;
+                                }
+                                onMarkerTap?.call(m);
+                              },
                               child: _AnimatedPin(
                                 key: ValueKey(m.id),
                                 marker: m,

@@ -44,7 +44,8 @@ import '../../../narration/narration_panel.dart';
 import '../../../narration_singleton.dart';
 import '../../../widget_tree/widget_catalog.dart';
 import '../../../widget_tree/widget_tree_panel.dart';
-import 'package:soliplex_client/soliplex_client.dart' show StateBus;
+import 'package:soliplex_client/soliplex_client.dart'
+    show StateBus, SurfaceEvent;
 import 'message_timeline.dart';
 import 'terminal_panel.dart';
 import 'async_action_dialog.dart';
@@ -117,6 +118,7 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _filesExpanded = false;
   bool _mapDrawerOpen = false;
   bool _aidDemoRunning = false;
+  SurfaceEvent? _shownSurfaceEvent;
 
   /// Catalog used to render agent-emitted widgets via
   /// `agentState['ui']['widgets']`. Built-ins ship in
@@ -944,9 +946,25 @@ class _RoomScreenState extends State<RoomScreen> {
     final status = threadView.messages.watch(context);
     final streaming = threadView.streamingState.watch(context);
     final sendError = threadView.lastSendError.watch(context);
+    final lastSurfaceEvent = threadView.lastSurfaceEvent.watch(context);
     final attachEnabled = room?.enableAttachments ?? false;
 
     _restoreUnsentText(sendError?.unsentText);
+    if (lastSurfaceEvent != null && lastSurfaceEvent != _shownSurfaceEvent) {
+      _shownSurfaceEvent = lastSurfaceEvent;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${lastSurfaceEvent.surfaceId} → ${lastSurfaceEvent.kind}: '
+              '${lastSurfaceEvent.data}',
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      });
+    }
 
     return Stack(
       children: [
@@ -1049,7 +1067,27 @@ class _RoomScreenState extends State<RoomScreen> {
                             children: [
                               SizedBox(
                                 height: h,
-                                child: MapView(extension: mapExtension),
+                                child: MapView(
+                                  extension: mapExtension,
+                                  onMarkerTap: (marker) {
+                                    // P6 spike — marker tap fires
+                                    // a SurfaceEvent on the bus.
+                                    // Forwarded by ThreadView's
+                                    // _handleSurfaceEvent.
+                                    threadView.bus.emit(
+                                      SurfaceEvent(
+                                        surfaceId: 'map.markers',
+                                        kind: 'marker.tap',
+                                        data: {
+                                          'site_id': marker.id,
+                                          'label': marker.label,
+                                          'lat': marker.lat,
+                                          'lng': marker.lng,
+                                        },
+                                      ),
+                                    );
+                                  },
+                                ),
                               ),
                               SizedBox(
                                 height: 160,

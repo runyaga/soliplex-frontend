@@ -86,6 +86,13 @@ class ThreadViewState {
     if (!_restoreFromRegistry()) _fetch();
   }
 
+  /// Read-only signal of the most recent SurfaceEvent (P6 spike).
+  /// Reset to null on session detach. Used by the room view to
+  /// flash a snackbar / toast so the spike is visibly testable
+  /// before the events get routed to a real agent input channel.
+  final Signal<SurfaceEvent?> _lastSurfaceEvent = Signal<SurfaceEvent?>(null);
+  ReadonlySignal<SurfaceEvent?> get lastSurfaceEvent => _lastSurfaceEvent;
+
   /// Forwards a surface-emitted event toward the agent as a
   /// synthetic prompt. The event becomes a one-line user message
   /// the LLM can react to via tool calls — the bidirectional half
@@ -93,27 +100,17 @@ class ThreadViewState {
   /// flow into the bus via [setAgentState] / [update]; surface
   /// events flow out via [emit] and end up here.
   ///
-  /// v1: synthetic user-prompt routing. Future versions will use a
-  /// dedicated AG-UI client→server event when the protocol grows
-  /// one.
+  /// v1: log + signal-emit so the room view can display a toast.
+  /// Real "send to agent" wiring is the next concrete step;
+  /// choosing the right delivery channel (chat send vs structured
+  /// input vs new AG-UI event type) is a separate architecture
+  /// call.
   void _handleSurfaceEvent(SurfaceEvent event) {
-    final session = _activeSession;
     final prompt = '[surface event] '
         '${event.surfaceId} → ${event.kind}: '
         '${event.data}';
-    debugPrint('SurfaceEvent forwarded as prompt: $prompt');
-    if (session == null) {
-      // No active session — for spike v1, log and drop.
-      // Future: queue and flush on next session attach.
-      return;
-    }
-    // Future: use a dedicated input channel rather than chat.
-    // For the spike, the existing send-message path is enough.
-    debugPrint(
-      'SurfaceEvent received during active session — '
-      'queue-and-prompt forwarding is a follow-up. '
-      'Event was: $prompt',
-    );
+    debugPrint('SurfaceEvent: $prompt');
+    _lastSurfaceEvent.value = event;
   }
 
   final ServerConnection _connection;
