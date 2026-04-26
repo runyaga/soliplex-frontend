@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dart_monty/dart_monty.dart' show MontyRuntime;
-import 'package:dart_monty/dart_monty_bridge.dart' show ExtensionCoordinator;
+import 'package:dart_monty/dart_monty_bridge.dart'
+    show ExtensionCoordinator, MontyExtension;
 import 'package:soliplex_agent/soliplex_agent.dart';
 // ToolExecutionContext is not re-exported from soliplex_agent's public
 import 'package:soliplex_agent_monty/src/monty_extension_set.dart';
+import 'package:soliplex_agent_monty/src/monty_host_plugin.dart';
 
 /// Bridges a [MontyRuntime] into a soliplex [AgentSession].
 ///
@@ -82,7 +84,38 @@ class MontyRuntimeExtension extends SessionExtension
 
   @override
   Future<void> onAttach(AgentSession session) async {
-    final runtime = MontyRuntime(extensions: _extensions.all);
+    // Legacy attach path (no SessionContext). The redesign wires
+    // host-function bridging through `onAttachWithContext`; this
+    // method is kept for backwards compatibility with extensions
+    // that still reach for the session-only signature.
+    await _attachInternal(session, hostBridged: const <MontyExtension>[]);
+  }
+
+  @override
+  Future<void> onAttachWithContext(SessionContext ctx) async {
+    // Walk the session's other extensions, gather any
+    // soliplex-side `hostFunctions`, and synthesize one
+    // `MontyExtension` per sibling. The translation is a 1:1 type
+    // rename (see monty_host_plugin.dart). Plugin authors never
+    // see dart_monty types — they declare `HostFunction` from
+    // soliplex_agent and the bridge does the rest.
+    //
+    // Plan reference: `docs/plans/reactive-bus-redesign.md` (Phase 2 step 9).
+    final synthesized = synthesizeMontyHostExtensions(
+      session: ctx.session,
+      ctx: ctx,
+      skipSelf: this,
+    );
+    await _attachInternal(ctx.session, hostBridged: synthesized);
+  }
+
+  Future<void> _attachInternal(
+    AgentSession session, {
+    required List<MontyExtension> hostBridged,
+  }) async {
+    final runtime = MontyRuntime(
+      extensions: [..._extensions.all, ...hostBridged],
+    );
     _runtime = runtime;
 
     // Fan each (namespace, signal) pair from the inner coordinator into

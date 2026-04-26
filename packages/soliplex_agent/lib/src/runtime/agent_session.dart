@@ -251,6 +251,14 @@ class AgentSession implements ToolExecutionContext {
   T? getExtension<T extends SessionExtension>() =>
       _coordinator.getExtension<T>();
 
+  /// All extensions registered with this session, in registration order.
+  ///
+  /// Read-only iterator — used by extensions that need to introspect
+  /// sibling extensions (e.g. the foreign-runtime bridge in
+  /// `soliplex_agent_monty` walks this list to gather every sibling's
+  /// `hostFunctions`).
+  Iterable<SessionExtension> get extensions => _coordinator.extensions;
+
   /// Yields `(namespace, signal)` for every stateful extension with a
   /// non-empty namespace registered in this session.
   Iterable<(String, ReadonlySignal<Object?>)> statefulObservations() =>

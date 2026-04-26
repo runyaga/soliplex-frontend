@@ -28,6 +28,13 @@ class SessionCoordinator {
   List<SessionExtension>? _attachOrder;
   bool _disposed = false;
 
+  /// All extensions registered with this coordinator, in registration
+  /// order (not attach / priority order).
+  ///
+  /// Read-only view — mutating the underlying list outside the
+  /// coordinator's own methods is unsupported.
+  Iterable<SessionExtension> get extensions => _extensions;
+
   /// All tools contributed by all extensions.
   List<ClientTool> get tools => _extensions.expand((e) => e.tools).toList();
 
