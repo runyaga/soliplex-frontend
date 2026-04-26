@@ -5,6 +5,10 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_agent_maps/soliplex_agent_maps.dart';
 import 'package:soliplex_agent_monty/soliplex_agent_monty.dart';
 
+import '../../maps_singleton.dart' as maps_singleton;
+import '../../narration/narration.dart';
+import '../../narration/narration_controller.dart';
+import '../../narration_singleton.dart';
 import '../../widget_tree/widget_spec.dart';
 import '../../widget_tree/widget_tree_projection.dart';
 
@@ -255,6 +259,39 @@ class ThreadViewState {
       const WidgetTreeProjection(),
     );
     _agentStateUnsub = session.agentState.subscribe(_bus.setAgentState);
+    _wireSurfaceSingletons();
+  }
+
+  /// Auto-wire the app-level surface singletons to projections over
+  /// the per-thread bus. Without this, real session events flow to
+  /// `aguiState` but the panels never see them — only the demo
+  /// button's free-standing bus would update them.
+  ///
+  /// Mirrors the demo-button setup but driven by the live session.
+  /// Unwired in [_detachSession] when the session ends.
+  void _wireSurfaceSingletons() {
+    final narrationSignal = _bus.project<List<Narration>>(
+      const NarrationProjection(),
+    );
+    final markersSignal = _bus.project<List<MarkerData>>(
+      const MapMarkersProjection(),
+    );
+    final spritesSignal = _bus.project<List<ImageOverlayData>>(
+      const MapSpritesProjection(),
+    );
+    final hudsSignal = _bus.project<List<HudOverlayData>>(
+      const MapHudProjection(),
+    );
+    narrationController.wireProjection(narrationSignal);
+    maps_singleton.mapExtension
+      ..wireMarkersProjection(markersSignal)
+      ..wireImagesProjection(spritesSignal)
+      ..wireHudsProjection(hudsSignal);
+  }
+
+  void _unwireSurfaceSingletons() {
+    narrationController.unwireProjection();
+    maps_singleton.mapExtension.unwireAllProjections();
   }
 
   void _onRunState(RunState runState) {
@@ -313,6 +350,7 @@ class ThreadViewState {
     _runStateUnsub = null;
     _agentStateUnsub?.call();
     _agentStateUnsub = null;
+    _unwireSurfaceSingletons();
     _activeSession = null;
     _streamingState.value = null;
     _sessionState.value = null;
