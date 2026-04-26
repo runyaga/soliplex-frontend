@@ -125,13 +125,25 @@ Five feature modules composed in the standard flavor:
 
 ## Workspace Packages
 
-Internal packages under `packages/`:
+Internal packages under `packages/`. Layered: **core packages** are
+imported by plugins and the app shell; **plugin packages** are imported
+only by the app shell. Core packages **must not** depend on plugin
+packages — the dependency direction is one-way and enforced via
+pubspec.
+
+**Core:**
 
 - `soliplex_agent` — Agent orchestration (runtime, sessions, tool registry, execution events)
-- `soliplex_agent_monty` — Bridge that wraps `dart_monty`'s Python sandbox in a `SessionExtension` and exposes the `run_python_on_device` `ClientTool`. Optional; enabled via `--dart-define=MONTY_ENABLED=true`.
 - `soliplex_client` — Backend HTTP/AG-UI API client, domain models, citation extraction
 - `soliplex_client_native` — Native HTTP client (iOS/macOS via cupertino_http)
 - `soliplex_logging` — Structured logging with memory, console, disk, and backend sinks
+
+**Plugins (each adds a session-extension surface and/or a render target):**
+
+- `soliplex_agent_maps` — `flutter_map` bridge: `MapExtension` ClientTool surface + `MapView` widget + projections.
+- `soliplex_agent_monty` — Bridge that wraps `dart_monty`'s Python sandbox in a `SessionExtension` and exposes the `run_python_on_device` `ClientTool`. Optional; enabled via `--dart-define=MONTY_ENABLED=true`.
+- `soliplex_agent_narration` — Narration log surface: app-singleton `NarrationController`, `NarrationPanel` widget, `NarrationMontyExtension` for Python-driven narration.
+- `soliplex_agent_widgets` — Generic widget-tree surface: `WidgetCatalog` of named builders (InfoCard, StatChip, …) rendering agent-emitted `WidgetSpec`s from AG-UI state.
 
 ## CI
 
