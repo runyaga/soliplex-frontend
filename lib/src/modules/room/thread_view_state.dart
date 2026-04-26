@@ -75,6 +75,11 @@ class ThreadViewState {
   })  : _connection = connection,
         _roomId = roomId,
         _registry = registry {
+    // Wire surface projections once for the lifetime of this
+    // thread. They follow the bus value through both
+    // history-load (reload restoration) and live session
+    // updates without rebinding.
+    _wireSurfaceSingletons();
     if (!_restoreFromRegistry()) _fetch();
   }
 
@@ -111,17 +116,18 @@ class ThreadViewState {
   /// This is the seam between the AG-UI streaming pipeline and the
   /// GenUI surface layer. See `packages/soliplex_client/lib/src/
   /// application/state_bus.dart`.
-  StateBus _bus = StateBus();
+  /// Lives for the full lifetime of this ThreadViewState — survives
+  /// session attach/detach. Seeded from `history.aguiState` on
+  /// thread-history load (so reload restores state), updated by
+  /// the active session's `agentState` signal while a session is
+  /// attached. Disposed in [dispose].
+  final StateBus _bus = StateBus();
   StateBus get bus => _bus;
 
   /// Projected widget tree from the bus — driven by
   /// `agentState['ui']['widgets']`. Widgets render via
   /// [WidgetTreePanel]; empty list = panel collapses.
-  ///
-  /// The signal is recomputed on every bus replacement (every
-  /// session attach), so the room view rebinds to the live
-  /// projection automatically.
-  late ReadonlySignal<List<WidgetSpec>> _widgetsSignal =
+  late final ReadonlySignal<List<WidgetSpec>> _widgetsSignal =
       _bus.project<List<WidgetSpec>>(const WidgetTreeProjection());
   ReadonlySignal<List<WidgetSpec>> get widgets => _widgetsSignal;
 
@@ -257,14 +263,13 @@ class ThreadViewState {
     _activeSession = session;
     _sessionState.value = session.state;
     _runStateUnsub = session.runState.subscribe(_onRunState);
-    // Pipe the session's agentState signal into the bus. Projections
-    // registered on the bus auto-update on every emission.
-    _bus = StateBus(initialAgentState: session.agentState.value);
-    _widgetsSignal = _bus.project<List<WidgetSpec>>(
-      const WidgetTreeProjection(),
-    );
+    // Feed the existing bus from the session's agentState signal.
+    // The bus is per-thread and survives session detach so
+    // history-loaded state isn't discarded; only the subscription
+    // changes here.
+    final initial = session.agentState.value;
+    if (initial.isNotEmpty) _bus.setAgentState(initial);
     _agentStateUnsub = session.agentState.subscribe(_bus.setAgentState);
-    _wireSurfaceSingletons();
   }
 
   /// Auto-wire the app-level surface singletons to projections over
@@ -407,17 +412,13 @@ class ThreadViewState {
     _runStateUnsub = null;
     _agentStateUnsub?.call();
     _agentStateUnsub = null;
-    _unwireSurfaceSingletons();
     _activeSession = null;
     _streamingState.value = null;
     _sessionState.value = null;
-    // Tear down the bus so any registered projection signals stop
-    // firing; a fresh bus is created on next attach.
-    _bus.dispose();
-    _bus = StateBus();
-    _widgetsSignal = _bus.project<List<WidgetSpec>>(
-      const WidgetTreeProjection(),
-    );
+    // Bus and projection wires survive across detach — last value
+    // remains visible in the panels until the next session attach
+    // or thread reload feeds new state. Surface singletons stay
+    // wired (unwired only in [dispose]).
   }
 
   bool _restoreFromRegistry() {
@@ -472,6 +473,13 @@ class ThreadViewState {
         messages: history.messages,
         messageStates: history.messageStates,
       );
+      // Rehydrate the surface bus from persisted aguiState so
+      // the panels restore their last state on browser reload.
+      // Projections wired in the constructor pick this up
+      // immediately; no session needed.
+      if (history.aguiState.isNotEmpty) {
+        _bus.setAgentState(Map<String, dynamic>.from(history.aguiState));
+      }
       onHistoryLoaded?.call(threadId, history);
     }).catchError((Object error) {
       if (token.isCancelled) return;
@@ -486,6 +494,7 @@ class ThreadViewState {
     _isDisposed = true;
     _cancelToken?.cancel('disposed');
     _detachSession();
+    _unwireSurfaceSingletons();
     _bus.dispose();
     _sessionState.dispose();
   }
