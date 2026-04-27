@@ -105,6 +105,14 @@ class BusInspector with ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    // Free the ring-buffer references eagerly. The inspector is
+    // typically an app-singleton constructed in `flavors/standard.dart`,
+    // so dispose only happens at app teardown — but if a
+    // longer-lived test or alternate flavor disposes mid-run, hanging
+    // onto stale references prevents collection of the underlying
+    // bus / tool-call structures.
+    _events.clear();
+    _toolInvocations.clear();
     super.dispose();
   }
 }
