@@ -18,6 +18,7 @@ void main() {
           onBackToLobby: () {},
           onCreateThread: () {},
           onNetworkInspector: () {},
+          onBusInspector: () {},
           onRoomInfo: () {},
           roomName: 'Test Room',
           quizzes: quizzes,
