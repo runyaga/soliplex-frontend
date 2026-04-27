@@ -450,8 +450,14 @@ class ThreadViewState {
     _agentStateUnsub?.call();
     _agentStateUnsub = null;
     _activeSession = null;
-    _streamingState.value = null;
-    _sessionState.value = null;
+    // Guard signal writes so a terminal RunState event arriving after
+    // dispose doesn't hit `_sessionState.value = null` on a disposed
+    // signal. The stream's microtask may already be queued by the
+    // time _runStateUnsub fires above.
+    if (!_isDisposed) {
+      _streamingState.value = null;
+      _sessionState.value = null;
+    }
     // Bus and projection wires survive across detach — last value
     // remains visible in the panels until the next session attach
     // or thread reload feeds new state. Surface singletons stay
