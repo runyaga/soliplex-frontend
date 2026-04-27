@@ -176,4 +176,110 @@ void main() {
       bus.dispose();
     });
   });
+
+  group('StateBus applyDelta', () {
+    test('add op extends the state', () {
+      final bus = StateBus()
+        ..applyDelta([
+          {'op': 'add', 'path': '/name', 'value': 'alice'},
+        ]);
+      expect(bus.agentState.value, equals({'name': 'alice'}));
+      bus.dispose();
+    });
+
+    test('replace op overwrites an existing value', () {
+      final bus = StateBus(initialAgentState: const {'count': 0})
+        ..applyDelta([
+          {'op': 'replace', 'path': '/count', 'value': 1},
+        ]);
+      expect(bus.agentState.value, equals({'count': 1}));
+      bus.dispose();
+    });
+
+    test('remove op deletes a key', () {
+      final bus = StateBus(initialAgentState: const {'a': 1, 'b': 2})
+        ..applyDelta([
+          {'op': 'remove', 'path': '/a'},
+        ]);
+      expect(bus.agentState.value, equals({'b': 2}));
+      bus.dispose();
+    });
+
+    test('append-to-array via /-/ path appends', () {
+      final bus = StateBus(
+        initialAgentState: const {
+          'ui': {'narrations': <dynamic>[]},
+        },
+      )..applyDelta([
+          {
+            'op': 'add',
+            'path': '/ui/narrations/-',
+            'value': {'actor': 'primary', 'text': 'hi'},
+          },
+        ]);
+      final entries =
+          (bus.agentState.value['ui']! as Map)['narrations']! as List;
+      expect(entries.single, equals({'actor': 'primary', 'text': 'hi'}));
+      bus.dispose();
+    });
+
+    test('multiple ops apply in sequence', () {
+      final bus = StateBus()
+        ..applyDelta([
+          {'op': 'add', 'path': '/a', 'value': 1},
+          {'op': 'add', 'path': '/b', 'value': 2},
+          {'op': 'replace', 'path': '/a', 'value': 99},
+        ]);
+      expect(bus.agentState.value, equals({'a': 99, 'b': 2}));
+      bus.dispose();
+    });
+
+    test('empty operations list is a no-op (no observer fire)', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)..applyDelta(const []);
+      expect(events, isEmpty);
+      expect(bus.agentState.value, isEmpty);
+      bus.dispose();
+    });
+
+    test('observer fires once per applyDelta call with kind update', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..applyDelta(
+          [
+            {'op': 'add', 'path': '/a', 'value': 1},
+          ],
+          tag: 'ag-ui-delta',
+        );
+
+      expect(events, hasLength(1));
+      expect(events.single.kind, BusWriteKind.update);
+      expect(events.single.tag, 'ag-ui-delta');
+      expect(events.single.before, isEmpty);
+      expect(events.single.after, equals({'a': 1}));
+      bus.dispose();
+    });
+
+    test('after applyDelta agentState is frozen', () {
+      final bus = StateBus()
+        ..applyDelta([
+          {'op': 'add', 'path': '/a', 'value': 1},
+        ]);
+      expect(
+        () => bus.agentState.value['x'] = 1,
+        throwsA(isA<UnsupportedError>()),
+      );
+      bus.dispose();
+    });
+
+    test('does not fire after dispose', () {
+      final events = <BusWriteEvent>[];
+      StateBus(observer: events.add)
+        ..dispose()
+        ..applyDelta([
+          {'op': 'add', 'path': '/a', 'value': 1},
+        ]);
+      expect(events, isEmpty);
+    });
+  });
 }

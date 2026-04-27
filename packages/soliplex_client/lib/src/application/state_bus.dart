@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:signals_core/signals_core.dart';
+import 'package:soliplex_client/src/application/json_patch.dart';
 import 'package:soliplex_client/src/domain/surface.dart';
 
 /// One bus write — a `setAgentState` (snapshot) or `update`
@@ -151,6 +152,30 @@ class StateBus {
     if (_disposed) return;
     final before = _agentState.value;
     final after = _freeze(transform(before));
+    _agentState.value = after;
+    _notify(BusWriteKind.update, before, after, tag);
+  }
+
+  /// Apply a list of RFC 6902 JSON Patch [operations] against the
+  /// current agent state and commit the result.
+  ///
+  /// Wire-aligned with AG-UI's `StateDeltaEvent`. The same
+  /// [applyJsonPatch] helper used by `AguiEventProcessor` is invoked
+  /// here, so server-side deltas and plugin-side deltas produce
+  /// identical results given the same ops.
+  ///
+  /// Pass [tag] to attribute the write to a callsite for the observer
+  /// (e.g. `"ag-ui-delta"`, `"narration.append"`). Idempotent if
+  /// [operations] is empty — emits no observer event.
+  ///
+  /// Plugin authors who want to build computed values (e.g.
+  /// `count + 1`) prefer [update]; this method is for callers that
+  /// already hold JSON Patch ops in hand.
+  void applyDelta(List<dynamic> operations, {String? tag}) {
+    if (_disposed) return;
+    if (operations.isEmpty) return;
+    final before = _agentState.value;
+    final after = _freeze(applyJsonPatch(before, operations));
     _agentState.value = after;
     _notify(BusWriteKind.update, before, after, tag);
   }

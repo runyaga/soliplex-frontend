@@ -19,10 +19,12 @@ ServerConnection _fakeConnection(FakeSoliplexApi api) => ServerConnection(
 class _FakeAgentSession implements AgentSession {
   _FakeAgentSession()
       : _runState = Signal<RunState>(const IdleState()),
-        _lastExecutionEvent = Signal<ExecutionEvent?>(null);
+        _lastExecutionEvent = Signal<ExecutionEvent?>(null),
+        _agentState = Signal<Map<String, dynamic>>(const {});
 
   final Signal<RunState> _runState;
   final Signal<ExecutionEvent?> _lastExecutionEvent;
+  final Signal<Map<String, dynamic>> _agentState;
   final Completer<AgentResult> _resultCompleter = Completer<AgentResult>();
   bool cancelCalled = false;
 
@@ -34,6 +36,9 @@ class _FakeAgentSession implements AgentSession {
 
   @override
   ReadonlySignal<ExecutionEvent?> get lastExecutionEvent => _lastExecutionEvent;
+
+  @override
+  ReadonlySignal<Map<String, dynamic>> get agentState => _agentState;
 
   @override
   Future<AgentResult> get result => _resultCompleter.future;
