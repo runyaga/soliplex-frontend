@@ -107,83 +107,22 @@ class MapPlugin extends SessionExtension {
         ),
       ];
 
-  @override
-  List<HostFunction> get hostFunctions => [
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'set_site',
-            description: 'Add or update a site marker on the map. '
-                'Status flips colors: "served" → green, anything else '
-                '→ orange. Returns the site id on success.',
-            params: [
-              HostParam(name: 'id', type: HostParamType.string),
-              HostParam(name: 'lat', type: HostParamType.number),
-              HostParam(name: 'lng', type: HostParamType.number),
-              HostParam(
-                name: 'name',
-                type: HostParamType.string,
-                isRequired: false,
-              ),
-              HostParam(
-                name: 'status',
-                type: HostParamType.string,
-                isRequired: false,
-              ),
-            ],
-          ),
-          handler: (args, ctx) async {
-            final id = args['id']! as String;
-            final lat = (args['lat']! as num).toDouble();
-            final lng = (args['lng']! as num).toDouble();
-            _setSite(
-              ctx,
-              id: id,
-              lat: lat,
-              lng: lng,
-              name: args['name'] as String?,
-              status: args['status'] as String?,
-            );
-            return id;
-          },
-        ),
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'clear_sites',
-            description: 'Remove every site from the map.',
-          ),
-          handler: (args, ctx) async {
-            _clearSites(ctx);
-            return true;
-          },
-        ),
-        HostFunction(
-          schema: const HostFunctionSchema(
-            name: 'move_convoy_to',
-            description: 'Move the convoy sprite to a lat/lng. The '
-                'sprite tween picks up the new position from the bus.',
-            params: [
-              HostParam(name: 'lat', type: HostParamType.number),
-              HostParam(name: 'lng', type: HostParamType.number),
-              HostParam(
-                name: 'heading',
-                type: HostParamType.number,
-                isRequired: false,
-              ),
-            ],
-          ),
-          handler: (args, ctx) async {
-            _moveConvoyTo(
-              ctx,
-              lat: (args['lat']! as num).toDouble(),
-              lng: (args['lng']! as num).toDouble(),
-              heading: args['heading'] is num
-                  ? (args['heading']! as num).toDouble()
-                  : null,
-            );
-            return true;
-          },
-        ),
-      ];
+  // hostFunctions intentionally NOT declared here.
+  //
+  // Phase 2 step 10b initially exposed `set_site` / `clear_sites` /
+  // `move_convoy_to` as host functions, but dart_monty enforces a
+  // namespace-prefix rule (function name must start with
+  // `${namespace}_`) that the plugin's namespace `'map_plugin'`
+  // doesn't satisfy. Renaming to `map_plugin_set_site` etc. would
+  // break the public Python API; renaming the namespace to `map`
+  // collides with the legacy `MapMontyExtension`.
+  //
+  // Map plugin is in maintenance-only mode (per user direction);
+  // the LLM tool path on this plugin keeps working — only the
+  // never-yet-used Python bridge path is removed. The proper fix
+  // belongs in the bridge layer (allow plugin authors to declare a
+  // separate `montyNamespace` or strip the prefix check for
+  // synthesized extensions).
 
   Future<String> _executeSetSite(
     ToolCallInfo toolCall,
