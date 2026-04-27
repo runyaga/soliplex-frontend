@@ -1,10 +1,12 @@
 import 'dart:developer' as developer;
 
+import 'package:json_patch/json_patch.dart' as pkg;
+
 /// Applies RFC 6902 JSON Patch operations to a state map.
 ///
 /// Returns a new map with the patches applied. Logs and skips invalid
-/// operations rather than failing entirely. Supports add, replace, and remove
-/// operations.
+/// operations rather than failing entirely. Backed by `package:json_patch`
+/// (`JsonPatch.apply` with `strict: false`).
 ///
 /// Example:
 /// ```dart
@@ -20,172 +22,57 @@ Map<String, dynamic> applyJsonPatch(
   Map<String, dynamic> state,
   List<dynamic> operations,
 ) {
-  var result = Map<String, dynamic>.from(state);
-
+  if (operations.isEmpty) return Map<String, dynamic>.from(state);
+  final typed = <Map<String, dynamic>>[];
   for (final op in operations) {
-    if (op is! Map<String, dynamic>) {
-      _logPatchError('Operation is not a map', op);
-      continue;
-    }
-
-    final operation = op['op'] as String?;
-    final path = op['path'] as String?;
-    final value = op['value'];
-
-    if (operation == null || path == null) {
-      _logPatchError('Missing op or path', op);
-      continue;
-    }
-
-    try {
-      result = switch (operation) {
-        'add' => _setAtPath(result, path, value, insert: true),
-        'replace' => _setAtPath(result, path, value),
-        'remove' => _removeAtPath(result, path),
-        _ => result, // Skip unsupported operations (move, copy, test)
-      };
-    } catch (e) {
-      _logPatchError('Failed to apply $operation at $path: $e', op);
-    }
-  }
-
-  return result;
-}
-
-Map<String, dynamic> _setAtPath(
-  Map<String, dynamic> state,
-  String path,
-  dynamic value, {
-  bool insert = false,
-}) {
-  final segments = _parsePath(path);
-  if (segments.isEmpty) {
-    // Path "/" means replace root - but we always return a map
-    if (value is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(value);
-    }
-    return state;
-  }
-
-  final result = _deepCopy(state);
-  dynamic current = result;
-
-  for (var i = 0; i < segments.length - 1; i++) {
-    final segment = segments[i];
-    if (current is Map<String, dynamic>) {
-      if (current[segment] == null) {
-        final nextSegment = segments[i + 1];
-        final nextIsArrayIndex =
-            int.tryParse(nextSegment) != null || nextSegment == '-';
-        current[segment] = nextIsArrayIndex ? <dynamic>[] : <String, dynamic>{};
-      }
-      current = current[segment];
-    } else if (current is List) {
-      final index = int.tryParse(segment);
-      if (index != null && index >= 0 && index < current.length) {
-        current = current[index];
-      } else {
-        return result; // Invalid path
-      }
-    }
-  }
-
-  final lastSegment = segments.last;
-  if (current is Map<String, dynamic>) {
-    current[lastSegment] = value;
-  } else if (current is List) {
-    // RFC 6902: "-" means append to end of array
-    if (lastSegment == '-') {
-      current.add(value);
+    if (op is Map<String, dynamic>) {
+      typed.add(op);
+    } else if (op is Map) {
+      typed.add(Map<String, dynamic>.from(op));
     } else {
-      final index = int.tryParse(lastSegment);
-      if (index != null) {
-        if (insert && index >= 0 && index <= current.length) {
-          // RFC 6902 §4.1: add inserts before the index, shifting elements.
-          current.insert(index, value);
-        } else if (!insert && index >= 0 && index < current.length) {
-          current[index] = value;
-        } else {
-          _logPatchError(
-            'Array index $index out of bounds '
-            '(length=${current.length}) at $path',
-            {'op': insert ? 'add' : 'replace', 'path': path, 'value': value},
-          );
-        }
-      }
+      _logPatchError('Operation is not a map', op);
     }
   }
-
-  return result;
-}
-
-Map<String, dynamic> _removeAtPath(Map<String, dynamic> state, String path) {
-  final segments = _parsePath(path);
-  if (segments.isEmpty) return state;
-
-  final result = _deepCopy(state);
-  dynamic current = result;
-
-  for (var i = 0; i < segments.length - 1; i++) {
-    final segment = segments[i];
-    if (current is Map<String, dynamic>) {
-      final next = current[segment];
-      if (next == null) return result; // Path doesn't exist
-      current = next;
-    } else if (current is List) {
-      final index = int.tryParse(segment);
-      if (index != null && index >= 0 && index < current.length) {
-        current = current[index];
-      } else {
-        return result; // Invalid path
-      }
-    }
+  if (typed.isEmpty) return Map<String, dynamic>.from(state);
+  try {
+    final result = pkg.JsonPatch.apply(state, typed);
+    if (result is Map<String, dynamic>) return result;
+    if (result is Map) return Map<String, dynamic>.from(result);
+    _logPatchError(
+      'Patched root is not a Map (kind=${result.runtimeType})',
+      typed,
+    );
+    return Map<String, dynamic>.from(state);
+  } on Object catch (e) {
+    _logPatchError('Failed to apply patch: $e', typed);
+    return Map<String, dynamic>.from(state);
   }
+}
 
-  final lastSegment = segments.last;
-  if (current is Map<String, dynamic>) {
-    current.remove(lastSegment);
-  } else if (current is List) {
-    final index = int.tryParse(lastSegment);
-    if (index != null && index >= 0 && index < current.length) {
-      current.removeAt(index);
-    }
+/// Returns the RFC 6902 patch ops that, applied to [before], produce
+/// [after]. Backed by `package:json_patch` (`JsonPatch.diff`).
+///
+/// Each entry is a `Map<String, dynamic>` matching the wire shape AG-UI
+/// `StateDeltaEvent` carries (`{op, path, value?}`). Returns an empty
+/// list if the two are equal.
+///
+/// Powers the bus inspector's "what changed" view.
+List<Map<String, dynamic>> diffJsonPatch(
+  Map<String, dynamic> before,
+  Map<String, dynamic> after,
+) {
+  try {
+    return pkg.JsonPatch.diff(before, after);
+  } on Object catch (e) {
+    _logPatchError('Failed to compute diff: $e', null);
+    return const [];
   }
-
-  return result;
 }
 
-List<String> _parsePath(String path) {
-  if (path.isEmpty || path == '/') return [];
-  return path.split('/').where((s) => s.isNotEmpty).toList();
-}
-
-Map<String, dynamic> _deepCopy(Map<String, dynamic> map) {
-  return map.map((key, value) {
-    if (value is Map<String, dynamic>) {
-      return MapEntry(key, _deepCopy(value));
-    } else if (value is List) {
-      return MapEntry(key, _deepCopyList(value));
-    }
-    return MapEntry(key, value);
-  });
-}
-
-List<dynamic> _deepCopyList(List<dynamic> list) {
-  return list.map((item) {
-    if (item is Map<String, dynamic>) {
-      return _deepCopy(item);
-    } else if (item is List) {
-      return _deepCopyList(item);
-    }
-    return item;
-  }).toList();
-}
-
-void _logPatchError(String message, dynamic operation) {
+void _logPatchError(String message, Object? operation) {
   developer.log(
-    '$message: $operation',
+    operation == null ? message : '$message: $operation',
     name: 'JsonPatch',
-    level: 900, // Warning level
+    level: 900,
   );
 }

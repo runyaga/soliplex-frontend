@@ -16,7 +16,13 @@ void main() {
         expect(result['new'], 'added');
       });
 
-      test('adds nested value creating intermediate objects', () {
+      test('rejects nested add when intermediate path does not exist', () {
+        // RFC 6902 §A.12 — `add` requires the parent to exist. The
+        // homegrown impl auto-created intermediates; the package
+        // (`json_patch`) is strict-to-spec. Production callers
+        // (AG-UI server) emit spec-compliant patches with valid
+        // parents, so this is no production regression — failing
+        // patches are logged and the state is returned unchanged.
         final state = <String, dynamic>{};
         final operations = [
           {'op': 'add', 'path': '/a/b/c', 'value': 'deep'},
@@ -24,9 +30,8 @@ void main() {
 
         final result = applyJsonPatch(state, operations);
 
-        final a = result['a'] as Map<String, dynamic>;
-        final b = a['b'] as Map<String, dynamic>;
-        expect(b['c'], 'deep');
+        // Patch fails silently; state is unchanged.
+        expect(result, equals(state));
       });
 
       test('adds item to array at end', () {
@@ -252,30 +257,27 @@ void main() {
     });
 
     group('intermediate container creation', () {
-      test('creates List when path segment is followed by numeric index', () {
+      // The homegrown impl auto-created intermediate Lists when a path
+      // segment was followed by a numeric index or "-". The package
+      // (`json_patch`) is strict-to-spec and rejects such patches when
+      // the parent is missing. AG-UI server emits well-formed patches,
+      // so production never relied on this leniency.
+      test('rejects intermediate List creation (numeric index)', () {
         final state = <String, dynamic>{};
         final operations = [
           {'op': 'add', 'path': '/rag/citations/0', 'value': 'chunk-1'},
         ];
-
         final result = applyJsonPatch(state, operations);
-
-        final ragState = result['rag'] as Map<String, dynamic>;
-        final citations = ragState['citations'] as List<dynamic>;
-        expect(citations, equals(['chunk-1']));
+        expect(result, equals(state));
       });
 
-      test('creates List when intermediate path uses "-" append syntax', () {
+      test('rejects intermediate List creation ("-" syntax)', () {
         final state = <String, dynamic>{};
         final operations = [
           {'op': 'add', 'path': '/data/items/-', 'value': 'first'},
         ];
-
         final result = applyJsonPatch(state, operations);
-
-        final data = result['data'] as Map<String, dynamic>;
-        final items = data['items'] as List<dynamic>;
-        expect(items, ['first']);
+        expect(result, equals(state));
       });
     });
 
@@ -338,19 +340,22 @@ void main() {
         expect(result['items'], ['a', 'b']);
       });
 
-      test('handles root path by replacing entire state', () {
+      test('replaces entire state via empty-path (RFC 6902 root)', () {
+        // RFC 6902 § 4: the empty string "" refers to the root. The
+        // homegrown impl also accepted "/" as root (lenient); the
+        // package is strict and treats "/" as the empty-string key.
+        // AG-UI server emits empty-path patches for root replace.
         final state = <String, dynamic>{'key': 'value'};
         final operations = [
           {
             'op': 'replace',
-            'path': '/',
+            'path': '',
             'value': {'new': 'state'},
           },
         ];
 
         final result = applyJsonPatch(state, operations);
 
-        // Root path replacement replaces entire state
         expect(result, equals({'new': 'state'}));
       });
 
@@ -391,6 +396,69 @@ void main() {
         final citationIndex = rag['citation_index'] as Map<String, dynamic>;
         expect(citationIndex.containsKey('c2'), isTrue);
       });
+    });
+  });
+
+  group('diffJsonPatch', () {
+    test('equal maps produce empty diff', () {
+      const a = {'k': 1};
+      const b = {'k': 1};
+      expect(diffJsonPatch(a, b), isEmpty);
+    });
+
+    test('add a key produces an add op', () {
+      const a = <String, dynamic>{};
+      const b = {'k': 1};
+      final ops = diffJsonPatch(a, b);
+      expect(ops, hasLength(1));
+      expect(ops.single['op'], 'add');
+      expect(ops.single['path'], '/k');
+      expect(ops.single['value'], 1);
+    });
+
+    test('change a value produces a replace op', () {
+      const a = {'k': 1};
+      const b = {'k': 2};
+      final ops = diffJsonPatch(a, b);
+      expect(ops, hasLength(1));
+      expect(ops.single['op'], 'replace');
+      expect(ops.single['path'], '/k');
+      expect(ops.single['value'], 2);
+    });
+
+    test('drop a key produces a remove op', () {
+      const a = {'k': 1, 'j': 2};
+      const b = {'j': 2};
+      final ops = diffJsonPatch(a, b);
+      expect(ops, hasLength(1));
+      expect(ops.single['op'], 'remove');
+      expect(ops.single['path'], '/k');
+    });
+
+    test('roundtrip: applying the diff to before equals after', () {
+      const before = {
+        'ui': {
+          'narrations': [
+            {'actor': 'primary', 'text': 'one'},
+          ],
+          'hud': {'banner': 'standing by'},
+        },
+      };
+      const after = {
+        'ui': {
+          'narrations': [
+            {'actor': 'primary', 'text': 'one'},
+            {'actor': 'field', 'text': 'two'},
+          ],
+          'hud': {'banner': 'underway'},
+        },
+      };
+
+      final ops = diffJsonPatch(before, after);
+      expect(ops, isNotEmpty);
+
+      final reconstructed = applyJsonPatch(before, ops);
+      expect(reconstructed, equals(after));
     });
   });
 }

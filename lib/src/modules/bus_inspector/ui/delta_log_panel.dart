@@ -235,6 +235,17 @@ class _DeltaDetail extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             children: [
               _SectionHeader(
+                label: 'CHANGED',
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 4),
+              _DiffPane(
+                before: event.before,
+                after: event.after,
+                background: theme.colorScheme.surfaceContainerLow,
+              ),
+              const SizedBox(height: 16),
+              _SectionHeader(
                 label: 'AFTER',
                 color: theme.colorScheme.tertiary,
               ),
@@ -272,6 +283,162 @@ class _DeltaDetail extends StatelessWidget {
             )
           : JsonTreeView(nodes: buildJsonTree(map)),
     );
+  }
+}
+
+/// Renders the JSON Patch diff between [before] and [after] as a
+/// list of color-coded ops. Each op shows: a colored badge for the
+/// op kind (`add` / `replace` / `remove` / `move` / `copy` / `test`),
+/// the JSON Pointer path, and (for ops that carry one) the value.
+///
+/// Uses `package:json_patch` via the soliplex `diffJsonPatch` helper
+/// so the result is RFC-6902 wire-aligned with what AG-UI server-side
+/// state-delta events carry.
+class _DiffPane extends StatelessWidget {
+  const _DiffPane({
+    required this.before,
+    required this.after,
+    required this.background,
+  });
+
+  final Map<String, dynamic> before;
+  final Map<String, dynamic> after;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    final ops = diffJsonPatch(before, after);
+    if (ops.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          '(no changes — observer may have fired on an identity-only '
+          'write)',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final op in ops) _DiffOpRow(op: op),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiffOpRow extends StatelessWidget {
+  const _DiffOpRow({required this.op});
+
+  final Map<String, dynamic> op;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final kind = (op['op'] as String?) ?? '?';
+    final path = (op['path'] as String?) ?? '?';
+    final value = op['value'];
+    final from = op['from'] as String?;
+
+    final colors = _colorsForOp(kind, theme);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 60,
+            padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+            decoration: BoxDecoration(
+              color: colors.$1,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              kind.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: colors.$2,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SelectableText(
+              [
+                path,
+                if (from != null) 'from $from',
+                if (value != null) '= ${_summarize(value)}',
+              ].join('  '),
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (Color, Color) _colorsForOp(String kind, ThemeData theme) {
+    switch (kind) {
+      case 'add':
+        return (
+          theme.colorScheme.tertiaryContainer,
+          theme.colorScheme.onTertiaryContainer,
+        );
+      case 'remove':
+        return (
+          theme.colorScheme.errorContainer,
+          theme.colorScheme.onErrorContainer,
+        );
+      case 'replace':
+        return (
+          theme.colorScheme.primaryContainer,
+          theme.colorScheme.onPrimaryContainer,
+        );
+      case 'move':
+      case 'copy':
+        return (
+          theme.colorScheme.secondaryContainer,
+          theme.colorScheme.onSecondaryContainer,
+        );
+      default:
+        return (
+          theme.colorScheme.surfaceContainerHighest,
+          theme.colorScheme.onSurfaceVariant,
+        );
+    }
+  }
+
+  String _summarize(Object? value) {
+    if (value is String) return '"$value"';
+    if (value is num || value is bool || value == null) return '$value';
+    if (value is Map) {
+      return '{…} (${value.length} key${value.length == 1 ? '' : 's'})';
+    }
+    if (value is List) {
+      return '[…] (${value.length} item${value.length == 1 ? '' : 's'})';
+    }
+    return '$value';
   }
 }
 
