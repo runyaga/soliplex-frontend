@@ -120,3 +120,4 @@ scratchpad/*
 # Claude Code local config
 .claude/*
 !.claude/skills/
+pubspec_overrides.yaml
