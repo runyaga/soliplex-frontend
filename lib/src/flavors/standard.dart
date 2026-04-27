@@ -140,6 +140,7 @@ Future<ShellConfig> standard({
     toolRegistryResolver: (_) async => const ToolRegistry(),
     logger: LogManager.instance.getLogger('room'),
     busObserver: busInspector.record,
+    toolObserver: busInspector.recordToolInvocation,
     extensionFactory: () async => [
       ExecutionTrackerExtension(),
       ToolCallsExtension(),

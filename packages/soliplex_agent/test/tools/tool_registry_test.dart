@@ -152,4 +152,87 @@ void main() {
       expect(receivedCtx, same(ctx));
     });
   });
+
+  group('ToolRegistry observer', () {
+    test('fires after successful execute with name + args + result', () async {
+      final calls = <ToolInvocationEvent>[];
+      final registry = const ToolRegistry()
+          .register(_testTool(executor: (_, __) async => 'rv'))
+          .withObserver(calls.add);
+
+      final result = await registry.execute(
+        const ToolCallInfo(
+          id: 'call-1',
+          name: 'test_tool',
+          arguments: '{"a":1}',
+        ),
+        ctx,
+      );
+
+      expect(result, 'rv');
+      expect(calls, hasLength(1));
+      expect(calls.single.toolName, 'test_tool');
+      expect(calls.single.toolCallId, 'call-1');
+      expect(calls.single.arguments, '{"a":1}');
+      expect(calls.single.result, 'rv');
+      expect(calls.single.error, isNull);
+      expect(calls.single.duration, isA<Duration>());
+    });
+
+    test('fires after executor throws and re-throws the error', () async {
+      final calls = <ToolInvocationEvent>[];
+      final registry = const ToolRegistry()
+          .register(
+            _testTool(
+              executor: (_, __) async => throw StateError('boom'),
+            ),
+          )
+          .withObserver(calls.add);
+
+      await expectLater(
+        () => registry.execute(
+          const ToolCallInfo(id: 'call-2', name: 'test_tool'),
+          ctx,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(calls, hasLength(1));
+      expect(calls.single.error, isA<StateError>());
+      expect(calls.single.result, isNull);
+    });
+
+    test('observer is preserved across register / alias / unregister',
+        () async {
+      final calls = <ToolInvocationEvent>[];
+      final registry = const ToolRegistry()
+          .withObserver(calls.add)
+          .register(_testTool(name: 'first'))
+          .alias('shortname', 'first')
+          .register(_testTool(name: 'second'));
+
+      await registry.execute(
+        const ToolCallInfo(id: 'c', name: 'shortname'),
+        ctx,
+      );
+
+      expect(calls, hasLength(1));
+      expect(calls.single.toolName, 'first');
+    });
+
+    test('withObserver(null) removes the observer', () async {
+      final calls = <ToolInvocationEvent>[];
+      final registry = const ToolRegistry()
+          .register(_testTool())
+          .withObserver(calls.add)
+          .withObserver(null);
+
+      await registry.execute(
+        const ToolCallInfo(id: 'c', name: 'test_tool'),
+        ctx,
+      );
+
+      expect(calls, isEmpty);
+    });
+  });
 }

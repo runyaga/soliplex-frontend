@@ -14,6 +14,7 @@ import 'package:soliplex_agent/src/runtime/server_connection.dart';
 import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/runtime/thread_state.dart';
+import 'package:soliplex_agent/src/tools/tool_registry.dart' show ToolObserver;
 import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
 import 'package:soliplex_client/soliplex_client.dart'
     show BusObserver, ThreadHistory;
@@ -56,6 +57,7 @@ class AgentRuntime {
     AgentLlmProvider? llmProvider,
     SessionExtensionFactory? extensionFactory,
     BusObserver? busObserver,
+    ToolObserver? toolObserver,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -69,7 +71,8 @@ class AgentRuntime {
         _extensionFactory = extensionFactory,
         _platform = platform,
         _logger = logger,
-        _busObserver = busObserver;
+        _busObserver = busObserver,
+        _toolObserver = toolObserver;
 
   final ServerConnection _connection;
   final AgentLlmProvider _llmProvider;
@@ -78,6 +81,7 @@ class AgentRuntime {
   final PlatformConstraints _platform;
   final Logger _logger;
   final BusObserver? _busObserver;
+  final ToolObserver? _toolObserver;
 
   /// Identifies which backend server this runtime targets.
   final String serverId;
@@ -364,6 +368,9 @@ class AgentRuntime {
     final coordinator = SessionCoordinator(extensions);
     for (final tool in coordinator.tools) {
       toolRegistry = toolRegistry.register(tool);
+    }
+    if (_toolObserver != null) {
+      toolRegistry = toolRegistry.withObserver(_toolObserver);
     }
     final orchestrator = RunOrchestrator(
       llmProvider: _llmProvider,

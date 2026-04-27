@@ -14,6 +14,54 @@ typedef ToolExecutor = Future<String> Function(
   ToolExecutionContext context,
 );
 
+/// One LLM tool invocation observed by [ToolRegistry.execute].
+///
+/// Emitted to the [ToolObserver] after the executor returns or
+/// throws. Carries enough information for the in-app tool log to
+/// display name, args, return value, duration, and error attribution
+/// without re-running the tool.
+@immutable
+class ToolInvocationEvent {
+  /// Constructs a tool-invocation event.
+  const ToolInvocationEvent({
+    required this.toolName,
+    required this.toolCallId,
+    required this.arguments,
+    required this.startedAt,
+    required this.duration,
+    this.result,
+    this.error,
+  });
+
+  /// Resolved canonical tool name (after alias resolution).
+  final String toolName;
+
+  /// Tool-call id supplied by the model. Useful for cross-referencing
+  /// against AG-UI events in the network inspector.
+  final String toolCallId;
+
+  /// JSON-encoded arguments string as sent by the model. Empty when
+  /// the executor was called without arguments.
+  final String arguments;
+
+  /// Wall-clock at execution start.
+  final DateTime startedAt;
+
+  /// Wall-clock duration of the executor call.
+  final Duration duration;
+
+  /// String returned by the executor on success. `null` when the
+  /// executor threw.
+  final String? result;
+
+  /// Error thrown by the executor, or `null` on success.
+  final Object? error;
+}
+
+/// Observer callback fired after every committed [ToolRegistry.execute]
+/// — both success and failure paths.
+typedef ToolObserver = void Function(ToolInvocationEvent event);
+
 /// Default JSON Schema for tools that take no parameters.
 const Map<String, Object> emptyToolParameters = {
   'type': 'object',
@@ -61,11 +109,13 @@ class ToolRegistry {
   /// Creates an empty registry.
   const ToolRegistry()
       : _tools = const {},
-        _aliases = const {};
+        _aliases = const {},
+        _observer = null;
 
-  const ToolRegistry._(this._tools, this._aliases);
+  const ToolRegistry._(this._tools, this._aliases, [this._observer]);
 
   final Map<String, ClientTool> _tools;
+  final ToolObserver? _observer;
 
   /// Maps alternative names to canonical tool names.
   ///
@@ -80,7 +130,11 @@ class ToolRegistry {
   /// The tool is keyed by the tool definition's name.
   @useResult
   ToolRegistry register(ClientTool tool) {
-    return ToolRegistry._({..._tools, tool.definition.name: tool}, _aliases);
+    return ToolRegistry._(
+      {..._tools, tool.definition.name: tool},
+      _aliases,
+      _observer,
+    );
   }
 
   /// Maps [aliasName] to the canonical [canonicalName] for lookup.
@@ -89,7 +143,11 @@ class ToolRegistry {
   /// not appear in [toolDefinitions].
   @useResult
   ToolRegistry alias(String aliasName, String canonicalName) {
-    return ToolRegistry._(_tools, {..._aliases, aliasName: canonicalName});
+    return ToolRegistry._(
+      _tools,
+      {..._aliases, aliasName: canonicalName},
+      _observer,
+    );
   }
 
   /// Returns a new registry without the tool named [name].
@@ -100,14 +158,29 @@ class ToolRegistry {
   @useResult
   ToolRegistry unregister(String name) {
     if (_aliases.containsKey(name)) {
-      return ToolRegistry._(_tools, {..._aliases}..remove(name));
+      return ToolRegistry._(
+        _tools,
+        {..._aliases}..remove(name),
+        _observer,
+      );
     }
     final newAliases = {
       for (final e in _aliases.entries)
         if (e.value != name) e.key: e.value,
     };
-    return ToolRegistry._({..._tools}..remove(name), newAliases);
+    return ToolRegistry._(
+      {..._tools}..remove(name),
+      newAliases,
+      _observer,
+    );
   }
+
+  /// Returns a new registry with [observer] installed. The observer
+  /// is fired after every [execute] call (success or failure).
+  /// Pass `null` to remove an existing observer.
+  @useResult
+  ToolRegistry withObserver(ToolObserver? observer) =>
+      ToolRegistry._(_tools, _aliases, observer);
 
   /// Returns the [ClientTool] registered under [name].
   ///
@@ -124,12 +197,42 @@ class ToolRegistry {
   ///
   /// The [ctx] is forwarded to the tool executor so tools can access
   /// cancellation tokens, child spawning, and session extensions.
+  ///
+  /// If a [ToolObserver] is installed (see [withObserver]), it fires
+  /// once per call after the executor returns (success) or throws
+  /// (failure). The observer never alters control flow — exceptions
+  /// from the executor are re-thrown unchanged.
   Future<String> execute(
     ToolCallInfo toolCall,
     ToolExecutionContext ctx,
   ) async {
+    final observer = _observer;
+    if (observer == null) {
+      final tool = lookup(toolCall.name);
+      return tool.executor(toolCall, ctx);
+    }
+    final startedAt = DateTime.now();
     final tool = lookup(toolCall.name);
-    return tool.executor(toolCall, ctx);
+    String? result;
+    Object? error;
+    try {
+      return result = await tool.executor(toolCall, ctx);
+    } on Object catch (e) {
+      error = e;
+      rethrow;
+    } finally {
+      observer(
+        ToolInvocationEvent(
+          toolName: tool.definition.name,
+          toolCallId: toolCall.id,
+          arguments: toolCall.arguments,
+          startedAt: startedAt,
+          duration: DateTime.now().difference(startedAt),
+          result: result,
+          error: error,
+        ),
+      );
+    }
   }
 
   /// Whether a tool with [name] is registered.
