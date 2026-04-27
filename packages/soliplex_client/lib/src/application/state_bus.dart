@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:collection/collection.dart';
 import 'package:meta/meta.dart';
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_client/src/application/json_patch.dart';
@@ -111,8 +112,12 @@ class StateBus {
 
   /// Read-only feed of the current raw agent-state map.
   ///
-  /// Identity changes on every replacement so listeners always fire,
-  /// even when delta application produces structurally-equal maps.
+  /// Distinct-until-changed: writes that produce a structurally-equal
+  /// map are dropped at the bus boundary — the underlying signal
+  /// neither swaps identity nor fires listeners, and no
+  /// [BusWriteEvent] is emitted. Callers needing per-call hooks
+  /// (heartbeats, instrumentation) must not rely on the bus for that
+  /// signal.
   ReadonlySignal<Map<String, dynamic>> get agentState => _agentState.readonly();
 
   /// Write-back channel for surface-originated events (P6 spike).
@@ -146,6 +151,7 @@ class StateBus {
     if (_disposed) return;
     final before = _agentState.value;
     final after = _freeze(next);
+    if (_eq.equals(before, after)) return;
     _agentState.value = after;
     _notify(BusWriteKind.snapshot, before, after, tag);
   }
@@ -167,6 +173,7 @@ class StateBus {
     if (_disposed) return;
     final before = _agentState.value;
     final after = _freeze(transform(before));
+    if (_eq.equals(before, after)) return;
     _agentState.value = after;
     _notify(BusWriteKind.update, before, after, tag);
   }
@@ -191,6 +198,7 @@ class StateBus {
     if (operations.isEmpty) return;
     final before = _agentState.value;
     final after = _freeze(applyJsonPatch(before, operations));
+    if (_eq.equals(before, after)) return;
     _agentState.value = after;
     _notify(BusWriteKind.update, before, after, tag);
   }
@@ -245,4 +253,8 @@ class StateBus {
   /// view of the state at that instant.
   static Map<String, dynamic> _freeze(Map<String, dynamic> map) =>
       Map<String, dynamic>.unmodifiable(map);
+
+  /// Single shared comparator for distinct-until-changed write
+  /// dedup. Deep-equality across nested maps and lists.
+  static const DeepCollectionEquality _eq = DeepCollectionEquality();
 }

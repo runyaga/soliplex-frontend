@@ -93,6 +93,7 @@ class AgentSession implements ToolExecutionContext {
   StreamSubscription<BaseEvent>? _baseEventSubscription;
   AgentSessionState _state = AgentSessionState.spawning;
   bool _disposed = false;
+
   final Signal<RunState> _runStateSignal = signal(const IdleState());
   final Signal<AgentSessionState> _sessionStateSignal = signal(
     AgentSessionState.spawning,
@@ -361,6 +362,12 @@ class AgentSession implements ToolExecutionContext {
     // the orchestrator.
     final next = _aguiStateOf(runState);
     if (next != null) {
+      // RunState fires on every text-message-delta, tool-call, and
+      // tool-yield event — most of those don't change AG-UI state.
+      // The bus dedups structurally-equal writes at its boundary
+      // (StateBus.update / setAgentState), so the no-op transforms
+      // we'd otherwise produce here are dropped before listeners
+      // see them.
       // Preserve client-side metadata namespace (`_meta`) across
       // server-driven snapshot writes. The AG-UI server owns the
       // application keys; the client owns underscore-prefixed

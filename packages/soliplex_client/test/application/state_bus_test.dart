@@ -282,4 +282,122 @@ void main() {
       expect(events, isEmpty);
     });
   });
+
+  group('StateBus distinct-until-changed (write coalescing)', () {
+    test('setAgentState with structurally-equal map does not fire observer',
+        () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..setAgentState(<String, dynamic>{
+          'ui': <String, dynamic>{
+            'narrations': <Object>[
+              <String, dynamic>{'text': 'hello'},
+            ],
+          },
+        });
+      expect(events, hasLength(1));
+
+      // Re-submit a freshly-built but structurally-equal map. With
+      // distinct-until-changed at the bus boundary the observer must
+      // NOT fire and the underlying signal identity must NOT change.
+      final identityBefore = bus.agentState.value;
+      bus.setAgentState(<String, dynamic>{
+        'ui': <String, dynamic>{
+          'narrations': <Object>[
+            <String, dynamic>{'text': 'hello'},
+          ],
+        },
+      });
+      expect(events, hasLength(1), reason: 'observer must not fire on no-op');
+      expect(
+        identical(bus.agentState.value, identityBefore),
+        isTrue,
+        reason: 'signal value identity must be preserved on no-op writes',
+      );
+      bus.dispose();
+    });
+
+    test('update() returning structurally-equal map is dropped', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..setAgentState(<String, dynamic>{'count': 1});
+      expect(events, hasLength(1));
+
+      // Transform builds a new Map.from(current) — fresh identity,
+      // identical content. Must be coalesced.
+      bus.update(Map<String, dynamic>.from);
+      expect(events, hasLength(1));
+
+      // A real change still fires.
+      bus.update(
+        (current) => {...current, 'count': 2},
+        tag: 'increment',
+      );
+      expect(events, hasLength(2));
+      expect(events.last.tag, 'increment');
+      bus.dispose();
+    });
+
+    test('applyDelta whose result equals current state is coalesced', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..setAgentState(<String, dynamic>{'a': 1});
+      expect(events, hasLength(1));
+
+      // Replace `/a` with the same value — JSON Patch op runs but the
+      // resulting state is structurally equal to the current state.
+      bus.applyDelta([
+        {'op': 'replace', 'path': '/a', 'value': 1},
+      ]);
+      expect(
+        events,
+        hasLength(1),
+        reason: 'no-op delta must not produce a bus event',
+      );
+
+      // Add of a new key fires normally.
+      bus.applyDelta([
+        {'op': 'add', 'path': '/b', 'value': 2},
+      ]);
+      expect(events, hasLength(2));
+      bus.dispose();
+    });
+
+    test('projection signal does not recompute on coalesced writes', () {
+      final bus = StateBus()
+        ..setAgentState(<String, dynamic>{
+          'ui': <String, dynamic>{
+            'narrations': <Object>[
+              <String, dynamic>{'text': 'one'},
+            ],
+          },
+        });
+      final narrations = bus.project(const _NarrationsProjection());
+      // Read once to establish the computed's first value.
+      final firstValue = narrations.value;
+      expect(firstValue, ['one']);
+
+      // No-op write — projection identity should hold steady because
+      // the underlying signal didn't fire.
+      bus.setAgentState(<String, dynamic>{
+        'ui': <String, dynamic>{
+          'narrations': <Object>[
+            <String, dynamic>{'text': 'one'},
+          ],
+        },
+      });
+      expect(identical(narrations.value, firstValue), isTrue);
+
+      // A real write replaces the value.
+      bus.setAgentState(<String, dynamic>{
+        'ui': <String, dynamic>{
+          'narrations': <Object>[
+            <String, dynamic>{'text': 'two'},
+          ],
+        },
+      });
+      expect(narrations.value, ['two']);
+      bus.dispose();
+    });
+  });
 }
