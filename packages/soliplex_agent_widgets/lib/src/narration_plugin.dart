@@ -27,8 +27,13 @@ class NarrationPlugin extends SessionExtension {
 
   SessionContext? _ctx;
 
+  // 'narrate' so dart_monty's namespace-prefix rule
+  // ("functions must start with `${namespace}_`") accepts the
+  // existing public Python identifiers `narrate_say` and
+  // `narrate_clear`. The legacy `NarrationMontyExtension` used the
+  // same namespace before Phase 2 step 10a retired it.
   @override
-  String get namespace => 'narration';
+  String get namespace => 'narrate';
 
   @override
   Future<void> onAttach(AgentSession session) async {}
