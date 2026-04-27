@@ -93,14 +93,17 @@ class ExecutionTrackerExtension extends SessionExtension
       allSteps.addAll(tracker.steps.value);
     }
     final serialized = stepsToBusList(allSteps);
-    bus.update((current) {
-      final next = Map<String, dynamic>.from(current);
-      final meta = Map<String, dynamic>.from(
-        (next['_meta'] as Map?)?.cast<String, dynamic>() ?? const {},
-      );
-      meta['steps'] = serialized;
-      next['_meta'] = meta;
-      return next;
-    });
+    bus.update(
+      (current) {
+        final next = Map<String, dynamic>.from(current);
+        final meta = Map<String, dynamic>.from(
+          (next['_meta'] as Map?)?.cast<String, dynamic>() ?? const {},
+        );
+        meta['steps'] = serialized;
+        next['_meta'] = meta;
+        return next;
+      },
+      tag: 'execution-tracker:steps',
+    );
   }
 }

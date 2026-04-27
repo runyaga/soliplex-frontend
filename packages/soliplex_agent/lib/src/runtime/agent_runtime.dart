@@ -147,7 +147,7 @@ class AgentRuntime {
   ) {
     if (aguiState.isEmpty) return;
     final state = _threadStateFor(key);
-    state.bus.setAgentState(aguiState);
+    state.bus.setAgentState(aguiState, tag: 'seed:initial');
     _threadStates[key] = state.withHistory(
       ThreadHistory(messages: const [], aguiState: aguiState),
     );
@@ -163,7 +163,7 @@ class AgentRuntime {
   void seedThreadHistory(ThreadKey key, ThreadHistory history) {
     final state = _threadStateFor(key);
     if (history.aguiState.isNotEmpty) {
-      state.bus.setAgentState(history.aguiState);
+      state.bus.setAgentState(history.aguiState, tag: 'seed:history');
     }
     _threadStates[key] = state.withHistory(history);
   }
@@ -172,7 +172,10 @@ class AgentRuntime {
   /// [ThreadState] if none has been registered yet. Internal helper —
   /// callers outside the runtime should use the seed APIs above.
   ThreadState _threadStateFor(ThreadKey key) =>
-      _threadStates[key] ??= ThreadState(busObserver: _busObserver);
+      _threadStates[key] ??= ThreadState(
+        busObserver: _busObserver,
+        busScope: '${key.serverId}/${key.roomId}/${key.threadId}',
+      );
 
   /// Returns the per-thread state for [key], or `null` if no state
   /// has been registered. Read-only public accessor used by

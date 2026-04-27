@@ -23,6 +23,7 @@ class BusWriteEvent {
     required this.after,
     required this.timestamp,
     this.tag,
+    this.scope,
   });
 
   /// Which API was invoked.
@@ -39,10 +40,17 @@ class BusWriteEvent {
   final DateTime timestamp;
 
   /// Optional caller-supplied tag. Conventionally a short identifier
-  /// like `"narration"`, `"ag-ui-snapshot"`, or `"map.set_site"` so
-  /// observers can attribute the write back to a callsite without a
-  /// stack walk.
+  /// like `"narration.append"`, `"ag-ui:run-state"`, or
+  /// `"map.set_site"` so observers can attribute the write back to a
+  /// callsite without a stack walk.
   final String? tag;
+
+  /// Optional scope identifying which bus emitted this event. Set
+  /// from [StateBus.scope] at construction time; the bus echoes it
+  /// on every emitted event. Buses in tests or ad-hoc demos pass
+  /// `null`; runtime-managed per-thread buses set a thread
+  /// identifier (e.g. `"server-1/room-x/thread-42"`).
+  final String? scope;
 }
 
 /// Flavor of a [BusWriteEvent].
@@ -84,8 +92,15 @@ class StateBus {
   StateBus({
     Map<String, dynamic> initialAgentState = const {},
     BusObserver? observer,
+    this.scope,
   })  : _agentState = signal(_freeze(initialAgentState)),
         _observer = observer;
+
+  /// Optional human-readable identifier for this bus, echoed on
+  /// every emitted [BusWriteEvent.scope]. Runtime-managed per-thread
+  /// buses set a thread identifier (e.g.
+  /// `"server-1/room-x/thread-42"`); ad-hoc buses pass `null`.
+  final String? scope;
 
   final Signal<Map<String, dynamic>> _agentState;
   final StreamController<SurfaceEvent> _events =
@@ -195,6 +210,7 @@ class StateBus {
         after: after,
         timestamp: DateTime.now(),
         tag: tag,
+        scope: scope,
       ),
     );
   }

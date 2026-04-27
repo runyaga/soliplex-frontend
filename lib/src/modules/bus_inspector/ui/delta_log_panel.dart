@@ -104,29 +104,77 @@ class _DeltaTile extends StatelessWidget {
     final theme = Theme.of(context);
     final tag = event.tag ?? '(untagged)';
     final time = event.timestamp.toLocal().toIso8601String().substring(11, 19);
+    final isSnapshot = event.kind == BusWriteKind.snapshot;
     return ListTile(
       selected: selected,
       onTap: onTap,
       dense: true,
-      leading: Icon(
-        event.kind == BusWriteKind.snapshot
-            ? Icons.photo_camera_outlined
-            : Icons.edit_outlined,
-        size: 18,
-      ),
+      leading: _KindBadge(isSnapshot: isSnapshot),
       title: Text(
         tag,
         style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '$time · ${event.kind.name}',
+        '$time'
+        '${event.scope == null ? '' : ' · ${_shortScope(event.scope!)}'}',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
+          fontFamily: 'monospace',
         ),
       ),
     );
   }
+}
+
+/// Compact text badge for SNAP / DELTA. Replaces the camera/pin
+/// icons that were unreadable at a glance.
+class _KindBadge extends StatelessWidget {
+  const _KindBadge({required this.isSnapshot});
+
+  final bool isSnapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = isSnapshot ? 'SNAP' : 'DELTA';
+    final bg = isSnapshot
+        ? theme.colorScheme.tertiaryContainer
+        : theme.colorScheme.secondaryContainer;
+    final fg = isSnapshot
+        ? theme.colorScheme.onTertiaryContainer
+        : theme.colorScheme.onSecondaryContainer;
+    return Container(
+      width: 50,
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontFamily: 'monospace',
+          letterSpacing: 0.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shorten `serverId/roomId/threadId` into the last segment plus
+/// a leading ellipsis, so list tiles don't get crushed by long
+/// thread ids.
+String _shortScope(String scope) {
+  final lastSlash = scope.lastIndexOf('/');
+  if (lastSlash < 0) return scope;
+  final tail = scope.substring(lastSlash + 1);
+  // Truncate UUID-like tails to 8 chars for readability.
+  final truncatedTail = tail.length > 12 ? '${tail.substring(0, 8)}…' : tail;
+  return 'thread:$truncatedTail';
 }
 
 class _DeltaDetail extends StatelessWidget {
@@ -137,55 +185,118 @@ class _DeltaDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return DefaultTabController(
-      length: 2,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            color: theme.colorScheme.surfaceContainerHighest,
-            child: Row(
-              children: [
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _KindBadge(
+                    isSnapshot: event.kind == BusWriteKind.snapshot,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      event.tag ?? '(untagged)',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                event.timestamp.toLocal().toIso8601String(),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              if (event.scope != null) ...[
+                const SizedBox(height: 2),
                 Text(
-                  event.tag ?? '(untagged)',
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  'scope: ${event.scope}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                     fontFamily: 'monospace',
                   ),
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  '${event.kind.name} · '
-                  '${event.timestamp.toLocal().toIso8601String()}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
               ],
-            ),
+            ],
           ),
-          const TabBar(
-            tabs: [Tab(text: 'After'), Tab(text: 'Before')],
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.all(12),
+            children: [
+              _SectionHeader(
+                label: 'AFTER',
+                color: theme.colorScheme.tertiary,
+              ),
+              const SizedBox(height: 4),
+              _jsonPane(event.after, theme.colorScheme.surfaceContainerLow),
+              const SizedBox(height: 16),
+              _SectionHeader(
+                label: 'BEFORE',
+                color: theme.colorScheme.outline,
+              ),
+              const SizedBox(height: 4),
+              _jsonPane(event.before, theme.colorScheme.surfaceContainerLow),
+            ],
           ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _jsonPane(event.after),
-                _jsonPane(event.before),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _jsonPane(Map<String, dynamic> map) {
-    if (map.isEmpty) return const Center(child: Text('(empty)'));
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: SingleChildScrollView(
-        child: JsonTreeView(nodes: buildJsonTree(map)),
+  Widget _jsonPane(Map<String, dynamic> map, Color background) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(4),
       ),
+      child: map.isEmpty
+          ? const Text(
+              '(empty)',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          : JsonTreeView(nodes: buildJsonTree(map)),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Container(width: 4, height: 14, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: color,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }

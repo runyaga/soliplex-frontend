@@ -361,7 +361,7 @@ class AgentSession implements ToolExecutionContext {
     // the orchestrator.
     final next = _aguiStateOf(runState);
     if (next != null) {
-      bus.setAgentState(next);
+      bus.setAgentState(next, tag: 'ag-ui:run-state');
     }
     switch (runState) {
       case RunningState():

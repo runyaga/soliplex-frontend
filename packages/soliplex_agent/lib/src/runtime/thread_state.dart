@@ -27,9 +27,16 @@ class ThreadState {
   /// The [bus] is owned by the [ThreadState]; disposing the state
   /// disposes the bus. Pass [busObserver] to forward every committed
   /// bus write to an observer (typically the in-app `BusInspector`);
-  /// ignored when [bus] is supplied directly.
-  ThreadState({StateBus? bus, this.history, BusObserver? busObserver})
-      : bus = bus ?? StateBus(observer: busObserver);
+  /// ignored when [bus] is supplied directly. Pass [busScope] to
+  /// echo a thread identifier on every `BusWriteEvent.scope` (e.g.
+  /// `"server-1/room-x/thread-42"`); also ignored when [bus] is
+  /// supplied directly.
+  ThreadState({
+    StateBus? bus,
+    this.history,
+    BusObserver? busObserver,
+    String? busScope,
+  }) : bus = bus ?? StateBus(observer: busObserver, scope: busScope);
 
   /// Per-thread reactive document. AG-UI events feed in via
   /// [StateBus.setAgentState] and [StateBus.update]; surfaces read

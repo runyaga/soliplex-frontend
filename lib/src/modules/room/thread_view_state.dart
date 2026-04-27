@@ -295,8 +295,12 @@ class ThreadViewState {
     // history-loaded state isn't discarded; only the subscription
     // changes here.
     final initial = session.agentState.value;
-    if (initial.isNotEmpty) _bus.setAgentState(initial);
-    _agentStateUnsub = session.agentState.subscribe(_bus.setAgentState);
+    if (initial.isNotEmpty) {
+      _bus.setAgentState(initial, tag: 'thread-view:session-attach');
+    }
+    _agentStateUnsub = session.agentState.subscribe(
+      (state) => _bus.setAgentState(state, tag: 'thread-view:session-state'),
+    );
   }
 
   /// Auto-wire the app-level surface singletons to projections over
@@ -511,7 +515,10 @@ class ThreadViewState {
       // Projections wired in the constructor pick this up
       // immediately; no session needed.
       if (history.aguiState.isNotEmpty) {
-        _bus.setAgentState(Map<String, dynamic>.from(history.aguiState));
+        _bus.setAgentState(
+          Map<String, dynamic>.from(history.aguiState),
+          tag: 'thread-view:history-rehydrate',
+        );
       }
       onHistoryLoaded?.call(threadId, history);
     }).catchError((Object error) {

@@ -200,37 +200,43 @@ class MapPlugin extends SessionExtension {
       if (name != null) 'name': name,
       if (status != null) 'status': status,
     };
-    ctx.bus.update((current) {
-      final next = Map<String, dynamic>.from(current);
-      final ui = _mapAt(next, 'ui');
-      final mapState = _mapAt(ui, 'map');
-      final sites = List<Map<String, dynamic>>.from(
-        (mapState['sites'] as List?)?.cast<Map<String, dynamic>>() ??
-            const <Map<String, dynamic>>[],
-      );
-      final idx = sites.indexWhere((s) => s['id'] == id);
-      if (idx >= 0) {
-        sites[idx] = {...sites[idx], ...site};
-      } else {
-        sites.add(site);
-      }
-      mapState['sites'] = sites;
-      ui['map'] = mapState;
-      next['ui'] = ui;
-      return next;
-    });
+    ctx.bus.update(
+      (current) {
+        final next = Map<String, dynamic>.from(current);
+        final ui = _mapAt(next, 'ui');
+        final mapState = _mapAt(ui, 'map');
+        final sites = List<Map<String, dynamic>>.from(
+          (mapState['sites'] as List?)?.cast<Map<String, dynamic>>() ??
+              const <Map<String, dynamic>>[],
+        );
+        final idx = sites.indexWhere((s) => s['id'] == id);
+        if (idx >= 0) {
+          sites[idx] = {...sites[idx], ...site};
+        } else {
+          sites.add(site);
+        }
+        mapState['sites'] = sites;
+        ui['map'] = mapState;
+        next['ui'] = ui;
+        return next;
+      },
+      tag: 'map.set_site',
+    );
   }
 
   void _clearSites(SessionContext ctx) {
-    ctx.bus.update((current) {
-      final next = Map<String, dynamic>.from(current);
-      final ui = _mapAt(next, 'ui');
-      final mapState = _mapAt(ui, 'map');
-      mapState['sites'] = const <Map<String, dynamic>>[];
-      ui['map'] = mapState;
-      next['ui'] = ui;
-      return next;
-    });
+    ctx.bus.update(
+      (current) {
+        final next = Map<String, dynamic>.from(current);
+        final ui = _mapAt(next, 'ui');
+        final mapState = _mapAt(ui, 'map');
+        mapState['sites'] = const <Map<String, dynamic>>[];
+        ui['map'] = mapState;
+        next['ui'] = ui;
+        return next;
+      },
+      tag: 'map.clear_sites',
+    );
   }
 
   void _moveConvoyTo(
@@ -244,15 +250,18 @@ class MapPlugin extends SessionExtension {
       'lng': lng,
       if (heading != null) 'heading': heading,
     };
-    ctx.bus.update((current) {
-      final next = Map<String, dynamic>.from(current);
-      final ui = _mapAt(next, 'ui');
-      final mapState = _mapAt(ui, 'map');
-      mapState['convoy'] = convoy;
-      ui['map'] = mapState;
-      next['ui'] = ui;
-      return next;
-    });
+    ctx.bus.update(
+      (current) {
+        final next = Map<String, dynamic>.from(current);
+        final ui = _mapAt(next, 'ui');
+        final mapState = _mapAt(ui, 'map');
+        mapState['convoy'] = convoy;
+        ui['map'] = mapState;
+        next['ui'] = ui;
+        return next;
+      },
+      tag: 'map.move_convoy_to',
+    );
   }
 
   static Map<String, Object?> _decodeArgs(ToolCallInfo toolCall) {
