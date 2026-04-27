@@ -75,7 +75,9 @@ void main() {
       expect(controller.entries.value[1].actor, NarrationActor.primary);
 
       // Replace state — clear narrations.
-      bus.setAgentState(const {'ui': <String, dynamic>{'narrations': []}});
+      bus.setAgentState(const {
+        'ui': <String, dynamic>{'narrations': []}
+      });
       expect(controller.entries.value, isEmpty);
     });
 

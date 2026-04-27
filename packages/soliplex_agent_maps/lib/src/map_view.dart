@@ -45,7 +45,7 @@ class MapView extends StatelessWidget {
           // Rounded up to the next zoom level so we never wrap.
           final wrapMin =
               (math.log(constraints.maxWidth / 256) / math.ln2).ceilToDouble();
-          final minZoom = math.max(1.0, wrapMin);
+          final minZoom = math.max<double>(1, wrapMin);
           return Stack(
             children: [
               FlutterMap(

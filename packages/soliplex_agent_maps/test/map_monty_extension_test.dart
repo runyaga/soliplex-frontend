@@ -68,9 +68,8 @@ mid
     });
 
     test('clear_markers empties everything', () async {
-      mapExt
-        ..addMarker(lat: 1, lng: 2, label: 'a')
-        ..addMarker(lat: 3, lng: 4, label: 'b');
+      await mapExt.addMarker(lat: 1, lng: 2, label: 'a');
+      await mapExt.addMarker(lat: 3, lng: 4, label: 'b');
       expect(mapExt.markers.value, hasLength(2));
 
       await runPython('map_clear_markers()');
@@ -113,7 +112,7 @@ mid
       'shared state — ClientTool path and Python path see the same markers',
       () async {
         // Simulate the ClientTool side dropping a marker.
-        final clientId = mapExt.addMarker(
+        final clientId = await mapExt.addMarker(
           lat: 51.5,
           lng: -0.12,
           label: 'London (tool)',

@@ -72,9 +72,8 @@ monty.HostFunction _bridge(soliplex.HostFunction src, SessionContext ctx) {
   return monty.HostFunction(
     schema: monty.HostFunctionSchema(
       name: src.schema.name,
-      description: src.schema.description.isEmpty
-          ? null
-          : src.schema.description,
+      description:
+          src.schema.description.isEmpty ? null : src.schema.description,
       params: [
         for (final p in src.schema.params)
           monty.HostParam(

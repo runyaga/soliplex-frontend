@@ -360,9 +360,10 @@ class MapMontyExtension extends MontyExtension {
                 'addressdetails': '0',
               },
             );
-            final res = await _http.get(uri, headers: {
-              'User-Agent': _nominatimUserAgent
-            }).timeout(const Duration(seconds: 15));
+            final res = await _http.get(
+              uri,
+              headers: {'User-Agent': _nominatimUserAgent},
+            ).timeout(const Duration(seconds: 15));
             if (res.statusCode != 200) {
               throw FormatException(
                 'map_geocode: ${res.statusCode} ${res.reasonPhrase}',
@@ -403,9 +404,10 @@ class MapMontyExtension extends MontyExtension {
                 'addressdetails': '1',
               },
             );
-            final res = await _http.get(uri, headers: {
-              'User-Agent': _nominatimUserAgent
-            }).timeout(const Duration(seconds: 15));
+            final res = await _http.get(
+              uri,
+              headers: {'User-Agent': _nominatimUserAgent},
+            ).timeout(const Duration(seconds: 15));
             if (res.statusCode != 200) {
               throw FormatException(
                 'map_reverse_geocode: ${res.statusCode} ${res.reasonPhrase}',
