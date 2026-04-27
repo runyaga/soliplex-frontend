@@ -20,16 +20,34 @@ class BusStatePanel extends StatelessWidget {
     if (s == null || s.isEmpty) {
       return _empty(context);
     }
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: SingleChildScrollView(
-        child: JsonTreeView(nodes: buildJsonTree(s)),
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _BusStateHeader(),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SingleChildScrollView(
+              child: JsonTreeView(nodes: buildJsonTree(s)),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _empty(BuildContext context) {
     final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _BusStateHeader(),
+        Expanded(child: _emptyBody(context, theme)),
+      ],
+    );
+  }
+
+  Widget _emptyBody(BuildContext context, ThemeData theme) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -51,6 +69,49 @@ class BusStatePanel extends StatelessWidget {
             'Run an agent that writes the bus to populate this view.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Header strip clarifying that this tab shows the **bus** state — a
+/// superset of AG-UI state. Underscore-prefixed keys (e.g. `_meta`)
+/// are written by client-side extensions (execution tracker, future
+/// projections) and never round-trip back to the backend.
+class _BusStateHeader extends StatelessWidget {
+  const _BusStateHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 14,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'BUS STATE — keys prefixed with _ are client-side only',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

@@ -14,7 +14,8 @@ import 'package:soliplex_agent/src/runtime/server_connection.dart';
 import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/runtime/thread_state.dart';
-import 'package:soliplex_agent/src/tools/tool_registry.dart' show ToolObserver;
+import 'package:soliplex_agent/src/tools/tool_registry.dart'
+    show RegisteredToolInfo, ToolObserver, ToolRegistryObserver;
 import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
 import 'package:soliplex_client/soliplex_client.dart'
     show BusObserver, ThreadHistory;
@@ -58,6 +59,7 @@ class AgentRuntime {
     SessionExtensionFactory? extensionFactory,
     BusObserver? busObserver,
     ToolObserver? toolObserver,
+    ToolRegistryObserver? toolRegistryObserver,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -72,7 +74,8 @@ class AgentRuntime {
         _platform = platform,
         _logger = logger,
         _busObserver = busObserver,
-        _toolObserver = toolObserver;
+        _toolObserver = toolObserver,
+        _toolRegistryObserver = toolRegistryObserver;
 
   final ServerConnection _connection;
   final AgentLlmProvider _llmProvider;
@@ -82,6 +85,7 @@ class AgentRuntime {
   final Logger _logger;
   final BusObserver? _busObserver;
   final ToolObserver? _toolObserver;
+  final ToolRegistryObserver? _toolRegistryObserver;
 
   /// Identifies which backend server this runtime targets.
   final String serverId;
@@ -366,14 +370,37 @@ class AgentRuntime {
     required bool ephemeral,
     required int depth,
   }) async {
-    var toolRegistry = await _toolRegistryResolver(roomId);
+    final resolverRegistry = await _toolRegistryResolver(roomId);
+    final resolverNames =
+        resolverRegistry.toolDefinitions.map((t) => t.name).toSet();
+    var toolRegistry = resolverRegistry;
     final extensions = await _createExtensions();
     final coordinator = SessionCoordinator(extensions);
+    final extensionSources = <String, String>{};
+    for (final ext in extensions) {
+      for (final ct in ext.tools) {
+        extensionSources[ct.definition.name] = 'extension:${ext.namespace}';
+      }
+    }
     for (final tool in coordinator.tools) {
       toolRegistry = toolRegistry.register(tool);
     }
     if (_toolObserver != null) {
       toolRegistry = toolRegistry.withObserver(_toolObserver);
+    }
+    if (_toolRegistryObserver != null) {
+      _toolRegistryObserver(
+        '${key.serverId}/${key.roomId}/${key.threadId}',
+        [
+          for (final def in toolRegistry.toolDefinitions)
+            RegisteredToolInfo(
+              definition: def,
+              source: resolverNames.contains(def.name)
+                  ? 'resolver'
+                  : extensionSources[def.name] ?? 'unknown',
+            ),
+        ],
+      );
     }
     final orchestrator = RunOrchestrator(
       llmProvider: _llmProvider,

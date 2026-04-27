@@ -1,7 +1,8 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
-import 'package:soliplex_agent/soliplex_agent.dart' show ToolInvocationEvent;
+import 'package:soliplex_agent/soliplex_agent.dart'
+    show RegisteredToolInfo, ToolInvocationEvent;
 import 'package:soliplex_client/soliplex_client.dart';
 
 /// Collects [BusWriteEvent]s and [ToolInvocationEvent]s for the bus
@@ -48,6 +49,7 @@ class BusInspector with ChangeNotifier {
   final ListQueue<BusWriteEvent> _events = ListQueue<BusWriteEvent>();
   final ListQueue<ToolInvocationEvent> _toolInvocations =
       ListQueue<ToolInvocationEvent>();
+  final Map<String, List<RegisteredToolInfo>> _registeredToolsByScope = {};
   int _eventsTotal = 0;
   int _toolInvocationsTotal = 0;
   bool _disposed = false;
@@ -71,6 +73,16 @@ class BusInspector with ChangeNotifier {
   /// Same monotonic counter for tool invocations.
   int get toolInvocationsTotal => _toolInvocationsTotal;
 
+  /// Latest snapshot of `ClientTool` definitions registered for each
+  /// session, keyed by scope (`"serverId/roomId/threadId"`). Wired
+  /// via the runtime's [ToolRegistryObserver]. Updated each time a
+  /// session is built so re-spawning a thread refreshes its set.
+  ///
+  /// Returns an unmodifiable view; callers must treat the inner lists
+  /// as read-only as well.
+  Map<String, List<RegisteredToolInfo>> get registeredToolsByScope =>
+      Map.unmodifiable(_registeredToolsByScope);
+
   /// Most recent agent-state snapshot, or `null` if no event has been
   /// recorded. The bus state panel renders this as a JSON tree.
   Map<String, dynamic>? get latestState =>
@@ -88,6 +100,18 @@ class BusInspector with ChangeNotifier {
     _events.addLast(event);
     _eventsTotal++;
     if (_events.length > _maxEvents) _events.removeFirst();
+    notifyListeners();
+  }
+
+  /// Records the tool-registry snapshot built for one session. Wire
+  /// as the `ToolRegistryObserver` when constructing [AgentRuntime]:
+  ///
+  /// ```dart
+  /// AgentRuntime(toolRegistryObserver: inspector.recordToolRegistry, ...);
+  /// ```
+  void recordToolRegistry(String scope, List<RegisteredToolInfo> tools) {
+    if (_disposed) return;
+    _registeredToolsByScope[scope] = List.unmodifiable(tools);
     notifyListeners();
   }
 
@@ -111,9 +135,14 @@ class BusInspector with ChangeNotifier {
   /// Idempotent.
   void clear() {
     if (_disposed) return;
-    if (_events.isEmpty && _toolInvocations.isEmpty) return;
+    if (_events.isEmpty &&
+        _toolInvocations.isEmpty &&
+        _registeredToolsByScope.isEmpty) {
+      return;
+    }
     _events.clear();
     _toolInvocations.clear();
+    _registeredToolsByScope.clear();
     _eventsTotal = 0;
     _toolInvocationsTotal = 0;
     notifyListeners();
@@ -131,6 +160,7 @@ class BusInspector with ChangeNotifier {
     // bus / tool-call structures.
     _events.clear();
     _toolInvocations.clear();
+    _registeredToolsByScope.clear();
     super.dispose();
   }
 }

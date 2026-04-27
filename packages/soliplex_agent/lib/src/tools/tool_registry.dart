@@ -62,6 +62,43 @@ class ToolInvocationEvent {
 /// — both success and failure paths.
 typedef ToolObserver = void Function(ToolInvocationEvent event);
 
+/// One tool entry in a fully-assembled [ToolRegistry], paired with
+/// attribution telling consumers where it came from.
+///
+/// [source] is a short label naming the contributor:
+/// - `"resolver"` — supplied by the room-keyed `ToolRegistryResolver`
+///   (typically room config / backend manifest).
+/// - `"extension:<namespace>"` — added by a `SessionExtension`'s
+///   `tools` list. The namespace matches `extension.namespace`.
+@immutable
+class RegisteredToolInfo {
+  /// Constructs a registered-tool snapshot. Both fields are required.
+  const RegisteredToolInfo({
+    required this.definition,
+    required this.source,
+  });
+
+  /// AG-UI [Tool] definition. Carries name, description, and the
+  /// JSON Schema the model sees.
+  final Tool definition;
+
+  /// Short attribution string. See class doc for canonical values.
+  final String source;
+}
+
+/// Observer callback fired once per session whenever a [ToolRegistry] is
+/// fully assembled (room-resolver tools + extension tools).
+///
+/// [scope] is the same identifier used by [BusObserver] events
+/// (`"serverId/roomId/threadId"`). [tools] enumerates every tool in
+/// the assembled registry along with its [RegisteredToolInfo.source]
+/// attribution. Fires synchronously during session construction;
+/// observers must not throw.
+typedef ToolRegistryObserver = void Function(
+  String scope,
+  List<RegisteredToolInfo> tools,
+);
+
 /// Default JSON Schema for tools that take no parameters.
 const Map<String, Object> emptyToolParameters = {
   'type': 'object',

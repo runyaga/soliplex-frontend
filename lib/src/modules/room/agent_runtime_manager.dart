@@ -12,12 +12,14 @@ class AgentRuntimeManager {
     SessionExtensionFactory? extensionFactory,
     BusObserver? busObserver,
     ToolObserver? toolObserver,
+    ToolRegistryObserver? toolRegistryObserver,
   })  : _platform = platform,
         _toolRegistryResolver = toolRegistryResolver,
         _extensionFactory = extensionFactory,
         _logger = logger,
         _busObserver = busObserver,
-        _toolObserver = toolObserver;
+        _toolObserver = toolObserver,
+        _toolRegistryObserver = toolRegistryObserver;
 
   final PlatformConstraints _platform;
   final Future<ToolRegistry> Function(String roomId) _toolRegistryResolver;
@@ -25,6 +27,7 @@ class AgentRuntimeManager {
   final Logger _logger;
   final BusObserver? _busObserver;
   final ToolObserver? _toolObserver;
+  final ToolRegistryObserver? _toolRegistryObserver;
   final Map<String, ({ServerConnection connection, AgentRuntime runtime})>
       _cache = {};
   bool _isDisposed = false;
@@ -62,6 +65,7 @@ class AgentRuntimeManager {
       logger: _logger,
       busObserver: _busObserver,
       toolObserver: _toolObserver,
+      toolRegistryObserver: _toolRegistryObserver,
     );
   }
 

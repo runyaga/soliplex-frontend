@@ -141,6 +141,7 @@ Future<ShellConfig> standard({
     logger: LogManager.instance.getLogger('room'),
     busObserver: busInspector.record,
     toolObserver: busInspector.recordToolInvocation,
+    toolRegistryObserver: busInspector.recordToolRegistry,
     extensionFactory: () async => [
       ExecutionTrackerExtension(),
       ToolCallsExtension(),

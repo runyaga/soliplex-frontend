@@ -424,8 +424,8 @@ class _DiffPane extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         child: const Text(
-          '(no changes — observer may have fired on an identity-only '
-          'write)',
+          '(no JSON Patch ops — before/after differ only in key '
+          'ordering or numeric type)',
           style: TextStyle(
             fontFamily: 'monospace',
             fontStyle: FontStyle.italic,
@@ -478,7 +478,7 @@ class _DiffOpRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(3),
             ),
             child: Text(
-              kind.toUpperCase(),
+              kind == 'replace' ? 'MOD' : kind.toUpperCase(),
               textAlign: TextAlign.center,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: colors.$2,

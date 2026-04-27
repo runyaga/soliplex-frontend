@@ -45,6 +45,11 @@ class BusInspectorScreen extends StatelessWidget {
                 ),
                 actions: [
                   IconButton(
+                    icon: const Icon(Icons.info_outline),
+                    tooltip: 'What does each tab show?',
+                    onPressed: () => _showHelp(context),
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.delete_outline),
                     onPressed: hasEvents ? inspector.clear : null,
                     tooltip: 'Clear bus + tool logs',
@@ -68,6 +73,7 @@ class BusInspectorScreen extends StatelessWidget {
                   ToolLogPanel(
                     events: inspector.toolInvocations,
                     totalRecorded: inspector.toolInvocationsTotal,
+                    registeredByScope: inspector.registeredToolsByScope,
                   ),
                 ],
               ),
@@ -75,6 +81,139 @@ class BusInspectorScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _showHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => const _BusInspectorHelpDialog(),
+    );
+  }
+}
+
+class _BusInspectorHelpDialog extends StatelessWidget {
+  const _BusInspectorHelpDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Bus Inspector — what each tab shows'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _HelpSection(
+                icon: Icons.data_object,
+                title: 'State',
+                body:
+                    'The bus\'s current agent-state snapshot for the active '
+                    'thread (after the most recent write). This is the BUS '
+                    'state — a superset of AG-UI state. Keys prefixed with '
+                    '_ (e.g. _meta.steps) are added by client-side '
+                    'extensions like the execution tracker; they never '
+                    'round-trip back to the backend.',
+              ),
+              const SizedBox(height: 12),
+              _HelpSection(
+                icon: Icons.history,
+                title: 'Delta log',
+                body:
+                    'Every committed bus write in chronological order '
+                    '(newest at top). Includes:\n\n'
+                    '• Server-side state — AG-UI STATE_SNAPSHOT and '
+                    'STATE_DELTA events under tag ag-ui:run-state.\n'
+                    '• Server-side tool calls — TOOL_CALL_START / _ARGS / '
+                    '_END events appear here as bus writes touching '
+                    '/toolCalls/* paths.\n'
+                    '• Client-side bus writes — plugins like '
+                    'NarrationPlugin and MapPlugin write directly to the '
+                    'bus with their own tags (narrate.append, map.set_site, '
+                    '...).\n'
+                    '• Execution tracker — _meta.steps mirroring under '
+                    'tag execution-tracker:steps.\n\n'
+                    'Tap a row for the JSON Patch diff and full '
+                    'before/after.',
+              ),
+              const SizedBox(height: 12),
+              _HelpSection(
+                icon: Icons.code,
+                title: 'Tools',
+                body:
+                    'Every CLIENT-SIDE ClientTool invocation captured by '
+                    'the agent runtime\'s ToolObserver. This is the call '
+                    'graph for tools that physically execute on this '
+                    'device — e.g. narrate_say, add_marker, '
+                    'run_python_on_device. Server-side tools (the LLM '
+                    'invokes them on the backend) do NOT appear here; '
+                    'find them in the Delta log under /toolCalls/*.',
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Diff badges',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'ADD / MOD / REMOVE / MOVE / COPY are RFC 6902 JSON Patch '
+                'ops between BEFORE and AFTER. (MOD = replace.)',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _HelpSection extends StatelessWidget {
+  const _HelpSection({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            icon,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              Text(body, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
