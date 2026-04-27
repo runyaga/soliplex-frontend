@@ -7,9 +7,14 @@ import 'package:soliplex_agent/soliplex_agent.dart' show ToolInvocationEvent;
 /// Renders most-recent-first to match the network inspector's
 /// convention.
 class ToolLogPanel extends StatefulWidget {
-  const ToolLogPanel({required this.events, super.key});
+  const ToolLogPanel({
+    required this.events,
+    required this.totalRecorded,
+    super.key,
+  });
 
   final List<ToolInvocationEvent> events;
+  final int totalRecorded;
 
   @override
   State<ToolLogPanel> createState() => _ToolLogPanelState();
@@ -32,20 +37,37 @@ class _ToolLogPanelState extends State<ToolLogPanel> {
       return _empty(context);
     }
     final reversed = widget.events.reversed.toList();
+    final newestSeq = widget.totalRecorded - 1;
+    final oldestSeq = widget.totalRecorded - widget.events.length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 600;
-        final list = ListView.builder(
-          itemCount: reversed.length,
-          itemBuilder: (context, i) => _ToolTile(
-            event: reversed[i],
-            selected: _selected == i,
-            onTap: () => setState(() => _selected = i),
-          ),
+        final list = Column(
+          children: [
+            _ToolDirectionBanner(
+              count: widget.events.length,
+              newestSeq: newestSeq,
+              oldestSeq: oldestSeq,
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: reversed.length,
+                itemBuilder: (context, i) => _ToolTile(
+                  seq: newestSeq - i,
+                  event: reversed[i],
+                  selected: _selected == i,
+                  onTap: () => setState(() => _selected = i),
+                ),
+              ),
+            ),
+          ],
         );
         if (!isWide) return list;
         final detail = _selected != null && _selected! < reversed.length
-            ? _ToolDetail(event: reversed[_selected!])
+            ? _ToolDetail(
+                seq: newestSeq - _selected!,
+                event: reversed[_selected!],
+              )
             : const _DetailEmpty();
         return Row(
           children: [
@@ -84,11 +106,13 @@ class _ToolLogPanelState extends State<ToolLogPanel> {
 
 class _ToolTile extends StatelessWidget {
   const _ToolTile({
+    required this.seq,
     required this.event,
     required this.selected,
     required this.onTap,
   });
 
+  final int seq;
   final ToolInvocationEvent event;
   final bool selected;
   final VoidCallback onTap;
@@ -96,7 +120,6 @@ class _ToolTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final time = event.startedAt.toLocal().toIso8601String().substring(11, 19);
     final isError = event.error != null;
     return ListTile(
       selected: selected,
@@ -107,24 +130,97 @@ class _ToolTile extends StatelessWidget {
         size: 18,
         color: isError ? theme.colorScheme.error : null,
       ),
-      title: Text(
-        event.toolName,
-        style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Text(
+            '#$seq',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              event.toolName,
+              style:
+                  theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
       subtitle: Text(
-        '$time · ${event.duration.inMilliseconds}ms',
+        '${event.duration.inMilliseconds}ms',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
+          fontFamily: 'monospace',
         ),
       ),
     );
   }
 }
 
-class _ToolDetail extends StatelessWidget {
-  const _ToolDetail({required this.event});
+/// Same shape as the delta-log direction banner; lives here to
+/// avoid cross-panel coupling for now.
+class _ToolDirectionBanner extends StatelessWidget {
+  const _ToolDirectionBanner({
+    required this.count,
+    required this.newestSeq,
+    required this.oldestSeq,
+  });
 
+  final int count;
+  final int newestSeq;
+  final int oldestSeq;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.vertical_align_top,
+            size: 14,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'NEWEST AT TOP',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '#$newestSeq … #$oldestSeq · $count call'
+            '${count == 1 ? '' : 's'}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolDetail extends StatelessWidget {
+  const _ToolDetail({required this.seq, required this.event});
+
+  final int seq;
   final ToolInvocationEvent event;
 
   @override
@@ -140,19 +236,33 @@ class _ToolDetail extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                event.toolName,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontFamily: 'monospace',
-                ),
+              Row(
+                children: [
+                  Text(
+                    '#$seq',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      event.toolName,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
                 'id ${event.toolCallId} · '
-                '${event.duration.inMilliseconds}ms · '
-                '${event.startedAt.toLocal().toIso8601String()}',
+                '${event.duration.inMilliseconds}ms',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
+                  fontFamily: 'monospace',
                 ),
               ),
             ],

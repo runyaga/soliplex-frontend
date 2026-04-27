@@ -361,7 +361,24 @@ class AgentSession implements ToolExecutionContext {
     // the orchestrator.
     final next = _aguiStateOf(runState);
     if (next != null) {
-      bus.setAgentState(next, tag: 'ag-ui:run-state');
+      // Preserve client-side metadata namespace (`_meta`) across
+      // server-driven snapshot writes. The AG-UI server owns the
+      // application keys; the client owns underscore-prefixed
+      // namespaces (e.g. `/_meta/steps` from ExecutionTracker).
+      // Without this, every run-state event would clobber the
+      // execution timeline.
+      bus.update(
+        (current) {
+          final merged = Map<String, dynamic>.from(next);
+          for (final key in current.keys) {
+            if (key.startsWith('_') && !merged.containsKey(key)) {
+              merged[key] = current[key];
+            }
+          }
+          return merged;
+        },
+        tag: 'ag-ui:run-state',
+      );
     }
     switch (runState) {
       case RunningState():

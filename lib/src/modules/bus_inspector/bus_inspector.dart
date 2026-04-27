@@ -48,6 +48,8 @@ class BusInspector with ChangeNotifier {
   final ListQueue<BusWriteEvent> _events = ListQueue<BusWriteEvent>();
   final ListQueue<ToolInvocationEvent> _toolInvocations =
       ListQueue<ToolInvocationEvent>();
+  int _eventsTotal = 0;
+  int _toolInvocationsTotal = 0;
   bool _disposed = false;
 
   /// Captured bus-write events in chronological order. Read-only.
@@ -57,6 +59,17 @@ class BusInspector with ChangeNotifier {
   /// Read-only.
   List<ToolInvocationEvent> get toolInvocations =>
       List.unmodifiable(_toolInvocations);
+
+  /// Monotonic count of bus writes recorded since construction
+  /// (or since the last `clear()`). Survives ring-buffer rotation
+  /// — older events drop out of [events] but still counted here.
+  /// The most-recent retained event has absolute sequence number
+  /// `eventsTotal - 1`; the oldest retained is
+  /// `eventsTotal - events.length`.
+  int get eventsTotal => _eventsTotal;
+
+  /// Same monotonic counter for tool invocations.
+  int get toolInvocationsTotal => _toolInvocationsTotal;
 
   /// Most recent agent-state snapshot, or `null` if no event has been
   /// recorded. The bus state panel renders this as a JSON tree.
@@ -73,6 +86,7 @@ class BusInspector with ChangeNotifier {
   void record(BusWriteEvent event) {
     if (_disposed) return;
     _events.addLast(event);
+    _eventsTotal++;
     if (_events.length > _maxEvents) _events.removeFirst();
     notifyListeners();
   }
@@ -86,18 +100,22 @@ class BusInspector with ChangeNotifier {
   void recordToolInvocation(ToolInvocationEvent event) {
     if (_disposed) return;
     _toolInvocations.addLast(event);
+    _toolInvocationsTotal++;
     if (_toolInvocations.length > _maxToolInvocations) {
       _toolInvocations.removeFirst();
     }
     notifyListeners();
   }
 
-  /// Clears both event logs. Idempotent.
+  /// Clears both event logs and resets the monotonic counters.
+  /// Idempotent.
   void clear() {
     if (_disposed) return;
     if (_events.isEmpty && _toolInvocations.isEmpty) return;
     _events.clear();
     _toolInvocations.clear();
+    _eventsTotal = 0;
+    _toolInvocationsTotal = 0;
     notifyListeners();
   }
 

@@ -9,11 +9,22 @@ import '../../diagnostics/ui/json_tree_view.dart';
 /// Chronological list of every committed bus write, with a tap-to-
 /// expand detail view showing the before/after state JSON.
 class DeltaLogPanel extends StatefulWidget {
-  const DeltaLogPanel({required this.events, super.key});
+  const DeltaLogPanel({
+    required this.events,
+    required this.totalRecorded,
+    super.key,
+  });
 
   /// Write log in chronological order — typically
   /// [BusInspector.events]. The widget renders most-recent-first.
   final List<BusWriteEvent> events;
+
+  /// Monotonic count of all events ever recorded by the inspector
+  /// since `clear()` — typically [BusInspector.eventsTotal]. The
+  /// most-recent event in [events] has absolute sequence
+  /// `totalRecorded - 1`; the oldest visible has
+  /// `totalRecorded - events.length`. Used to label tiles `#N`.
+  final int totalRecorded;
 
   @override
   State<DeltaLogPanel> createState() => _DeltaLogPanelState();
@@ -38,20 +49,37 @@ class _DeltaLogPanelState extends State<DeltaLogPanel> {
       return _empty(context);
     }
     final reversed = widget.events.reversed.toList();
+    final newestSeq = widget.totalRecorded - 1;
+    final oldestSeq = widget.totalRecorded - widget.events.length;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 600;
-        final list = ListView.builder(
-          itemCount: reversed.length,
-          itemBuilder: (context, i) => _DeltaTile(
-            event: reversed[i],
-            selected: _selected == i,
-            onTap: () => setState(() => _selected = i),
-          ),
+        final list = Column(
+          children: [
+            _DirectionBanner(
+              count: widget.events.length,
+              newestSeq: newestSeq,
+              oldestSeq: oldestSeq,
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: reversed.length,
+                itemBuilder: (context, i) => _DeltaTile(
+                  seq: newestSeq - i,
+                  event: reversed[i],
+                  selected: _selected == i,
+                  onTap: () => setState(() => _selected = i),
+                ),
+              ),
+            ),
+          ],
         );
         if (!isWide) return list;
         final detail = _selected != null && _selected! < reversed.length
-            ? _DeltaDetail(event: reversed[_selected!])
+            ? _DeltaDetail(
+                seq: newestSeq - _selected!,
+                event: reversed[_selected!],
+              )
             : const _DetailEmpty();
         return Row(
           children: [
@@ -90,11 +118,13 @@ class _DeltaLogPanelState extends State<DeltaLogPanel> {
 
 class _DeltaTile extends StatelessWidget {
   const _DeltaTile({
+    required this.seq,
     required this.event,
     required this.selected,
     required this.onTap,
   });
 
+  final int seq;
   final BusWriteEvent event;
   final bool selected;
   final VoidCallback onTap;
@@ -103,25 +133,101 @@ class _DeltaTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tag = event.tag ?? '(untagged)';
-    final time = event.timestamp.toLocal().toIso8601String().substring(11, 19);
     final isSnapshot = event.kind == BusWriteKind.snapshot;
     return ListTile(
       selected: selected,
       onTap: onTap,
       dense: true,
       leading: _KindBadge(isSnapshot: isSnapshot),
-      title: Text(
-        tag,
-        style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          // Monotonic per-inspector sequence number — required when
+          // events fire faster than wall-clock resolution allows
+          // (back-to-back agui events within the same millisecond).
+          Text(
+            '#$seq',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontFamily: 'monospace',
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              tag,
+              style:
+                  theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
-      subtitle: Text(
-        '$time'
-        '${event.scope == null ? '' : ' · ${_shortScope(event.scope!)}'}',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-          fontFamily: 'monospace',
+      subtitle: event.scope == null
+          ? null
+          : Text(
+              _shortScope(event.scope!),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontFamily: 'monospace',
+              ),
+            ),
+    );
+  }
+}
+
+/// Banner above the tile list explaining the order ("most recent
+/// at TOP") plus the time-span the visible events cover. Required
+/// because chronological vs reverse-chronological isn't intuitive
+/// without a label.
+class _DirectionBanner extends StatelessWidget {
+  const _DirectionBanner({
+    required this.count,
+    required this.newestSeq,
+    required this.oldestSeq,
+  });
+
+  final int count;
+  final int newestSeq;
+  final int oldestSeq;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        border: Border(
+          bottom: BorderSide(color: theme.dividerColor, width: 0.5),
         ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.vertical_align_top,
+            size: 14,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'NEWEST AT TOP',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '#$newestSeq … #$oldestSeq · $count event'
+            '${count == 1 ? '' : 's'}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -178,8 +284,9 @@ String _shortScope(String scope) {
 }
 
 class _DeltaDetail extends StatelessWidget {
-  const _DeltaDetail({required this.event});
+  const _DeltaDetail({required this.seq, required this.event});
 
+  final int seq;
   final BusWriteEvent event;
 
   @override
@@ -199,6 +306,14 @@ class _DeltaDetail extends StatelessWidget {
                     isSnapshot: event.kind == BusWriteKind.snapshot,
                   ),
                   const SizedBox(width: 8),
+                  Text(
+                    '#$seq',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       event.tag ?? '(untagged)',
@@ -209,16 +324,8 @@ class _DeltaDetail extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                event.timestamp.toLocal().toIso8601String(),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontFamily: 'monospace',
-                ),
-              ),
               if (event.scope != null) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   'scope: ${event.scope}',
                   style: theme.textTheme.bodySmall?.copyWith(
