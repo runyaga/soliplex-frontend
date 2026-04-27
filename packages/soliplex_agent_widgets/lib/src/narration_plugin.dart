@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:meta/meta.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 
 import 'narration.dart';
@@ -93,8 +94,7 @@ class NarrationPlugin extends SessionExtension {
           handler: (args, ctx) async {
             final text = (args['text'] as String?)?.trim() ?? '';
             if (text.isEmpty) return 'narrate_say: empty text';
-            final actor =
-                NarrationActor.parse(args['actor'] as String?).name;
+            final actor = NarrationActor.parse(args['actor'] as String?).name;
             _appendNarration(ctx, actor: actor, text: text);
             return 'ok';
           },
@@ -134,7 +134,28 @@ class NarrationPlugin extends SessionExtension {
     required String actor,
     required String text,
   }) {
-    ctx.bus.update((current) {
+    appendNarrationToBus(ctx.bus, actor: actor, text: text);
+  }
+
+  void _clearNarrations(SessionContext ctx) {
+    clearNarrationsOnBus(ctx.bus);
+  }
+}
+
+/// Appends a narration entry to `agentState['ui']['narrations']`.
+///
+/// Pure top-level helper: takes a [StateBus] directly so unit tests
+/// can exercise the mutation without booting an [AgentSession] or a
+/// [SessionContext]. Plugin handlers call this through their
+/// `SessionContext.bus` reference.
+@visibleForTesting
+void appendNarrationToBus(
+  StateBus bus, {
+  required String actor,
+  required String text,
+}) {
+  bus.update(
+    (current) {
       final next = Map<String, dynamic>.from(current);
       final ui = Map<String, dynamic>.from(
         (next['ui'] as Map?)?.cast<String, dynamic>() ?? const {},
@@ -147,11 +168,18 @@ class NarrationPlugin extends SessionExtension {
       ui['narrations'] = list;
       next['ui'] = ui;
       return next;
-    });
-  }
+    },
+    tag: 'narration.append',
+  );
+}
 
-  void _clearNarrations(SessionContext ctx) {
-    ctx.bus.update((current) {
+/// Clears `agentState['ui']['narrations']`.
+///
+/// Pure top-level helper paired with [appendNarrationToBus].
+@visibleForTesting
+void clearNarrationsOnBus(StateBus bus) {
+  bus.update(
+    (current) {
       final next = Map<String, dynamic>.from(current);
       final ui = Map<String, dynamic>.from(
         (next['ui'] as Map?)?.cast<String, dynamic>() ?? const {},
@@ -159,6 +187,7 @@ class NarrationPlugin extends SessionExtension {
       ui['narrations'] = const <Map<String, dynamic>>[];
       next['ui'] = ui;
       return next;
-    });
-  }
+    },
+    tag: 'narration.clear',
+  );
 }
