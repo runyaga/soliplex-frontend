@@ -16,6 +16,8 @@ import '../modules/auth/platform/callback_params.dart';
 import '../modules/auth/secure_server_storage.dart';
 import '../modules/auth/server_manager.dart';
 import '../modules/auth/server_storage.dart';
+import '../modules/bus_inspector/bus_inspector.dart';
+import '../modules/bus_inspector/bus_inspector_module.dart';
 import '../modules/diagnostics/diagnostics_module.dart';
 import '../modules/diagnostics/network_inspector.dart';
 import '../modules/lobby/lobby_module.dart';
@@ -83,6 +85,7 @@ Future<ShellConfig> standard({
 }) async {
   logo ??= Image.asset(_defaultLogoAsset, width: _logoSize, height: _logoSize);
   final inspector = NetworkInspector();
+  final busInspector = BusInspector();
   final httpLogger = LogManager.instance.getLogger('http_stack');
 
   void onHttpDiagnostic(
@@ -136,6 +139,7 @@ Future<ShellConfig> standard({
         : const NativePlatformConstraints(),
     toolRegistryResolver: (_) async => const ToolRegistry(),
     logger: LogManager.instance.getLogger('room'),
+    busObserver: busInspector.record,
     extensionFactory: () async => [
       ExecutionTrackerExtension(),
       ToolCallsExtension(),
@@ -167,6 +171,7 @@ Future<ShellConfig> standard({
     refreshListenable: authMod.refreshListenable,
     modules: [
       DiagnosticsAppModule(inspector: inspector),
+      BusInspectorAppModule(inspector: busInspector),
       authMod,
       LobbyAppModule(serverManager: serverManager),
       RoomAppModule(

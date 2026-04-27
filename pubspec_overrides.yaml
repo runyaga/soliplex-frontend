@@ -1,0 +1,12 @@
+# Pin dart_monty_core to the local checkout for the entire workspace.
+#
+# `dart_monty/pubspec.yaml` declares `dart_monty_core` as a git dep;
+# the top-level pubspec declares it as a local path. Without this
+# override, pub treats them as conflicting sources and fails resolution.
+# Use this override during local development against ../dart_monty_core.
+# Remove once both deps are pinned to the same git ref.
+dependency_overrides:
+  dart_monty_core:
+    path: ../dart_monty_core
+  dart_monty:
+    path: ../dart_monty

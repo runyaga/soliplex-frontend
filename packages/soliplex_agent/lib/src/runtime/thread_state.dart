@@ -1,6 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:soliplex_client/soliplex_client.dart'
-    show StateBus, ThreadHistory;
+    show BusObserver, StateBus, ThreadHistory;
 
 /// Per-thread state owned by `AgentRuntime` and keyed by `ThreadKey`.
 ///
@@ -25,8 +25,11 @@ class ThreadState {
   /// Constructs a per-thread bundle with a fresh [bus] and no history.
   ///
   /// The [bus] is owned by the [ThreadState]; disposing the state
-  /// disposes the bus.
-  ThreadState({StateBus? bus, this.history}) : bus = bus ?? StateBus();
+  /// disposes the bus. Pass [busObserver] to forward every committed
+  /// bus write to an observer (typically the in-app `BusInspector`);
+  /// ignored when [bus] is supplied directly.
+  ThreadState({StateBus? bus, this.history, BusObserver? busObserver})
+      : bus = bus ?? StateBus(observer: busObserver);
 
   /// Per-thread reactive document. AG-UI events feed in via
   /// [StateBus.setAgentState] and [StateBus.update]; surfaces read
@@ -41,7 +44,7 @@ class ThreadState {
 
   /// Returns a copy with a different [history]. The underlying [bus]
   /// is preserved across mutations because it carries the live
-  /// signal subscriptions.
+  /// signal subscriptions (and the observer that was wired into it).
   ThreadState withHistory(ThreadHistory? next) =>
       ThreadState(bus: bus, history: next);
 

@@ -15,7 +15,8 @@ import 'package:soliplex_agent/src/runtime/session_coordinator.dart';
 import 'package:soliplex_agent/src/runtime/session_extension.dart';
 import 'package:soliplex_agent/src/runtime/thread_state.dart';
 import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
-import 'package:soliplex_client/soliplex_client.dart' show ThreadHistory;
+import 'package:soliplex_client/soliplex_client.dart'
+    show BusObserver, ThreadHistory;
 import 'package:soliplex_logging/soliplex_logging.dart';
 
 /// Facade for spawning and coordinating multiple [AgentSession]s.
@@ -54,6 +55,7 @@ class AgentRuntime {
     required Logger logger,
     AgentLlmProvider? llmProvider,
     SessionExtensionFactory? extensionFactory,
+    BusObserver? busObserver,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -66,7 +68,8 @@ class AgentRuntime {
         _toolRegistryResolver = toolRegistryResolver,
         _extensionFactory = extensionFactory,
         _platform = platform,
-        _logger = logger;
+        _logger = logger,
+        _busObserver = busObserver;
 
   final ServerConnection _connection;
   final AgentLlmProvider _llmProvider;
@@ -74,6 +77,7 @@ class AgentRuntime {
   final SessionExtensionFactory? _extensionFactory;
   final PlatformConstraints _platform;
   final Logger _logger;
+  final BusObserver? _busObserver;
 
   /// Identifies which backend server this runtime targets.
   final String serverId;
@@ -164,7 +168,7 @@ class AgentRuntime {
   /// [ThreadState] if none has been registered yet. Internal helper —
   /// callers outside the runtime should use the seed APIs above.
   ThreadState _threadStateFor(ThreadKey key) =>
-      _threadStates[key] ??= ThreadState();
+      _threadStates[key] ??= ThreadState(busObserver: _busObserver);
 
   /// Returns the per-thread state for [key], or `null` if no state
   /// has been registered. Read-only public accessor used by
