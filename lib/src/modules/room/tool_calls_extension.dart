@@ -59,6 +59,9 @@ class ToolCallsExtension extends SessionExtension
   String get namespace => 'tool_calls';
 
   @override
+  String get sourcePath => 'lib/src/modules/room/tool_calls_extension.dart';
+
+  @override
   int get priority => 5;
 
   @override

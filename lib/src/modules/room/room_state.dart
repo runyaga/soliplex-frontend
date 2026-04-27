@@ -128,6 +128,21 @@ class RoomState {
         );
       },
     );
+    // Eagerly populate the bus inspector's "Registered" tools view
+    // for this thread. The runtime fires its ToolRegistryObserver
+    // even though no session has spawned — so users can see the
+    // tool catalog before they send a first message. Fire-and-
+    // forget; observer is a no-op when the runtime has none wired.
+    unawaited(
+      runtime.previewToolRegistry(
+        roomId: _roomId,
+        key: (
+          serverId: _connection.serverId,
+          roomId: _roomId,
+          threadId: threadId,
+        ),
+      ),
+    );
     // Thread switch → force a refresh for the same reasons as room
     // entry. Reselecting the same thread is a no-op earlier in the
     // method, so this doesn't fire spuriously.

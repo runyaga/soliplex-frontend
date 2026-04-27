@@ -40,6 +40,10 @@ class MontyRuntimeExtension extends SessionExtension
   String get namespace => 'monty';
 
   @override
+  String get sourcePath =>
+      'packages/soliplex_agent_monty/lib/src/monty_runtime_extension.dart';
+
+  @override
   int get priority => 0;
 
   @override

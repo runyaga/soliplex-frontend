@@ -309,17 +309,45 @@ class _RegisteredToolRow extends StatelessWidget {
               _SourceBadge(source: info.source),
             ],
           ),
-          subtitle: desc.isEmpty
-              ? null
-              : Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: SelectableText(
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (desc.isNotEmpty)
+                  SelectableText(
                     desc,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
+                if (info.sourcePath != null) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.insert_drive_file_outlined,
+                        size: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: SelectableText(
+                          info.sourcePath!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontFamily: 'monospace',
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
           children: [
             _ParamsBlock(params: params, hasContent: hasParams),
           ],

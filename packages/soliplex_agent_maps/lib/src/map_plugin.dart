@@ -40,6 +40,10 @@ class MapPlugin extends SessionExtension {
   String get namespace => 'map_plugin';
 
   @override
+  String get sourcePath =>
+      'packages/soliplex_agent_maps/lib/src/map_plugin.dart';
+
+  @override
   Future<void> onAttach(AgentSession session) async {}
 
   @override

@@ -52,6 +52,10 @@ class HumanApprovalExtension extends ToolApprovalExtension
   String get namespace => 'human_approval';
 
   @override
+  String get sourcePath =>
+      'lib/src/modules/room/human_approval_extension.dart';
+
+  @override
   int get priority => 30;
 
   @override

@@ -364,6 +364,60 @@ class AgentRuntime {
   // Session building
   // ---------------------------------------------------------------------------
 
+  /// Eagerly resolve the tool registry for a room/thread combination
+  /// and fire the [ToolRegistryObserver] without spawning a session.
+  ///
+  /// The bus inspector calls this on thread entry so users can inspect
+  /// the tool catalog before issuing a first message. No-op when no
+  /// observer is wired.
+  ///
+  /// **Lifecycle caveat — does NOT call `onDispose()`.** The flavor's
+  /// extension factory may return singleton instances (e.g. an app-
+  /// scoped `MapExtension` shared with a Flutter widget singleton);
+  /// disposing them here would null their `_stateSignal` and corrupt
+  /// other live sessions / surfaces. Non-singleton transient
+  /// instances are released via GC. If a future extension allocates
+  /// expensive resources in its constructor, the factory should
+  /// either return a stable singleton or memoize.
+  Future<void> previewToolRegistry({
+    required String roomId,
+    required ThreadKey key,
+  }) async {
+    final observer = _toolRegistryObserver;
+    if (observer == null) return;
+    final resolverRegistry = await _toolRegistryResolver(roomId);
+    final resolverNames =
+        resolverRegistry.toolDefinitions.map((t) => t.name).toSet();
+    final extensions = await _createExtensions();
+    final extensionSources = <String, String>{};
+    final extensionSourcePaths = <String, String?>{};
+    for (final ext in extensions) {
+      for (final ct in ext.tools) {
+        extensionSources[ct.definition.name] = 'extension:${ext.namespace}';
+        extensionSourcePaths[ct.definition.name] = ext.sourcePath;
+      }
+    }
+    var registry = resolverRegistry;
+    for (final ext in extensions) {
+      for (final ct in ext.tools) {
+        registry = registry.register(ct);
+      }
+    }
+    observer(
+      '${key.serverId}/${key.roomId}/${key.threadId}',
+      [
+        for (final def in registry.toolDefinitions)
+          RegisteredToolInfo(
+            definition: def,
+            source: resolverNames.contains(def.name)
+                ? 'resolver'
+                : extensionSources[def.name] ?? 'unknown',
+            sourcePath: extensionSourcePaths[def.name],
+          ),
+      ],
+    );
+  }
+
   Future<AgentSession> _buildSession({
     required ThreadKey key,
     required String roomId,
@@ -377,9 +431,11 @@ class AgentRuntime {
     final extensions = await _createExtensions();
     final coordinator = SessionCoordinator(extensions);
     final extensionSources = <String, String>{};
+    final extensionSourcePaths = <String, String?>{};
     for (final ext in extensions) {
       for (final ct in ext.tools) {
         extensionSources[ct.definition.name] = 'extension:${ext.namespace}';
+        extensionSourcePaths[ct.definition.name] = ext.sourcePath;
       }
     }
     for (final tool in coordinator.tools) {
@@ -398,6 +454,7 @@ class AgentRuntime {
               source: resolverNames.contains(def.name)
                   ? 'resolver'
                   : extensionSources[def.name] ?? 'unknown',
+              sourcePath: extensionSourcePaths[def.name],
             ),
         ],
       );

@@ -4,6 +4,7 @@ import '../bus_inspector.dart';
 import 'bus_state_panel.dart';
 import 'delta_log_panel.dart';
 import 'tool_log_panel.dart';
+import 'widgets_panel.dart';
 
 /// Tabbed scaffold mirroring `NetworkInspectorScreen`'s ergonomics.
 ///
@@ -36,7 +37,7 @@ class BusInspectorScreen extends StatelessWidget {
             inspector.events.isNotEmpty || inspector.toolInvocations.isNotEmpty;
         return SelectionArea(
           child: DefaultTabController(
-            length: 3,
+            length: 4,
             child: Scaffold(
               appBar: AppBar(
                 title: Text(
@@ -56,10 +57,12 @@ class BusInspectorScreen extends StatelessWidget {
                   ),
                 ],
                 bottom: const TabBar(
+                  isScrollable: true,
                   tabs: [
                     Tab(icon: Icon(Icons.data_object), text: 'State'),
                     Tab(icon: Icon(Icons.history), text: 'Delta log'),
                     Tab(icon: Icon(Icons.code), text: 'Tools'),
+                    Tab(icon: Icon(Icons.widgets_outlined), text: 'Widgets'),
                   ],
                 ),
               ),
@@ -75,6 +78,7 @@ class BusInspectorScreen extends StatelessWidget {
                     totalRecorded: inspector.toolInvocationsTotal,
                     registeredByScope: inspector.registeredToolsByScope,
                   ),
+                  const WidgetsPanel(),
                 ],
               ),
             ),
@@ -144,13 +148,33 @@ class _BusInspectorHelpDialog extends StatelessWidget {
                 icon: Icons.code,
                 title: 'Tools',
                 body:
-                    'Every CLIENT-SIDE ClientTool invocation captured by '
-                    'the agent runtime\'s ToolObserver. This is the call '
-                    'graph for tools that physically execute on this '
-                    'device — e.g. narrate_say, add_marker, '
-                    'run_python_on_device. Server-side tools (the LLM '
-                    'invokes them on the backend) do NOT appear here; '
-                    'find them in the Delta log under /toolCalls/*.',
+                    'Two views via the segmented control:\n\n'
+                    '• Registered — every ClientTool the active '
+                    'session received, grouped by scope. Each entry '
+                    'shows name, source attribution '
+                    '(resolver vs. extension:<namespace>), description, '
+                    'and the parameters JSON Schema.\n'
+                    '• Invocations — every ClientTool execution '
+                    'captured via ToolObserver. Server-side tools '
+                    '(the LLM invokes them on the backend) do NOT '
+                    'appear here; find them in the Delta log under '
+                    '/toolCalls/*.',
+              ),
+              const SizedBox(height: 12),
+              _HelpSection(
+                icon: Icons.widgets_outlined,
+                title: 'Widgets',
+                body:
+                    'Static catalog of what client-side rendering '
+                    'builders exist:\n\n'
+                    '• Markdown element builders registered on the '
+                    'chat renderer (code, pre, latex).\n'
+                    '• Code-fence languages the pre builder special-'
+                    'cases (svg → live preview, default → highlighted '
+                    'source).\n'
+                    '• WidgetCatalog entries — the AG-UI WidgetSpec '
+                    'dispatch table (InfoCard, StatChip, plus any '
+                    'flavor-added builders).',
               ),
               const SizedBox(height: 16),
               Text(

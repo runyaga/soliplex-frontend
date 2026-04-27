@@ -29,6 +29,11 @@ class WidgetCatalog {
 
   final Map<String, WidgetCatalogBuilder> _builders;
 
+  /// Sorted list of registered builder names. Exposed for
+  /// introspection surfaces (e.g. the bus inspector's Widgets tab)
+  /// — not part of the rendering hot path.
+  List<String> get names => _builders.keys.toList()..sort();
+
   /// True if [name] resolves to a registered builder.
   bool has(String name) => _builders.containsKey(name);
 

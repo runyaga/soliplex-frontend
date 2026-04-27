@@ -30,6 +30,10 @@ class ExecutionTrackerExtension extends SessionExtension
   String get namespace => 'execution_tracker';
 
   @override
+  String get sourcePath =>
+      'lib/src/modules/room/execution_tracker_extension.dart';
+
+  @override
   int get priority => 10;
 
   @override

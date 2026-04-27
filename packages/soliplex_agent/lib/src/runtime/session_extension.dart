@@ -66,6 +66,16 @@ abstract class SessionExtension {
 
   /// Called when the session is disposed. Must be idempotent.
   void onDispose();
+
+  /// Optional self-declared source path for the file that defines
+  /// this extension. Used by the bus inspector's Tools tab to
+  /// surface where each registered tool comes from. The runtime
+  /// has no way to introspect this, so extensions opt in.
+  ///
+  /// Convention: relative path from the repo root, e.g.
+  /// `'lib/src/modules/room/execution_tracker_extension.dart'`.
+  /// Returns `null` (the default) when undeclared.
+  String? get sourcePath => null;
 }
 
 /// Factory that creates extensions for each new session.

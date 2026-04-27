@@ -36,6 +36,10 @@ class NarrationPlugin extends SessionExtension {
   String get namespace => 'narrate';
 
   @override
+  String get sourcePath =>
+      'packages/soliplex_agent_widgets/lib/src/narration_plugin.dart';
+
+  @override
   Future<void> onAttach(AgentSession session) async {}
 
   @override

@@ -72,10 +72,11 @@ typedef ToolObserver = void Function(ToolInvocationEvent event);
 ///   `tools` list. The namespace matches `extension.namespace`.
 @immutable
 class RegisteredToolInfo {
-  /// Constructs a registered-tool snapshot. Both fields are required.
+  /// Constructs a registered-tool snapshot.
   const RegisteredToolInfo({
     required this.definition,
     required this.source,
+    this.sourcePath,
   });
 
   /// AG-UI [Tool] definition. Carries name, description, and the
@@ -84,6 +85,13 @@ class RegisteredToolInfo {
 
   /// Short attribution string. See class doc for canonical values.
   final String source;
+
+  /// Optional repo-relative file path for the registering site
+  /// (e.g. `'packages/soliplex_agent_widgets/lib/src/narration_plugin.dart'`).
+  /// Self-declared by extensions via `SessionExtension.sourcePath`.
+  /// `null` for resolver-supplied tools or when the extension didn't
+  /// declare one.
+  final String? sourcePath;
 }
 
 /// Observer callback fired once per session whenever a [ToolRegistry] is
