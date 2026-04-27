@@ -1,7 +1,6 @@
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent/testing.dart';
 import 'package:test/test.dart';
-
-import 'bus_harness.dart';
 
 /// Minimal `SessionExtension` used to smoke-test the harness itself.
 ///

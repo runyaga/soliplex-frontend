@@ -122,7 +122,7 @@ class NarrationPlugin extends SessionExtension {
     final args = toolCall.hasArguments
         ? (jsonDecode(toolCall.arguments) as Map).cast<String, Object?>()
         : const <String, Object?>{};
-    final text = args['text']?.toString() ?? '';
+    final text = args['text']?.toString().trim() ?? '';
     if (text.isEmpty) return 'narrate_say: empty text';
     final actor = NarrationActor.parse(args['actor']?.toString()).name;
     _appendNarration(ctx, actor: actor, text: text);

@@ -10,3 +10,4 @@ library;
 export 'src/host/fake_agent_api.dart';
 export 'src/host/fake_blackboard_api.dart';
 export 'src/host/fake_host_api.dart';
+export 'src/testing/bus_harness.dart' show BusHarness;
