@@ -4,6 +4,58 @@ import 'package:meta/meta.dart';
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_client/src/domain/surface.dart';
 
+/// One bus write — a `setAgentState` (snapshot) or `update`
+/// (transformer) call that committed.
+///
+/// Carries enough information for observers (e.g. the in-app bus
+/// inspector) to log, diff, or display the mutation. Emitted AFTER
+/// the underlying signal value swaps, so observers see the same
+/// post-write state any other reader would.
+@immutable
+class BusWriteEvent {
+  /// Constructs a write event. Use [BusWriteKind.snapshot] for
+  /// `setAgentState` callsites, [BusWriteKind.update] for
+  /// `update` callsites.
+  const BusWriteEvent({
+    required this.kind,
+    required this.before,
+    required this.after,
+    required this.timestamp,
+    this.tag,
+  });
+
+  /// Which API was invoked.
+  final BusWriteKind kind;
+
+  /// State immediately before the write. Frozen (unmodifiable).
+  final Map<String, dynamic> before;
+
+  /// State immediately after the write. Frozen (unmodifiable). The
+  /// same [Map] [StateBus.agentState] now exposes.
+  final Map<String, dynamic> after;
+
+  /// Wall-clock at write time.
+  final DateTime timestamp;
+
+  /// Optional caller-supplied tag. Conventionally a short identifier
+  /// like `"narration"`, `"ag-ui-snapshot"`, or `"map.set_site"` so
+  /// observers can attribute the write back to a callsite without a
+  /// stack walk.
+  final String? tag;
+}
+
+/// Flavor of a [BusWriteEvent].
+enum BusWriteKind {
+  /// `setAgentState(...)` — full replacement.
+  snapshot,
+
+  /// `update(transform)` — derived from current state via a transform.
+  update,
+}
+
+/// Observer callback fired on every committed bus write.
+typedef BusObserver = void Function(BusWriteEvent event);
+
 /// Per-thread reactive bus that mirrors AG-UI agent state and runs
 /// registered surface projections over it.
 ///
@@ -23,12 +75,21 @@ import 'package:soliplex_client/src/domain/surface.dart';
 class StateBus {
   /// Construct a fresh bus. The initial agent state is empty; feed
   /// the first snapshot via [setAgentState] when one arrives.
-  StateBus({Map<String, dynamic> initialAgentState = const {}})
-      : _agentState = signal(_freeze(initialAgentState));
+  ///
+  /// Pass [observer] to receive a [BusWriteEvent] after every
+  /// committed write. Observers must not throw; they run on the
+  /// writer's microtask. The observer is the foundation for the
+  /// in-app bus inspector and the delta log.
+  StateBus({
+    Map<String, dynamic> initialAgentState = const {},
+    BusObserver? observer,
+  })  : _agentState = signal(_freeze(initialAgentState)),
+        _observer = observer;
 
   final Signal<Map<String, dynamic>> _agentState;
   final StreamController<SurfaceEvent> _events =
       StreamController<SurfaceEvent>.broadcast();
+  final BusObserver? _observer;
 
   bool _disposed = false;
 
@@ -60,9 +121,17 @@ class StateBus {
 
   /// Replace the entire agent-state map. Call when an AG-UI
   /// `StateSnapshotEvent` arrives.
-  void setAgentState(Map<String, dynamic> next) {
+  ///
+  /// Pass [tag] to attribute the write to a callsite for the
+  /// observer (e.g. `"ag-ui-snapshot"` from the event processor,
+  /// `"history-rehydrate"` from the thread loader). Optional;
+  /// `null` is a fine default for ad-hoc writes.
+  void setAgentState(Map<String, dynamic> next, {String? tag}) {
     if (_disposed) return;
-    _agentState.value = _freeze(next);
+    final before = _agentState.value;
+    final after = _freeze(next);
+    _agentState.value = after;
+    _notify(BusWriteKind.snapshot, before, after, tag);
   }
 
   /// Replace via a transform applied to the current map. Convenient
@@ -72,11 +141,37 @@ class StateBus {
   /// ```dart
   /// bus.update((current) => applyJsonPatch(current, deltaOps));
   /// ```
+  ///
+  /// Pass [tag] to attribute the write to a callsite for the
+  /// observer (e.g. `"narration"`, `"map.set_site"`).
   void update(
-    Map<String, dynamic> Function(Map<String, dynamic> current) transform,
-  ) {
+    Map<String, dynamic> Function(Map<String, dynamic> current) transform, {
+    String? tag,
+  }) {
     if (_disposed) return;
-    _agentState.value = _freeze(transform(_agentState.value));
+    final before = _agentState.value;
+    final after = _freeze(transform(before));
+    _agentState.value = after;
+    _notify(BusWriteKind.update, before, after, tag);
+  }
+
+  void _notify(
+    BusWriteKind kind,
+    Map<String, dynamic> before,
+    Map<String, dynamic> after,
+    String? tag,
+  ) {
+    final observer = _observer;
+    if (observer == null) return;
+    observer(
+      BusWriteEvent(
+        kind: kind,
+        before: before,
+        after: after,
+        timestamp: DateTime.now(),
+        tag: tag,
+      ),
+    );
   }
 
   /// Register a [StateProjection] and receive a derived signal that

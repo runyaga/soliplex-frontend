@@ -113,4 +113,67 @@ void main() {
       },
     );
   });
+
+  group('StateBus observer', () {
+    test('fires on setAgentState with snapshot kind and tag', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..setAgentState(const {'a': 1}, tag: 'snap-1')
+        ..setAgentState(const {'a': 2});
+
+      expect(events, hasLength(2));
+      expect(events[0].kind, BusWriteKind.snapshot);
+      expect(events[0].before, isEmpty);
+      expect(events[0].after, equals(<String, dynamic>{'a': 1}));
+      expect(events[0].tag, 'snap-1');
+      expect(events[1].before, equals(<String, dynamic>{'a': 1}));
+      expect(events[1].after, equals(<String, dynamic>{'a': 2}));
+      expect(events[1].tag, isNull);
+      bus.dispose();
+    });
+
+    test('fires on update with update kind', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)
+        ..setAgentState(const {'count': 1})
+        ..update(
+          (current) => {...current, 'count': (current['count'] as int) + 1},
+          tag: 'increment',
+        );
+
+      expect(events, hasLength(2));
+      expect(events[1].kind, BusWriteKind.update);
+      expect(events[1].before, equals(<String, dynamic>{'count': 1}));
+      expect(events[1].after, equals(<String, dynamic>{'count': 2}));
+      expect(events[1].tag, 'increment');
+      bus.dispose();
+    });
+
+    test('event payloads are frozen', () {
+      final events = <BusWriteEvent>[];
+      final bus = StateBus(observer: events.add)..setAgentState(const {'a': 1});
+      expect(
+        () => events.single.after['a'] = 99,
+        throwsA(isA<UnsupportedError>()),
+      );
+      bus.dispose();
+    });
+
+    test('does not fire after dispose', () {
+      final events = <BusWriteEvent>[];
+      StateBus(observer: events.add)
+        ..setAgentState(const {'a': 1})
+        ..dispose()
+        ..setAgentState(const {'a': 2});
+      expect(events, hasLength(1));
+    });
+
+    test('absent observer is a no-op (no throw)', () {
+      final bus = StateBus()
+        ..setAgentState(const {'a': 1})
+        ..update((current) => {...current, 'b': 2});
+      expect(bus.agentState.value, equals(<String, dynamic>{'a': 1, 'b': 2}));
+      bus.dispose();
+    });
+  });
 }
