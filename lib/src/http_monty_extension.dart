@@ -48,8 +48,7 @@ class HttpMontyExtension extends MontyExtension {
   String get namespace => 'http';
 
   @override
-  String? get systemPromptContext =>
-      'HTTP externals available in Python: '
+  String? get systemPromptContext => 'HTTP externals available in Python: '
       'http_get(url, headers?) -> str (response body). '
       'Decode JSON with json.loads(). '
       'Browser sandbox: subject to CORS — only public APIs that send '
@@ -66,8 +65,7 @@ class HttpMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'http_get',
-            description:
-                'Performs an HTTP GET. Returns the response body as a '
+            description: 'Performs an HTTP GET. Returns the response body as a '
                 'string. Use json.loads(body) to decode JSON. Throws on '
                 'non-2xx status, network error, or timeout (15s).',
             params: const [
@@ -109,8 +107,7 @@ class HttpMontyExtension extends MontyExtension {
         HostFunction(
           schema: HostFunctionSchema(
             name: 'http_get_json',
-            description:
-                'Convenience wrapper around http_get that decodes the '
+            description: 'Convenience wrapper around http_get that decodes the '
                 'response body as JSON and returns the parsed value '
                 'directly. Throws on non-2xx, network error, timeout, '
                 'or invalid JSON.',
