@@ -406,7 +406,7 @@ class AgentSession implements ToolExecutionContext {
     // event without each consumer re-listening to the orchestrator.
     final next = _aguiStateOf(runState);
     if (next != null) {
-      bus.setAgentState(next);
+      bus.setAgentState(next, tag: 'agui.snapshot');
     }
     switch (runState) {
       case RunningState():

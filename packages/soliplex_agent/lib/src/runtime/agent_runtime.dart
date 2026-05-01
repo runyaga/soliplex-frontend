@@ -18,6 +18,18 @@ import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
 import 'package:soliplex_client/soliplex_client.dart' show ThreadHistory;
 import 'package:soliplex_logging/soliplex_logging.dart';
 
+/// Callback receiving every per-thread `StateBus` write across the
+/// runtime, with the [ThreadKey] context the bus itself does not carry.
+///
+/// Wired from [AgentRuntime] into each per-thread bus the first time
+/// the runtime materialises a [ThreadState]. Used by debug surfaces
+/// (e.g. the in-app Bus Inspector) to record every commit.
+typedef ThreadBusObserver = void Function(
+  ThreadKey threadKey,
+  String? tag,
+  Map<String, dynamic> snapshot,
+);
+
 /// Facade for spawning and coordinating multiple [AgentSession]s.
 ///
 /// Each runtime is bound to a single backend server via [AgentLlmProvider].
@@ -54,6 +66,7 @@ class AgentRuntime {
     required Logger logger,
     AgentLlmProvider? llmProvider,
     SessionExtensionFactory? extensionFactory,
+    ThreadBusObserver? busObserver,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -65,6 +78,7 @@ class AgentRuntime {
             ),
         _toolRegistryResolver = toolRegistryResolver,
         _extensionFactory = extensionFactory,
+        _busObserver = busObserver,
         _platform = platform,
         _logger = logger;
 
@@ -72,6 +86,7 @@ class AgentRuntime {
   final AgentLlmProvider _llmProvider;
   final ToolRegistryResolver _toolRegistryResolver;
   final SessionExtensionFactory? _extensionFactory;
+  final ThreadBusObserver? _busObserver;
   final PlatformConstraints _platform;
   final Logger _logger;
 
@@ -139,7 +154,7 @@ class AgentRuntime {
   ) {
     if (aguiState.isEmpty) return;
     final state = _threadStateFor(key);
-    state.bus.setAgentState(aguiState);
+    state.bus.setAgentState(aguiState, tag: 'seed.initial');
     _threadStates[key] = state.withHistory(
       ThreadHistory(messages: const [], aguiState: aguiState),
     );
@@ -155,7 +170,7 @@ class AgentRuntime {
   void seedThreadHistory(ThreadKey key, ThreadHistory history) {
     final state = _threadStateFor(key);
     if (history.aguiState.isNotEmpty) {
-      state.bus.setAgentState(history.aguiState);
+      state.bus.setAgentState(history.aguiState, tag: 'seed.history');
     }
     _threadStates[key] = state.withHistory(history);
   }
@@ -163,8 +178,23 @@ class AgentRuntime {
   /// Returns the per-thread state for [key], creating a fresh
   /// [ThreadState] if none has been registered yet. Internal helper —
   /// callers outside the runtime should use the seed APIs above.
-  ThreadState _threadStateFor(ThreadKey key) =>
-      _threadStates[key] ??= ThreadState();
+  ///
+  /// On first creation, the bus is wired to forward every commit to
+  /// [_busObserver] (when set), threading the [ThreadKey] context the
+  /// bus itself does not carry.
+  ThreadState _threadStateFor(ThreadKey key) {
+    final existing = _threadStates[key];
+    if (existing != null) return existing;
+    final state = ThreadState();
+    final observer = _busObserver;
+    if (observer != null) {
+      state.bus.addObserver(
+        (tag, snapshot) => observer(key, tag, snapshot),
+      );
+    }
+    _threadStates[key] = state;
+    return state;
+  }
 
   /// Returns the per-thread state for [key], or `null` if no state has
   /// been registered. Read-only public accessor for consumers that
