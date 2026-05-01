@@ -103,14 +103,31 @@ void main() {
       expect(calls, 1);
     });
 
-    test('recordEvent does not notify listeners', () {
+    test('recordEvent appends to event records and notifies', () {
       final inspector = BusInspector();
       addTearDown(inspector.dispose);
       var calls = 0;
       inspector.addListener(() => calls++);
 
       inspector.recordEvent(key, const StateSnapshotEvent(snapshot: {}));
-      expect(calls, 0);
+      expect(calls, 1);
+      expect(inspector.eventRecords, hasLength(1));
+      expect(inspector.eventRecords.single.tag, 'agui.statesnapshot');
+    });
+
+    test('event tag is derived from runtime type, lowercased', () {
+      final inspector = BusInspector()
+        ..recordEvent(key, const StateDeltaEvent(delta: []))
+        ..recordEvent(
+          key,
+          const TextMessageStartEvent(messageId: 'm-1'),
+        )
+        ..recordEvent(key, const RunFinishedEvent(threadId: 't', runId: 'r'));
+      addTearDown(inspector.dispose);
+      expect(
+        inspector.eventRecords.map((r) => r.tag).toList(),
+        ['agui.statedelta', 'agui.textmessagestart', 'agui.runfinished'],
+      );
     });
 
     test('overflow drops oldest events', () {

@@ -24,6 +24,32 @@ class BusEvent {
   final Map<String, dynamic> snapshot;
 }
 
+/// One recorded raw AG-UI event observed on a thread.
+///
+/// [tag] is derived from the event's runtime type (e.g.
+/// `ActivitySnapshotEvent` → `agui.activitysnapshot`) so the existing
+/// tag chip + `tag:` filter work uniformly for events and bus commits.
+@immutable
+class EventRecord {
+  EventRecord({
+    required this.timestamp,
+    required this.threadKey,
+    required this.event,
+  }) : tag = _tagFor(event);
+
+  final DateTime timestamp;
+  final ThreadKey threadKey;
+  final BaseEvent event;
+  final String tag;
+
+  static String _tagFor(BaseEvent event) {
+    final name = event.runtimeType.toString();
+    final stripped =
+        name.endsWith('Event') ? name.substring(0, name.length - 5) : name;
+    return 'agui.${stripped.toLowerCase()}';
+  }
+}
+
 /// Collects bus events for the bus inspector UI.
 ///
 /// Wired into `AgentRuntime` via its `busObserver` and `eventObserver`
@@ -47,6 +73,7 @@ class BusInspector with ChangeNotifier {
 
   final int _maxEvents;
   final ListQueue<BusEvent> _events = ListQueue<BusEvent>();
+  final ListQueue<EventRecord> _records = ListQueue<EventRecord>();
 
   /// Most recent AG-UI state event seen per thread, used to infer the
   /// tag for the next bus commit on that thread. Cleared after the
@@ -56,23 +83,38 @@ class BusInspector with ChangeNotifier {
 
   bool _disposed = false;
 
+  /// Recorded bus commits, oldest first.
   List<BusEvent> get events => List.unmodifiable(_events);
+
+  /// Recorded raw AG-UI events, oldest first.
+  List<EventRecord> get eventRecords => List.unmodifiable(_records);
 
   void clear() {
     if (_disposed) return;
     _events.clear();
+    _records.clear();
     _lastStateEventByThread.clear();
     notifyListeners();
   }
 
   /// Sink callable as a `ThreadEventObserver` from `AgentRuntime`.
-  /// Tracks the latest state event per thread so [record] can label
-  /// the next commit accurately.
+  /// Records the event for the unified inspector timeline AND tracks
+  /// the latest state event per thread so [record] can label the next
+  /// bus commit accurately.
   void recordEvent(ThreadKey threadKey, BaseEvent event) {
     if (_disposed) return;
     if (event is StateSnapshotEvent || event is StateDeltaEvent) {
       _lastStateEventByThread[threadKey] = event;
     }
+    _records.addLast(
+      EventRecord(
+        timestamp: DateTime.now(),
+        threadKey: threadKey,
+        event: event,
+      ),
+    );
+    if (_records.length > _maxEvents) _records.removeFirst();
+    notifyListeners();
   }
 
   /// Sink callable as a `ThreadBusObserver` from `AgentRuntime`.

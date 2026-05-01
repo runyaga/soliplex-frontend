@@ -15,10 +15,19 @@ const Set<String> kFilterKeys = {
   'server',
   'tag',
   'path',
+  'kind',
 };
 
-/// Parsed filter applied to bus events; each non-null field must match
-/// for the event to pass. Bare terms must each match somewhere.
+/// Row kinds the filter recognises via `kind:`. Bus commits are tagged
+/// `bus`; recorded raw AG-UI events are tagged `event`.
+enum RowKind { bus, event }
+
+/// Parsed filter applied to inspector rows; each non-null field must
+/// match for the row to pass. Bare terms must each match somewhere.
+///
+/// The same filter applies to both bus commits and event records;
+/// fields not relevant to a given row kind (e.g. `pathSubstr` on an
+/// event record) are skipped via the kind-aware match methods below.
 @immutable
 class BusFilter {
   const BusFilter({
@@ -27,6 +36,7 @@ class BusFilter {
     this.serverSubstr,
     this.tagPattern,
     this.pathSubstr,
+    this.kind,
     this.bareTerms = const [],
   });
 
@@ -46,11 +56,16 @@ class BusFilter {
   final TagPattern? tagPattern;
 
   /// Substring match against any changed path in the diff
-  /// (case-insensitive).
+  /// (case-insensitive). Only applies to bus rows.
   final String? pathSubstr;
 
+  /// Row kind filter (`bus` or `event`). When set, rows of the other
+  /// kind are filtered out.
+  final RowKind? kind;
+
   /// Bare (unprefixed) tokens. Each one must match at least one of:
-  /// thread short id, room id, server id, tag, or any changed path.
+  /// thread short id, room id, server id, tag, or (for bus rows) any
+  /// changed path.
   final List<String> bareTerms;
 
   bool get isEmpty =>
@@ -59,15 +74,16 @@ class BusFilter {
       serverSubstr == null &&
       tagPattern == null &&
       pathSubstr == null &&
+      kind == null &&
       bareTerms.isEmpty;
 
-  bool matches(BusEvent event, SnapshotDiff diff) {
+  bool matchesBus(BusEvent event, SnapshotDiff diff) {
+    if (kind != null && kind != RowKind.bus) return false;
     if (threadSubstr != null &&
         !_substr(event.threadKey.threadId, threadSubstr!)) {
       return false;
     }
-    if (roomSubstr != null &&
-        !_substr(event.threadKey.roomId, roomSubstr!)) {
+    if (roomSubstr != null && !_substr(event.threadKey.roomId, roomSubstr!)) {
       return false;
     }
     if (serverSubstr != null &&
@@ -81,10 +97,36 @@ class BusFilter {
       return false;
     }
     for (final term in bareTerms) {
-      if (!_anyFieldContains(event, diff, term)) return false;
+      if (!_anyBusFieldContains(event, diff, term)) return false;
     }
     return true;
   }
+
+  bool matchesEvent(EventRecord record) {
+    if (kind != null && kind != RowKind.event) return false;
+    if (threadSubstr != null &&
+        !_substr(record.threadKey.threadId, threadSubstr!)) {
+      return false;
+    }
+    if (roomSubstr != null && !_substr(record.threadKey.roomId, roomSubstr!)) {
+      return false;
+    }
+    if (serverSubstr != null &&
+        !_substr(record.threadKey.serverId, serverSubstr!)) {
+      return false;
+    }
+    if (tagPattern != null && !tagPattern!.matches(record.tag)) {
+      return false;
+    }
+    // pathSubstr does not apply to event records — skip.
+    for (final term in bareTerms) {
+      if (!_anyEventFieldContains(record, term)) return false;
+    }
+    return true;
+  }
+
+  /// Backwards-compatible alias for [matchesBus].
+  bool matches(BusEvent event, SnapshotDiff diff) => matchesBus(event, diff);
 }
 
 /// A tag predicate: either an exact string or a prefix glob (input
@@ -117,6 +159,7 @@ BusFilter parseBusFilter(String input) {
   String? server;
   TagPattern? tag;
   String? path;
+  RowKind? kind;
   final bare = <String>[];
 
   for (final raw in trimmed.split(RegExp(r'\s+'))) {
@@ -139,6 +182,15 @@ BusFilter parseBusFilter(String input) {
                 : TagPattern.exact(value);
           case 'path':
             path = value;
+          case 'kind':
+            switch (value.toLowerCase()) {
+              case 'bus':
+                kind = RowKind.bus;
+              case 'event':
+                kind = RowKind.event;
+              default:
+                bare.add(raw);
+            }
         }
         continue;
       }
@@ -152,6 +204,7 @@ BusFilter parseBusFilter(String input) {
     serverSubstr: server,
     tagPattern: tag,
     pathSubstr: path,
+    kind: kind,
     bareTerms: List.unmodifiable(bare),
   );
 }
@@ -187,6 +240,7 @@ List<String> suggestionsFor({
   required String text,
   required int cursor,
   required Iterable<BusEvent> events,
+  Iterable<EventRecord> records = const [],
 }) {
   final at = currentTokenAt(text, cursor);
   if (at == null) {
@@ -204,14 +258,18 @@ List<String> suggestionsFor({
   final key = tok.substring(0, colon).toLowerCase();
   final partial = tok.substring(colon + 1).toLowerCase();
   if (!kFilterKeys.contains(key)) return const [];
-  final values = _valuesForKey(key, events);
+  final values = _valuesForKey(key, events, records);
   return [
     for (final v in values)
       if (partial.isEmpty || v.toLowerCase().contains(partial)) '$key:$v',
   ];
 }
 
-Set<String> _valuesForKey(String key, Iterable<BusEvent> events) {
+Set<String> _valuesForKey(
+  String key,
+  Iterable<BusEvent> events, [
+  Iterable<EventRecord> records = const [],
+]) {
   final out = <String>{};
   for (final e in events) {
     switch (key) {
@@ -223,6 +281,22 @@ Set<String> _valuesForKey(String key, Iterable<BusEvent> events) {
         out.add(e.threadKey.serverId);
       case 'tag':
         if (e.tag != null) out.add(e.tag!);
+      case 'kind':
+        out.add('bus');
+    }
+  }
+  for (final r in records) {
+    switch (key) {
+      case 'thread':
+        out.add(_threadShort(r.threadKey));
+      case 'room':
+        out.add(r.threadKey.roomId);
+      case 'server':
+        out.add(r.threadKey.serverId);
+      case 'tag':
+        out.add(r.tag);
+      case 'kind':
+        out.add('event');
     }
   }
   return out;
@@ -243,13 +317,22 @@ bool _anyPathContains(SnapshotDiff diff, String needle) {
       diff.replaced.any((c) => match(c.path));
 }
 
-bool _anyFieldContains(BusEvent event, SnapshotDiff diff, String term) {
+bool _anyBusFieldContains(BusEvent event, SnapshotDiff diff, String term) {
   final t = term.toLowerCase();
   if (_threadShort(event.threadKey).toLowerCase().contains(t)) return true;
   if (event.threadKey.roomId.toLowerCase().contains(t)) return true;
   if (event.threadKey.serverId.toLowerCase().contains(t)) return true;
   if ((event.tag ?? '').toLowerCase().contains(t)) return true;
   return _anyPathContains(diff, term);
+}
+
+bool _anyEventFieldContains(EventRecord record, String term) {
+  final t = term.toLowerCase();
+  if (_threadShort(record.threadKey).toLowerCase().contains(t)) return true;
+  if (record.threadKey.roomId.toLowerCase().contains(t)) return true;
+  if (record.threadKey.serverId.toLowerCase().contains(t)) return true;
+  if (record.tag.toLowerCase().contains(t)) return true;
+  return false;
 }
 
 bool _isSpace(int codeUnit) =>
