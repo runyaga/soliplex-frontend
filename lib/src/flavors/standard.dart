@@ -143,6 +143,7 @@ Future<ShellConfig> standard({
       HumanApprovalExtension(),
     ],
     busObserver: busInspector.record,
+    eventObserver: busInspector.recordEvent,
   );
 
   final registry = RunRegistry();
