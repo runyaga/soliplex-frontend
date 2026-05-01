@@ -6,8 +6,9 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 /// One recorded write to a per-thread `StateBus`.
 ///
 /// Captures the [ThreadKey] context (which the bus itself does not
-/// carry), the optional [tag] passed by the writer, and a frozen
-/// snapshot of the state immediately after the commit.
+/// carry), the resolved [tag] (either the writer-supplied label or one
+/// inferred from the most recent AG-UI event on the same thread),
+/// and a frozen snapshot of the state immediately after the commit.
 @immutable
 class BusEvent {
   const BusEvent({
@@ -25,8 +26,13 @@ class BusEvent {
 
 /// Collects bus events for the bus inspector UI.
 ///
-/// Wired into [AgentRuntime] via its `busObserver` constructor parameter,
-/// so every commit on every per-thread `StateBus` flows through here.
+/// Wired into `AgentRuntime` via its `busObserver` and `eventObserver`
+/// constructor parameters: the runtime fans every per-thread bus
+/// commit and every raw AG-UI event into this recorder. The agent
+/// itself stays free of any tagging logic — the inspector retroactively
+/// labels each commit based on the most recent state event observed on
+/// the same thread.
+///
 /// Events are bounded: on overflow, the oldest event is dropped so a
 /// long-running session cannot grow memory without bound.
 class BusInspector with ChangeNotifier {
@@ -41,6 +47,13 @@ class BusInspector with ChangeNotifier {
 
   final int _maxEvents;
   final ListQueue<BusEvent> _events = ListQueue<BusEvent>();
+
+  /// Most recent AG-UI state event seen per thread, used to infer the
+  /// tag for the next bus commit on that thread. Cleared after the
+  /// commit consumes it so subsequent untagged commits surface as
+  /// `agui.run-state` rather than re-using a stale tag.
+  final Map<ThreadKey, BaseEvent> _lastStateEventByThread = {};
+
   bool _disposed = false;
 
   List<BusEvent> get events => List.unmodifiable(_events);
@@ -48,26 +61,50 @@ class BusInspector with ChangeNotifier {
   void clear() {
     if (_disposed) return;
     _events.clear();
+    _lastStateEventByThread.clear();
     notifyListeners();
   }
 
-  /// Sink callable as a [ThreadBusObserver] from `AgentRuntime`.
+  /// Sink callable as a `ThreadEventObserver` from `AgentRuntime`.
+  /// Tracks the latest state event per thread so [record] can label
+  /// the next commit accurately.
+  void recordEvent(ThreadKey threadKey, BaseEvent event) {
+    if (_disposed) return;
+    if (event is StateSnapshotEvent || event is StateDeltaEvent) {
+      _lastStateEventByThread[threadKey] = event;
+    }
+  }
+
+  /// Sink callable as a `ThreadBusObserver` from `AgentRuntime`.
+  /// If [tag] is non-null it is preserved verbatim (used by seed paths
+  /// like `seed.initial` / `seed.history`). Otherwise the inspector
+  /// infers the tag from the most recent state event on the same
+  /// thread; absence of one means the commit was driven by a non-state
+  /// run-state transition (tool yielding, run completion, …).
   void record(
     ThreadKey threadKey,
     String? tag,
     Map<String, dynamic> snapshot,
   ) {
     if (_disposed) return;
+    final resolved = tag ?? _inferTag(threadKey);
     _events.addLast(
       BusEvent(
         timestamp: DateTime.now(),
         threadKey: threadKey,
-        tag: tag,
+        tag: resolved,
         snapshot: snapshot,
       ),
     );
     if (_events.length > _maxEvents) _events.removeFirst();
     notifyListeners();
+  }
+
+  String _inferTag(ThreadKey threadKey) {
+    final last = _lastStateEventByThread.remove(threadKey);
+    if (last is StateSnapshotEvent) return 'agui.snapshot';
+    if (last is StateDeltaEvent) return 'agui.delta';
+    return 'agui.run-state';
   }
 
   @override
