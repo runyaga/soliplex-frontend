@@ -95,9 +95,9 @@ void _diffMap(
     final inA = a.containsKey(key);
     final inB = b.containsKey(key);
     if (!inA) {
-      added.add(AddedChange(path, b[key]));
+      _walkAdds(b[key], path, added);
     } else if (!inB) {
-      removed.add(RemovedChange(path, a[key]));
+      _walkRemoves(a[key], path, removed);
     } else {
       _diffValue(a[key], b[key], path, added, removed, replaced);
     }
@@ -121,9 +121,9 @@ void _diffValue(
     for (var i = 0; i < maxLen; i++) {
       final childPath = '$path/$i';
       if (i >= before.length) {
-        added.add(AddedChange(childPath, after[i]));
+        _walkAdds(after[i], childPath, added);
       } else if (i >= after.length) {
-        removed.add(RemovedChange(childPath, before[i]));
+        _walkRemoves(before[i], childPath, removed);
       } else {
         _diffValue(before[i], after[i], childPath, added, removed, replaced);
       }
@@ -133,4 +133,56 @@ void _diffValue(
   if (before != after) {
     replaced.add(ReplacedChange(path, before, after));
   }
+}
+
+/// Recursively emit one [AddedChange] per leaf inside [value]. Empty
+/// maps and lists surface as a single change at [path] so the user
+/// still sees that something appeared, just empty.
+void _walkAdds(dynamic value, String path, List<AddedChange> out) {
+  if (value is Map) {
+    if (value.isEmpty) {
+      out.add(AddedChange(path, value));
+      return;
+    }
+    for (final entry in value.entries) {
+      _walkAdds(entry.value, '$path/${entry.key}', out);
+    }
+    return;
+  }
+  if (value is List) {
+    if (value.isEmpty) {
+      out.add(AddedChange(path, value));
+      return;
+    }
+    for (var i = 0; i < value.length; i++) {
+      _walkAdds(value[i], '$path/$i', out);
+    }
+    return;
+  }
+  out.add(AddedChange(path, value));
+}
+
+/// Mirror of [_walkAdds] for removals.
+void _walkRemoves(dynamic value, String path, List<RemovedChange> out) {
+  if (value is Map) {
+    if (value.isEmpty) {
+      out.add(RemovedChange(path, value));
+      return;
+    }
+    for (final entry in value.entries) {
+      _walkRemoves(entry.value, '$path/${entry.key}', out);
+    }
+    return;
+  }
+  if (value is List) {
+    if (value.isEmpty) {
+      out.add(RemovedChange(path, value));
+      return;
+    }
+    for (var i = 0; i < value.length; i++) {
+      _walkRemoves(value[i], '$path/$i', out);
+    }
+    return;
+  }
+  out.add(RemovedChange(path, value));
 }
