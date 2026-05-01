@@ -79,6 +79,13 @@ class AgentSession implements ToolExecutionContext {
   AgentSessionState _state = AgentSessionState.spawning;
   bool _disposed = false;
   final Signal<RunState> _runStateSignal = signal(const IdleState());
+
+  /// Tag captured when we see an AG-UI event that will cause the next
+  /// bus commit, then consumed when the run-state listener fires so
+  /// the resulting `bus.setAgentState` call carries an accurate source
+  /// label (`agui.snapshot` vs `agui.delta`). Cleared after use;
+  /// commits not driven by a tagged event default to `agui.run-state`.
+  String? _pendingBusTag;
   final Signal<AgentSessionState> _sessionStateSignal = signal(
     AgentSessionState.spawning,
   );
@@ -406,7 +413,8 @@ class AgentSession implements ToolExecutionContext {
     // event without each consumer re-listening to the orchestrator.
     final next = _aguiStateOf(runState);
     if (next != null) {
-      bus.setAgentState(next, tag: 'agui.snapshot');
+      bus.setAgentState(next, tag: _pendingBusTag ?? 'agui.run-state');
+      _pendingBusTag = null;
     }
     switch (runState) {
       case RunningState():
@@ -428,7 +436,19 @@ class AgentSession implements ToolExecutionContext {
   /// Maps raw AG-UI [BaseEvent]s to [ExecutionEvent] emissions so that
   /// consumers observing [lastExecutionEvent] see streaming text, thinking,
   /// server tool calls, and terminal events without polling [runState].
+  ///
+  /// Also captures the source tag for AG-UI state events so the next
+  /// `bus.setAgentState` in the run-state listener can label the
+  /// resulting commit accurately (snapshot vs delta).
   void _bridgeBaseEvent(BaseEvent event) {
+    switch (event) {
+      case StateSnapshotEvent():
+        _pendingBusTag = 'agui.snapshot';
+      case StateDeltaEvent():
+        _pendingBusTag = 'agui.delta';
+      default:
+        break;
+    }
     final executionEvent = bridgeBaseEvent(event);
     if (executionEvent != null) emitEvent(executionEvent);
   }
