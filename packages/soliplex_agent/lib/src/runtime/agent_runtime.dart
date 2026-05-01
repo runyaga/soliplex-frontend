@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ag_ui/ag_ui.dart' show BaseEvent;
 import 'package:signals_core/signals_core.dart';
 import 'package:soliplex_agent/src/host/platform_constraints.dart';
 import 'package:soliplex_agent/src/models/agent_result.dart';
@@ -28,6 +29,18 @@ typedef ThreadBusObserver = void Function(
   ThreadKey threadKey,
   String? tag,
   Map<String, dynamic> snapshot,
+);
+
+/// Callback receiving every raw AG-UI [BaseEvent] processed by any
+/// session in the runtime, paired with its [ThreadKey].
+///
+/// Lets diagnostics consumers correlate events with bus commits
+/// without the agent owning any tagging logic. The runtime itself
+/// makes no behavioural decision on the events; it only fans them
+/// out to the observer.
+typedef ThreadEventObserver = void Function(
+  ThreadKey threadKey,
+  BaseEvent event,
 );
 
 /// Facade for spawning and coordinating multiple [AgentSession]s.
@@ -67,6 +80,7 @@ class AgentRuntime {
     AgentLlmProvider? llmProvider,
     SessionExtensionFactory? extensionFactory,
     ThreadBusObserver? busObserver,
+    ThreadEventObserver? eventObserver,
     this.maxSpawnDepth = 10,
     this.rootTimeout,
   })  : serverId = connection.serverId,
@@ -79,6 +93,7 @@ class AgentRuntime {
         _toolRegistryResolver = toolRegistryResolver,
         _extensionFactory = extensionFactory,
         _busObserver = busObserver,
+        _eventObserver = eventObserver,
         _platform = platform,
         _logger = logger;
 
@@ -87,8 +102,16 @@ class AgentRuntime {
   final ToolRegistryResolver _toolRegistryResolver;
   final SessionExtensionFactory? _extensionFactory;
   final ThreadBusObserver? _busObserver;
+  final ThreadEventObserver? _eventObserver;
   final PlatformConstraints _platform;
   final Logger _logger;
+
+  /// Forwards [event] (received by an [AgentSession]) to the optional
+  /// runtime-level event observer. No-op when no observer is wired.
+  /// Internal: called from [AgentSession._bridgeBaseEvent].
+  void notifyThreadEvent(ThreadKey key, BaseEvent event) {
+    _eventObserver?.call(key, event);
+  }
 
   /// Identifies which backend server this runtime targets.
   final String serverId;
