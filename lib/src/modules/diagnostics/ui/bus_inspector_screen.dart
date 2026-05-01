@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:soliplex_agent/soliplex_agent.dart' show ThreadKey;
+import 'package:soliplex_agent/soliplex_agent.dart' show BaseEvent, ThreadKey;
 
 import '../../auth/auth_providers.dart';
 import '../bus_filter.dart';
@@ -19,8 +19,7 @@ class BusInspectorScreen extends ConsumerStatefulWidget {
   final BusInspector inspector;
 
   @override
-  ConsumerState<BusInspectorScreen> createState() =>
-      _BusInspectorScreenState();
+  ConsumerState<BusInspectorScreen> createState() => _BusInspectorScreenState();
 }
 
 class _BusInspectorScreenState extends ConsumerState<BusInspectorScreen> {
@@ -46,21 +45,18 @@ class _BusInspectorScreenState extends ConsumerState<BusInspectorScreen> {
     return ListenableBuilder(
       listenable: widget.inspector,
       builder: (context, _) {
-        final allRows = _buildRows(widget.inspector.events)
-            .where((row) => !row.diff.isEmpty)
-            .toList();
+        final allRows = _buildUnifiedRows(
+          widget.inspector.events,
+          widget.inspector.eventRecords,
+        );
         final threadStats = _summariseThreads(allRows);
         final filter = parseBusFilter(_filterController.text);
         final scopedRows = _selectedThread == null
             ? allRows
-            : allRows
-                .where((r) => r.event.threadKey == _selectedThread)
-                .toList();
+            : allRows.where((r) => r.threadKey == _selectedThread).toList();
         final visibleRows = filter.isEmpty
             ? scopedRows
-            : scopedRows
-                .where((r) => filter.matches(r.event, r.diff))
-                .toList();
+            : scopedRows.where((r) => r.matchesFilter(filter)).toList();
         final reversed = visibleRows.reversed.toList();
 
         return Scaffold(
@@ -100,6 +96,7 @@ class _BusInspectorScreenState extends ConsumerState<BusInspectorScreen> {
                         rows: reversed,
                         filterController: _filterController,
                         events: widget.inspector.events,
+                        eventRecords: widget.inspector.eventRecords,
                         onFilterChanged: () => setState(() {}),
                         onOpenThread: _openThread,
                       ),
@@ -121,6 +118,7 @@ class _BusInspectorScreenState extends ConsumerState<BusInspectorScreen> {
                 rows: reversed,
                 filterController: _filterController,
                 events: widget.inspector.events,
+                eventRecords: widget.inspector.eventRecords,
                 onFilterChanged: () => setState(() {}),
                 onOpenThread: _openThread,
                 onBack: () => setState(() {
@@ -152,22 +150,22 @@ class _ThreadStat {
   final DateTime lastEventAt;
 }
 
-List<_ThreadStat> _summariseThreads(List<_EventRow> rows) {
+List<_ThreadStat> _summariseThreads(List<_Row> rows) {
   final stats = <ThreadKey, _ThreadStat>{};
   for (final row in rows) {
-    final existing = stats[row.event.threadKey];
+    final existing = stats[row.threadKey];
     if (existing == null) {
-      stats[row.event.threadKey] = _ThreadStat(
-        key: row.event.threadKey,
+      stats[row.threadKey] = _ThreadStat(
+        key: row.threadKey,
         eventCount: 1,
-        lastEventAt: row.event.timestamp,
+        lastEventAt: row.timestamp,
       );
     } else {
-      stats[row.event.threadKey] = _ThreadStat(
+      stats[row.threadKey] = _ThreadStat(
         key: existing.key,
         eventCount: existing.eventCount + 1,
-        lastEventAt: row.event.timestamp.isAfter(existing.lastEventAt)
-            ? row.event.timestamp
+        lastEventAt: row.timestamp.isAfter(existing.lastEventAt)
+            ? row.timestamp
             : existing.lastEventAt,
       );
     }
@@ -257,14 +255,16 @@ class _EventsPane extends StatefulWidget {
     required this.rows,
     required this.filterController,
     required this.events,
+    required this.eventRecords,
     required this.onFilterChanged,
     required this.onOpenThread,
     this.onBack,
   });
 
-  final List<_EventRow> rows;
+  final List<_Row> rows;
   final TextEditingController filterController;
   final List<BusEvent> events;
+  final List<EventRecord> eventRecords;
   final VoidCallback onFilterChanged;
   final void Function(ThreadKey) onOpenThread;
   final VoidCallback? onBack;
@@ -284,6 +284,7 @@ class _EventsPaneState extends State<_EventsPane> {
         _FilterBar(
           controller: widget.filterController,
           events: widget.events,
+          eventRecords: widget.eventRecords,
           onChanged: () {
             widget.onFilterChanged();
             setState(() => _selectedIndex = null);
@@ -338,24 +339,24 @@ class _EventsPaneState extends State<_EventsPane> {
 
   Widget _buildList(
     BuildContext context,
-    List<_EventRow> rows, {
+    List<_Row> rows, {
     required bool sheetMode,
   }) {
     return ListView.separated(
       itemCount: rows.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) => _EventTile(
+      itemBuilder: (context, index) => _RowTile(
         row: rows[index],
         selected: _selectedIndex == index,
         onTap: sheetMode
             ? () => _showDetailSheet(context, rows[index])
             : () => setState(() => _selectedIndex = index),
-        onOpenThread: () => widget.onOpenThread(rows[index].event.threadKey),
+        onOpenThread: () => widget.onOpenThread(rows[index].threadKey),
       ),
     );
   }
 
-  Widget _buildMasterDetail(BuildContext context, List<_EventRow> rows) {
+  Widget _buildMasterDetail(BuildContext context, List<_Row> rows) {
     final selected = _selectedIndex != null && _selectedIndex! < rows.length
         ? rows[_selectedIndex!]
         : null;
@@ -370,10 +371,9 @@ class _EventsPaneState extends State<_EventsPane> {
           child: selected == null
               ? _buildDetailPlaceholder(context)
               : SingleChildScrollView(
-                  child: _EventDetail(
+                  child: _RowDetail(
                     row: selected,
-                    onOpenThread: () =>
-                        widget.onOpenThread(selected.event.threadKey),
+                    onOpenThread: () => widget.onOpenThread(selected.threadKey),
                   ),
                 ),
         ),
@@ -393,7 +393,7 @@ class _EventsPaneState extends State<_EventsPane> {
     );
   }
 
-  Future<void> _showDetailSheet(BuildContext context, _EventRow row) {
+  Future<void> _showDetailSheet(BuildContext context, _Row row) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -402,9 +402,9 @@ class _EventsPaneState extends State<_EventsPane> {
         initialChildSize: 0.75,
         builder: (_, scrollController) => SingleChildScrollView(
           controller: scrollController,
-          child: _EventDetail(
+          child: _RowDetail(
             row: row,
-            onOpenThread: () => widget.onOpenThread(row.event.threadKey),
+            onOpenThread: () => widget.onOpenThread(row.threadKey),
           ),
         ),
       ),
@@ -420,12 +420,14 @@ class _FilterBar extends StatefulWidget {
   const _FilterBar({
     required this.controller,
     required this.events,
+    required this.eventRecords,
     required this.onChanged,
     this.onBack,
   });
 
   final TextEditingController controller;
   final List<BusEvent> events;
+  final List<EventRecord> eventRecords;
   final VoidCallback onChanged;
   final VoidCallback? onBack;
 
@@ -440,13 +442,15 @@ class _FilterBarState extends State<_FilterBar> {
   void initState() {
     super.initState();
     widget.controller.addListener(_onTextChanged);
-    _focus.addListener(() => setState(() {}));
+    _focus.addListener(_onFocusChanged);
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onTextChanged);
-    _focus.dispose();
+    _focus
+      ..removeListener(_onFocusChanged)
+      ..dispose();
     super.dispose();
   }
 
@@ -454,6 +458,8 @@ class _FilterBarState extends State<_FilterBar> {
     widget.onChanged();
     setState(() {});
   }
+
+  void _onFocusChanged() => setState(() {});
 
   void _applySuggestion(String suggestion) {
     final cursor = widget.controller.selection.baseOffset.clamp(
@@ -465,12 +471,25 @@ class _FilterBarState extends State<_FilterBar> {
     final end = at?.end ?? cursor;
     final before = widget.controller.text.substring(0, start);
     final after = widget.controller.text.substring(end);
-    final replaced = '$before$suggestion$after';
+    // Append a trailing space if there isn't one — lets the user type
+    // the next filter immediately without manual delimiter.
+    final needsSpace = after.isEmpty || !after.startsWith(' ');
+    final inserted = needsSpace ? '$suggestion ' : suggestion;
+    final replaced = '$before$inserted$after';
+    final newCursor = (before + inserted).length;
     widget.controller.value = TextEditingValue(
       text: replaced,
-      selection:
-          TextSelection.collapsed(offset: (before + suggestion).length),
+      selection: TextSelection.collapsed(offset: newCursor),
     );
+    _focus.requestFocus();
+  }
+
+  void _removeToken(int index) {
+    final tokens = widget.controller.text.split(RegExp(r'\s+'))
+      ..removeWhere((t) => t.isEmpty);
+    if (index < 0 || index >= tokens.length) return;
+    tokens.removeAt(index);
+    widget.controller.text = tokens.join(' ');
   }
 
   @override
@@ -485,114 +504,202 @@ class _FilterBarState extends State<_FilterBar> {
             text: widget.controller.text,
             cursor: cursor,
             events: widget.events,
+            records: widget.eventRecords,
           ).take(8).toList()
         : <String>[];
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              if (widget.onBack != null)
-                IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  onPressed: widget.onBack,
-                  tooltip: 'Back to threads',
-                ),
-              Expanded(
-                child: TextField(
-                  controller: widget.controller,
-                  focusNode: _focus,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: widget.controller.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () => widget.controller.clear(),
-                            tooltip: 'Clear filter',
-                          ),
-                    hintText:
-                        'Filter: thread:abc room:weather tag:agui.snapshot path:/ui',
-                    hintStyle: theme.textTheme.bodySmall?.copyWith(
-                      fontFamily: 'monospace',
-                    ),
-                    border: const OutlineInputBorder(),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+    final activeTokens = widget.controller.text
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    return TapRegion(
+      groupId: 'bus-filter-bar',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                if (widget.onBack != null)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: widget.onBack,
+                    tooltip: 'Back to threads',
                   ),
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontFamily: 'monospace'),
+                Expanded(
+                  child: TextField(
+                    controller: widget.controller,
+                    focusNode: _focus,
+                    // Default unfocuses the field on any outside tap,
+                    // which kills the suggestion chips: the rebuild
+                    // triggered by focus loss unmounts the chip before
+                    // its `onPressed` can fire. Override with a no-op
+                    // so the field keeps focus until the user
+                    // explicitly leaves the filter area.
+                    onTapOutside: (_) {},
+                    decoration: InputDecoration(
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      suffixIcon: widget.controller.text.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => widget.controller.clear(),
+                              tooltip: 'Clear filter',
+                            ),
+                      hintText:
+                          'Filter: kind:bus|event tag:agui.* thread:abc path:/ui',
+                      hintStyle: theme.textTheme.bodySmall?.copyWith(
+                        fontFamily: 'monospace',
+                      ),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                    ),
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
+            ),
+            if (activeTokens.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (var i = 0; i < activeTokens.length; i++)
+                    InputChip(
+                      label: Text(
+                        activeTokens[i],
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(fontFamily: 'monospace'),
+                      ),
+                      onDeleted: () => _removeToken(i),
+                      deleteIcon: const Icon(Icons.close, size: 14),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                ],
+              ),
+            ],
+            if (suggestions.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 32,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: suggestions.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 6),
+                  itemBuilder: (_, index) {
+                    final s = suggestions[index];
+                    return ActionChip(
+                      label: Text(
+                        s,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(fontFamily: 'monospace'),
+                      ),
+                      onPressed: () {
+                        debugPrint('[BUS-INSPECTOR] chip onPressed: "$s"');
+                        _applySuggestion(s);
+                      },
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  },
                 ),
               ),
             ],
-          ),
-          if (suggestions.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 32,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: suggestions.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
-                itemBuilder: (_, index) {
-                  final s = suggestions[index];
-                  return ActionChip(
-                    label: Text(
-                      s,
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(fontFamily: 'monospace'),
-                    ),
-                    onPressed: () => _applySuggestion(s),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  );
-                },
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Event row + tile + detail
+// Unified row hierarchy + builder
 // ---------------------------------------------------------------------------
 
-class _EventRow {
-  _EventRow({required this.event, required this.diff});
+sealed class _Row {
+  DateTime get timestamp;
+  ThreadKey get threadKey;
+  String? get tag;
+
+  bool matchesFilter(BusFilter filter);
+}
+
+class _BusRow extends _Row {
+  _BusRow({required this.event, required this.diff});
 
   final BusEvent event;
   final SnapshotDiff diff;
+
+  @override
+  DateTime get timestamp => event.timestamp;
+  @override
+  ThreadKey get threadKey => event.threadKey;
+  @override
+  String? get tag => event.tag;
+
+  @override
+  bool matchesFilter(BusFilter filter) => filter.matchesBus(event, diff);
 }
 
-List<_EventRow> _buildRows(List<BusEvent> events) {
+class _AguiEventRow extends _Row {
+  _AguiEventRow({required this.record});
+
+  final EventRecord record;
+
+  @override
+  DateTime get timestamp => record.timestamp;
+  @override
+  ThreadKey get threadKey => record.threadKey;
+  @override
+  String? get tag => record.tag;
+
+  @override
+  bool matchesFilter(BusFilter filter) => filter.matchesEvent(record);
+}
+
+/// Combine bus commits + raw event records into one timestamp-ordered
+/// list. Bus rows compute their per-thread diff against the previous
+/// commit on the same thread; no-op commits (empty diff) are dropped.
+List<_Row> _buildUnifiedRows(
+  List<BusEvent> commits,
+  List<EventRecord> records,
+) {
   final lastSnapshotPerThread = <ThreadKey, Map<String, dynamic>>{};
-  final rows = <_EventRow>[];
-  for (final event in events) {
+  final busRows = <_BusRow>[];
+  for (final event in commits) {
     final prior = lastSnapshotPerThread[event.threadKey];
-    rows.add(
-      _EventRow(event: event, diff: diffSnapshots(prior, event.snapshot)),
-    );
+    final diff = diffSnapshots(prior, event.snapshot);
     lastSnapshotPerThread[event.threadKey] = event.snapshot;
+    if (diff.isEmpty) continue;
+    busRows.add(_BusRow(event: event, diff: diff));
   }
-  return rows;
+  final eventRows = records.map((r) => _AguiEventRow(record: r));
+  return [...busRows, ...eventRows]
+    ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
 }
 
-class _EventTile extends StatelessWidget {
-  const _EventTile({
+// ---------------------------------------------------------------------------
+// Tiles + details (dispatch on row kind)
+// ---------------------------------------------------------------------------
+
+class _RowTile extends StatelessWidget {
+  const _RowTile({
     required this.row,
     required this.selected,
     required this.onTap,
     required this.onOpenThread,
   });
 
-  final _EventRow row;
+  final _Row row;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onOpenThread;
@@ -600,6 +707,16 @@ class _EventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final (subtitle, summary) = switch (row) {
+      _BusRow(:final diff) => (
+          _firstChangedPath(diff) ?? _threadShort(row.threadKey),
+          diff.summary,
+        ),
+      _AguiEventRow(:final record) => (
+          _eventSubtitle(record.event),
+          'event',
+        ),
+    };
     return ListTile(
       selected: selected,
       onTap: onTap,
@@ -611,25 +728,27 @@ class _EventTile extends StatelessWidget {
             width: 4,
             height: 32,
             decoration: BoxDecoration(
-              color: _threadColor(row.event.threadKey),
+              color: _threadColor(row.threadKey),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(width: 8),
-          _TagChip(tag: row.event.tag),
+          _RowKindBadge(row: row),
+          const SizedBox(width: 6),
+          _TagChip(tag: row.tag),
         ],
       ),
       title: Row(
         children: [
           Text(
-            _formatTime(row.event.timestamp),
+            _formatTime(row.timestamp),
             style:
                 theme.textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              row.diff.summary,
+              summary,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontFamily: 'monospace',
                 color: theme.colorScheme.primary,
@@ -639,7 +758,7 @@ class _EventTile extends StatelessWidget {
         ],
       ),
       subtitle: Text(
-        _firstChangedPath(row.diff) ?? _threadShort(row.event.threadKey),
+        subtitle,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: theme.textTheme.bodySmall?.copyWith(
@@ -649,7 +768,7 @@ class _EventTile extends StatelessWidget {
       ),
       trailing: IconButton(
         icon: const Icon(Icons.open_in_new, size: 18),
-        tooltip: 'Open thread ${_threadShort(row.event.threadKey)}',
+        tooltip: 'Open thread ${_threadShort(row.threadKey)}',
         onPressed: onOpenThread,
         visualDensity: VisualDensity.compact,
       ),
@@ -657,17 +776,68 @@ class _EventTile extends StatelessWidget {
   }
 }
 
-class _EventDetail extends StatefulWidget {
-  const _EventDetail({required this.row, required this.onOpenThread});
+class _RowKindBadge extends StatelessWidget {
+  const _RowKindBadge({required this.row});
 
-  final _EventRow row;
+  final _Row row;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isBus = row is _BusRow;
+    final label = isBus ? 'bus' : 'event';
+    final color = isBus
+        ? theme.colorScheme.tertiaryContainer
+        : theme.colorScheme.primaryContainer;
+    final fg = isBus
+        ? theme.colorScheme.onTertiaryContainer
+        : theme.colorScheme.onPrimaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: fg,
+          fontFamily: 'monospace',
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+}
+
+class _RowDetail extends StatelessWidget {
+  const _RowDetail({required this.row, required this.onOpenThread});
+
+  final _Row row;
   final VoidCallback onOpenThread;
 
   @override
-  State<_EventDetail> createState() => _EventDetailState();
+  Widget build(BuildContext context) => switch (row) {
+        _BusRow() =>
+          _BusRowDetail(row: row as _BusRow, onOpenThread: onOpenThread),
+        _AguiEventRow() => _AguiEventDetail(
+            row: row as _AguiEventRow,
+            onOpenThread: onOpenThread,
+          ),
+      };
 }
 
-class _EventDetailState extends State<_EventDetail> {
+class _BusRowDetail extends StatefulWidget {
+  const _BusRowDetail({required this.row, required this.onOpenThread});
+
+  final _BusRow row;
+  final VoidCallback onOpenThread;
+
+  @override
+  State<_BusRowDetail> createState() => _BusRowDetailState();
+}
+
+class _BusRowDetailState extends State<_BusRowDetail> {
   bool _showFullSnapshot = false;
 
   @override
@@ -699,29 +869,9 @@ class _EventDetailState extends State<_EventDetail> {
             ],
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: SelectableText(
-                  'thread: ${_threadFull(widget.row.event.threadKey)}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: widget.onOpenThread,
-                icon: const Icon(Icons.open_in_new, size: 16),
-                label: const Text('Open thread'),
-                style: TextButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                  minimumSize: const Size(0, 32),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-            ],
+          _ThreadHeaderRow(
+            threadKey: widget.row.event.threadKey,
+            onOpenThread: widget.onOpenThread,
           ),
           const Divider(height: 24),
           if (diff.isEmpty)
@@ -757,11 +907,107 @@ class _EventDetailState extends State<_EventDetail> {
           if (_showFullSnapshot)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child:
-                  JsonTreeView(nodes: buildJsonTree(widget.row.event.snapshot)),
+              child: JsonTreeView(
+                nodes: buildJsonTree(widget.row.event.snapshot),
+              ),
             ),
         ],
       ),
+    );
+  }
+}
+
+class _AguiEventDetail extends StatelessWidget {
+  const _AguiEventDetail({required this.row, required this.onOpenThread});
+
+  final _AguiEventRow row;
+  final VoidCallback onOpenThread;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final event = row.record.event;
+    final json = _eventJson(event);
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _TagChip(tag: row.record.tag),
+              const SizedBox(width: 12),
+              Text(
+                _formatTime(row.record.timestamp),
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontFamily: 'monospace'),
+              ),
+              const Spacer(),
+              Text(
+                event.runtimeType.toString(),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontFamily: 'monospace',
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _ThreadHeaderRow(
+            threadKey: row.record.threadKey,
+            onOpenThread: onOpenThread,
+          ),
+          const Divider(height: 24),
+          if (json.isEmpty)
+            Text(
+              '(no payload — event is fields-only)',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else
+            JsonTreeView(nodes: buildJsonTree(json)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThreadHeaderRow extends StatelessWidget {
+  const _ThreadHeaderRow({
+    required this.threadKey,
+    required this.onOpenThread,
+  });
+
+  final ThreadKey threadKey;
+  final VoidCallback onOpenThread;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: SelectableText(
+            'thread: ${_threadFull(threadKey)}',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: onOpenThread,
+          icon: const Icon(Icons.open_in_new, size: 16),
+          label: const Text('Open thread'),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+            minimumSize: const Size(0, 32),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -918,6 +1164,50 @@ String? _firstChangedPath(SnapshotDiff diff) {
   if (diff.replaced.isNotEmpty) return diff.replaced.first.path;
   if (diff.removed.isNotEmpty) return diff.removed.first.path;
   return null;
+}
+
+/// One-line summary used as the tile subtitle for an AG-UI event row.
+/// Picks the most informative field from the event's JSON form
+/// (messageId, activityType, etc.); falls back to runtime type.
+String _eventSubtitle(BaseEvent event) {
+  final json = _eventJson(event);
+  // Boring fields the user already sees elsewhere (timestamp + the
+  // tag derived from runtime type covers `type`).
+  const skip = {'type', 'eventType', 'timestamp', 'rawEvent'};
+  for (final entry in json.entries) {
+    if (skip.contains(entry.key)) continue;
+    final value = entry.value;
+    if (value == null) continue;
+    final repr = _briefValue(value);
+    return '${entry.key}=$repr';
+  }
+  return event.runtimeType.toString();
+}
+
+/// Pulls the event's structured fields via `toJson()`. All ag_ui
+/// `BaseEvent` subclasses provide this; it is the authoritative
+/// payload representation.
+Map<String, dynamic> _eventJson(BaseEvent event) {
+  try {
+    return event.toJson();
+  } on Object {
+    // toJson can in principle throw; fall back to an empty map so the
+    // detail view still renders the runtime type.
+    return const {};
+  }
+}
+
+String _briefValue(dynamic value) {
+  if (value is String) {
+    if (value.length > 60) return '"${value.substring(0, 57)}..."';
+    return '"$value"';
+  }
+  if (value is num || value is bool) return value.toString();
+  if (value is Map) {
+    return '{…} (${value.length} key${value.length == 1 ? '' : 's'})';
+  }
+  if (value is List) return '[…] (${value.length})';
+  return value.toString();
 }
 
 String _formatValue(dynamic value) {
