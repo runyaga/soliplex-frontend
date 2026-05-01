@@ -264,15 +264,13 @@ void main() {
 
     test('busObserver receives every per-thread bus write with key + tag',
         () async {
-      final received =
-          <(ThreadKey, String?, Map<String, dynamic>)>[];
+      final received = <(ThreadKey, String?, Map<String, dynamic>)>[];
       final runtime = AgentRuntime(
         connection: mockConnection(),
         toolRegistryResolver: (_) async => const ToolRegistry(),
         platform: const NativePlatformConstraints(),
         logger: logger,
-        busObserver: (key, tag, snapshot) =>
-            received.add((key, tag, snapshot)),
+        busObserver: (key, tag, snapshot) => received.add((key, tag, snapshot)),
       );
 
       const key1 = (

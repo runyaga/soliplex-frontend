@@ -10,7 +10,7 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 /// snapshot of the state immediately after the commit.
 @immutable
 class BusEvent {
-  BusEvent({
+  const BusEvent({
     required this.timestamp,
     required this.threadKey,
     required this.tag,
