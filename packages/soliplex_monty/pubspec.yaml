@@ -1,0 +1,30 @@
+name: soliplex_monty
+description: >-
+  Monty (dart_monty) plugin for the Soliplex frontend: A2UI catalogs whose
+  components run Python only on a user gesture.
+version: 0.0.1-dev
+publish_to: none
+
+# Not a member of the root workspace: the frontend app and its workspace
+# packages never resolve dart_monty. A flavor app that wants these catalogs
+# depends on this package and on soliplex_frontend.
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  a2ui_core: 0.7.0
+  a2ui_flutter: 0.3.0
+  dart_monty:
+    path: ../../../../dart_monty2/packages/dart_monty
+  flutter:
+    sdk: flutter
+  json_schema_builder: ^0.1.7
+  soliplex_design:
+    path: ../soliplex_design
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.0.0

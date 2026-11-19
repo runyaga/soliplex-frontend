@@ -1,0 +1,1112 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
+import 'package:a2ui_flutter/basic_catalog.dart';
+import 'package:dart_monty/dart_monty.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:json_schema_builder/json_schema_builder.dart'
+    hide ValidationResult;
+import 'package:soliplex_design/soliplex_design.dart';
+
+import 'package:soliplex_monty/src/lab_chart.dart';
+import 'package:soliplex_monty/src/lab_chart_api.dart';
+import 'package:soliplex_monty/src/python_ui.dart';
+import 'package:soliplex_monty/src/repair_chain.dart';
+import 'package:soliplex_monty/src/worker_location.dart';
+import 'package:soliplex_monty/src/workspace_files.dart';
+
+const labCatalogId = 'urn:soliplex:catalog:lab:1';
+
+/// Starts the interpreter that one `PythonRepl` instance owns.
+typedef ReplRuntimeStarter =
+    Future<MontyRuntime> Function(
+      ResourceLimits limits,
+      Map<String, Object?> externalModules,
+    );
+
+/// Bounds for one REPL instance.
+class ReplLimits {
+  const ReplLimits({
+    this.maxMemory = 32 * 1024 * 1024,
+    this.maxFeedDuration = const Duration(seconds: 1),
+    this.deadline = const Duration(seconds: 5),
+    this.maxEntries = 20,
+    this.maxOutputChars = 4000,
+    this.maxSourceChars = 20000,
+    this.retries = 2,
+    this.maxRetries = 5,
+    this.maxErrorChars = 2000,
+  });
+
+  final int maxMemory;
+  final Duration maxFeedDuration;
+  final Duration deadline;
+  final int maxEntries;
+  final int maxOutputChars;
+  final int maxSourceChars;
+
+  /// Repair rounds requested without asking, unless a surface sets fewer.
+  final int retries;
+
+  /// The most repair rounds a surface may ask for without a user's click.
+  final int maxRetries;
+
+  /// Error text sent to the model with a repair request.
+  final int maxErrorChars;
+}
+
+/// A surface's `retry` property: the repair budget it asks for, and the
+/// chain and attempt a repaired editor answers.
+class ReplRetry {
+  const ReplRetry({this.max, this.chainId, this.attempt = 0});
+
+  /// Reads the `retry` property; null when it is absent or not an object.
+  static ReplRetry? from(Object? value) => switch (value) {
+    final Map<Object?, Object?> map => ReplRetry(
+      max: switch (map['max']) {
+        final num n => n.toInt(),
+        _ => null,
+      },
+      chainId: switch (map['chainId']) {
+        final String id when id.isNotEmpty => id,
+        _ => null,
+      },
+      attempt: switch (map['attempt']) {
+        final num n => n.toInt(),
+        _ => 0,
+      },
+    ),
+    _ => null,
+  };
+
+  final int? max;
+  final String? chainId;
+  final int attempt;
+}
+
+/// Pools that [_startRuntime] created, closed after their runtime.
+final _ownedPools = Expando<Monty>('soliplex_monty.pool');
+
+/// Starts a runtime whose worker comes from the Flutter asset base on the web.
+Future<MontyRuntime> _startRuntime(
+  ResourceLimits limits,
+  Map<String, Object?> externalModules,
+) async {
+  final base = montyWorkerBase();
+  if (base == null) {
+    return MontyRuntime.start(limits: limits, externalModules: externalModules);
+  }
+  final pool = await Monty.start(
+    maxProcesses: 2,
+    checkoutTimeout: const Duration(seconds: 30),
+    workerLocation: base,
+  );
+  try {
+    final runtime = await MontyRuntime.start(
+      pool: pool,
+      limits: limits,
+      externalModules: externalModules,
+    );
+    _ownedPools[runtime] = pool;
+    return runtime;
+  } on Object {
+    await pool.close();
+    rethrow;
+  }
+}
+
+/// Disposes [runtime] and the pool [_startRuntime] created for it.
+Future<void> _disposeRuntime(MontyRuntime runtime) async {
+  await runtime.dispose();
+  await _ownedPools[runtime]?.close();
+}
+
+/// JSON Pointer accepted for `outputPath`.
+const _pointerPattern = r'^(/([^~/]|~[01])*)+$';
+
+/// Registers experimental components that run code only on a user gesture.
+///
+/// [isLive] says whether the surface around a component arrived from a run
+/// in flight. Only such a surface may run a repaired program on arrival.
+/// Without [isLive] nothing runs on arrival. [chains] defaults to
+/// [RepairChains.shared].
+CatalogImplementation labCatalog({
+  ReplRuntimeStarter? startRuntime,
+  ReplLimits limits = const ReplLimits(),
+  bool Function(BuildContext context)? isLive,
+  RepairChains? chains,
+}) => CatalogImplementation(
+  id: labCatalogId,
+  protocolVersion: A2uiProtocolVersion.v1_0,
+  components: [
+    ComponentImplementation(
+      name: 'PythonRepl',
+      schema: Schema.object(
+        properties: {
+          'source': CommonSchemasV1.dynamicString,
+          'outputPath': Schema.string(pattern: _pointerPattern, maxLength: 200),
+          'onRun': Schema.fromMap({
+            r'$ref': r'common_types.json#/$defs/Action',
+          }),
+          'onFailure': Schema.fromMap({
+            r'$ref': r'common_types.json#/$defs/Action',
+          }),
+          'showSource': Schema.boolean(),
+          'mode': Schema.fromMap({
+            'type': 'string',
+            'enum': ['repl', 'run'],
+          }),
+          'retry': Schema.fromMap({
+            'type': 'object',
+            'properties': {
+              'max': {'type': 'integer', 'minimum': 0, 'maximum': 10},
+              'chainId': {'type': 'string', 'minLength': 1, 'maxLength': 64},
+              'attempt': {'type': 'integer', 'minimum': 0, 'maximum': 50},
+            },
+            'additionalProperties': false,
+          }),
+          'files': workspaceFilesSchema(),
+          'examples': Schema.fromMap({
+            'type': 'array',
+            'maxItems': 12,
+            'items': {
+              'type': 'object',
+              'properties': {
+                'label': {'type': 'string', 'minLength': 1, 'maxLength': 40},
+                'source': {'type': 'string', 'maxLength': 20000},
+              },
+              'required': ['label', 'source'],
+              'additionalProperties': false,
+            },
+          }),
+        },
+        required: ['source'],
+      ),
+      builder: (context, node, props, buildChild) {
+        final source = props.string('source') ?? '';
+        final binding = props.writable('source');
+        final outputPath = props.string('outputPath');
+        final sourcePath = binding == null
+            ? null
+            : DataModel.resolvePath(binding.path, node.dataPath);
+        final resolvedOutput = outputPath == null
+            ? null
+            : DataModel.resolvePath(outputPath, node.dataPath);
+        if (resolvedOutput != null &&
+            sourcePath != null &&
+            (resolvedOutput == sourcePath ||
+                sourcePath.startsWith('$resolvedOutput/'))) {
+          return const Text('Invalid REPL: outputPath overlaps source');
+        }
+        final surface = A2uiSurface.of(context);
+        return PythonReplView(
+          key: ValueKey('python-repl:${node.instanceId}'),
+          source: source,
+          limits: limits,
+          startRuntime: startRuntime ?? _startRuntime,
+          writeSource: binding == null
+              ? null
+              : (text) {
+                  try {
+                    binding.set(text);
+                    return true;
+                  } on A2uiDataError {
+                    return false;
+                  }
+                },
+          writeResult: resolvedOutput == null
+              ? null
+              : (result) => surface.dataModel.set(resolvedOutput, result),
+          onRun: props.action('onRun'),
+          onFailure: props.action('onFailure'),
+          retry: ReplRetry.from(props.value('retry')),
+          showSource: props.boolean('showSource') ?? false,
+          mode: props.string('mode') == 'run' ? ReplMode.run : ReplMode.repl,
+          live: isLive?.call(context) ?? false,
+          chains: chains ?? RepairChains.shared,
+          files: workspaceFiles(props.list('files')),
+          examples: [
+            for (final item in props.list('examples'))
+              if (item case {
+                'label': final String label,
+                'source': final String code,
+              })
+                ReplExample(label, code),
+          ],
+        );
+      },
+    ),
+  ],
+);
+
+/// A program the user can load into the editor; loading never runs it.
+class ReplExample {
+  const ReplExample(this.label, this.source);
+
+  final String label;
+  final String source;
+}
+
+/// One transcript entry: the code that ran and what it produced.
+class ReplEntry {
+  const ReplEntry({
+    required this.input,
+    required this.output,
+    required this.ok,
+    this.header = '',
+  });
+
+  final String input;
+  final String output;
+  final bool ok;
+
+  /// What produced the entry, such as `Run 3` or `Run 2 · attempt 1 of 2`.
+  final String header;
+}
+
+/// How a `PythonRepl` presents its program.
+enum ReplMode {
+  /// Editor, transcript of runs, and globals kept between runs.
+  repl,
+
+  /// Run button and the latest result. The editor is behind a toggle, and
+  /// each Run starts a fresh interpreter session.
+  run,
+}
+
+/// Editor, Run button and transcript backed by one Monty runtime.
+///
+/// Code runs from the Run button, or on arrival when this editor is the
+/// repair a live [RepairChain] waits for and the surface arrived [live].
+class PythonReplView extends StatefulWidget {
+  const PythonReplView({
+    required this.source,
+    required this.limits,
+    required this.startRuntime,
+    super.key,
+    this.writeSource,
+    this.writeResult,
+    this.onRun,
+    this.onFailure,
+    this.retry,
+    this.live = false,
+    this.chains,
+    this.showSource = false,
+    this.mode = ReplMode.repl,
+    this.examples = const [],
+    this.files = const [],
+  });
+
+  final String source;
+  final List<ReplExample> examples;
+
+  /// Files mounted read-only at `/workspace/room/<name>` for every run.
+  final List<WorkspaceFile> files;
+  final ReplLimits limits;
+  final ReplRuntimeStarter startRuntime;
+  final bool Function(String text)? writeSource;
+  final void Function(Map<String, Object?> result)? writeResult;
+  final Future<void> Function()? onRun;
+
+  /// Asks the model to repair a failed run. The failure is in the result
+  /// that [writeResult] wrote just before.
+  final Future<void> Function()? onFailure;
+  final ReplRetry? retry;
+
+  /// Whether the surface arrived from a run in flight, not from history.
+  final bool live;
+  final RepairChains? chains;
+
+  /// Whether each transcript entry shows its code without a click.
+  final bool showSource;
+  final ReplMode mode;
+
+  /// Receives each run on arrival instead of starting it, so a widget test
+  /// can start it outside the fake-async zone.
+  @visibleForTesting
+  static void Function(VoidCallback start)? debugScheduleAutoRun;
+
+  @override
+  State<PythonReplView> createState() => _PythonReplViewState();
+}
+
+class _PythonReplViewState extends State<PythonReplView> {
+  late final TextEditingController _editor;
+  final ScrollController _scroll = ScrollController();
+  final List<ReplEntry> _entries = [];
+  Future<MontyRuntime>? _starting;
+  ExecutionHandle? _active;
+  bool _running = false;
+  bool _disposed = false;
+  int _runs = 0;
+  PythonUiArena _arena = PythonUiArena();
+  MessageProcessor<ComponentImplementation>? _ui;
+  bool _loading = false;
+
+  /// Whether the editor is open in [ReplMode.run].
+  bool _editorOpen = false;
+
+  bool get _runMode => widget.mode == ReplMode.run;
+
+  /// The source the surface delivered. A failure of other code is the
+  /// user's, and asks before any repair.
+  late String _delivered;
+  RepairChain? _chain;
+
+  /// The attempt this editor requested, and the one it ran on arrival.
+  int? _requested;
+  int? _claimed;
+  String? _lastError;
+  bool _asking = false;
+  int? _fixedAfter;
+
+  RepairChains get _chains => widget.chains ?? RepairChains.shared;
+
+  bool get _repairable =>
+      widget.onFailure != null && widget.writeResult != null;
+
+  bool get _pending => _requested != null && _chain?.awaiting == _requested;
+
+  /// Rounds a new chain may request without asking, clamped by the client.
+  int get _budget => math.min(
+    math.max(widget.retry?.max ?? widget.limits.retries, 0),
+    widget.limits.maxRetries,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _editor = TextEditingController(text: widget.source);
+    _delivered = widget.source;
+    _claimOnArrival();
+  }
+
+  /// Runs this editor once when it is the repair a live chain waits for.
+  void _claimOnArrival() {
+    final retry = widget.retry;
+    final id = retry?.chainId;
+    if (!_repairable || !widget.live || retry == null || id == null) return;
+    final chain = _chains[id];
+    if (chain == null || !chain.claim(retry.attempt)) return;
+    _follow(chain);
+    _claimed = retry.attempt;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      (PythonReplView.debugScheduleAutoRun ?? (start) => start())(() {
+        if (!_disposed && chain.isActive) unawaited(run());
+      });
+    });
+  }
+
+  void _follow(RepairChain chain) {
+    _chain?.removeListener(_onChain);
+    _chain = chain..addListener(_onChain);
+  }
+
+  /// Repaints for a chain change, after the frame when another editor's
+  /// build caused it.
+  void _onChain() {
+    if (_disposed || !mounted) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase != SchedulerPhase.persistentCallbacks) return setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_disposed && mounted) setState(() {});
+    });
+  }
+
+  @override
+  void didUpdateWidget(PythonReplView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final bound = widget.writeSource != null;
+    if ((bound || widget.source != oldWidget.source) &&
+        widget.source != _editor.text) {
+      _delivered = widget.source;
+      _editor.value = TextEditingValue(
+        text: widget.source,
+        selection: TextSelection.collapsed(offset: widget.source.length),
+      );
+    }
+  }
+
+  /// Replaces the editor text with [example]. It does not run the code.
+  void load(ReplExample example) {
+    if (_running || _disposed) return;
+    _editor.value = TextEditingValue(
+      text: example.source,
+      selection: TextSelection.collapsed(offset: example.source.length),
+    );
+    _onEdit(example.source);
+  }
+
+  void _onEdit(String text) {
+    if (widget.writeSource?.call(text) == false) {
+      _editor.text = widget.source;
+    }
+  }
+
+  /// The read-only workspace; null when the surface delivered no files.
+  late final OsHandler? _os = widget.files.isEmpty
+      ? null
+      : workspaceOsHandler(widget.files);
+
+  ResourceLimits get _resourceLimits => ResourceLimits(
+    maxMemory: widget.limits.maxMemory,
+    maxFeedDuration: widget.limits.maxFeedDuration,
+  );
+
+  /// Runs the editor text. Only the Run button calls this.
+  Future<void> run() async {
+    if (_running || _disposed) return;
+    final code = _editor.text;
+    final limits = widget.limits;
+    if (code.length > limits.maxSourceChars) {
+      final message = 'Source exceeds ${limits.maxSourceChars} characters.';
+      _record(code, message, ok: false);
+      _afterRun(code, message, ok: false);
+      return;
+    }
+    setState(() {
+      _running = true;
+      _asking = false;
+      _fixedAfter = null;
+    });
+    try {
+      final runtime = await _runtime(code);
+      if (runtime == null || _disposed) return;
+      if (_runMode && !await _freshSession(runtime, code)) return;
+      _arena = PythonUiArena();
+      var (output, ok) = await _execute(runtime, code, limits);
+      if (_disposed) return;
+      if (ok) {
+        final rejected = _commit(_arena.staged);
+        if (rejected != null) {
+          output = _join(output, 'Surface rejected: $rejected');
+          ok = false;
+        }
+      }
+      _record(code, output, ok: ok);
+      _runs++;
+      widget.writeResult?.call({
+        'run': _runs,
+        'source': code,
+        'output': _clip(output, limits.maxOutputChars),
+        'ok': ok,
+      });
+      _afterRun(code, output, ok: ok);
+      final onRun = widget.onRun;
+      if (onRun != null) unawaited(onRun().catchError((Object _) {}));
+    } finally {
+      if (!_disposed) setState(() => _running = false);
+    }
+  }
+
+  /// `Run n`, with the repair attempt when this editor ran one on arrival.
+  String _runHeader() {
+    final attempt = _claimed;
+    final chain = _chain;
+    final run = 'Run ${_runs + 1}';
+    if (attempt == null || chain == null) return run;
+    return '$run · attempt $attempt of ${chain.max}';
+  }
+
+  /// The session runtime, started on first use. Null when it failed to start.
+  Future<MontyRuntime?> _runtime(String code) async {
+    if (_starting == null) setState(() => _loading = true);
+    try {
+      return await (_starting ??= widget.startRuntime(_resourceLimits, {
+        'ui': PythonUiArena.moduleFor(() => _arena),
+      }));
+    } on Object catch (error) {
+      _starting = null;
+      if (!_disposed) {
+        _record(code, 'Python failed to start: $error', ok: false);
+      }
+      return null;
+    } finally {
+      if (!_disposed && _loading) setState(() => _loading = false);
+    }
+  }
+
+  /// Clears globals and the Python-built surface before a run in
+  /// [ReplMode.run]. False when the interpreter could not be reset.
+  Future<bool> _freshSession(MontyRuntime runtime, String code) async {
+    final old = _ui;
+    if (old != null) {
+      setState(() => _ui = null);
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+    try {
+      await runtime.clearState();
+      return !_disposed;
+    } on Object catch (error) {
+      if (!_disposed) {
+        _record(code, 'Python failed to reset: $error', ok: false);
+      }
+      return false;
+    }
+  }
+
+  /// Requests a repair after a failure of delivered code while the chain has
+  /// budget, and asks the user otherwise.
+  void _afterRun(String code, String output, {required bool ok}) {
+    if (!_repairable || _disposed) return;
+    if (ok) return _settle();
+    _lastError = output;
+    final chain = _chain;
+    if (code != _delivered) {
+      setState(() => _asking = true);
+    } else if (chain != null && chain.isActive) {
+      chain.hasBudget ? _requestRepair(chain, code) : _ask();
+    } else if (_budget == 0) {
+      _ask();
+    } else {
+      _follow(_chains.start(_budget));
+      _requestRepair(_chain!, code);
+    }
+  }
+
+  void _ask() => setState(() => _asking = true);
+
+  void _settle() {
+    final chain = _chain;
+    setState(() {
+      _lastError = null;
+      _asking = false;
+      if (chain != null && _claimed != null && chain.isActive) {
+        _fixedAfter = chain.rounds;
+        chain.markFixed();
+      }
+    });
+  }
+
+  /// Writes the failure where the `onFailure` action reads it, then
+  /// dispatches the action once for the chain's next round.
+  void _requestRepair(RepairChain chain, String code) {
+    final onFailure = widget.onFailure;
+    final attempt = chain.request();
+    if (onFailure == null || attempt == null) return _ask();
+    final limits = widget.limits;
+    final error = _clip(_lastError ?? '', limits.maxErrorChars);
+    widget.writeResult?.call({
+      'run': _runs,
+      'source': _clip(code, limits.maxSourceChars),
+      'output': error,
+      'error': error,
+      'ok': false,
+      'attempt': attempt,
+      'chainId': chain.id,
+    });
+    setState(() {
+      _requested = attempt;
+      _asking = false;
+    });
+    unawaited(onFailure().catchError((Object _) {}));
+  }
+
+  /// Requests one repair of the editor's code, edited or not: AI Fix and Yes.
+  void _fix() {
+    if (_running || _disposed || _pending || _lastError == null) return;
+    var chain = _chain;
+    if (chain == null || chain.status == RepairStatus.fixed) {
+      chain = _chains.start(math.max(_budget, 1));
+      _follow(chain);
+    }
+    chain.grant();
+    _requestRepair(chain, _editor.text);
+  }
+
+  /// Ends the chain: No, and Stop while a repair is pending.
+  void _end() {
+    _chain?.end();
+    setState(() => _asking = false);
+  }
+
+  /// Validates [staged] in a fresh processor and swaps it in.
+  ///
+  /// Returns the rejection reason, or null when committed or nothing staged.
+  /// A rejected surface leaves the previous one on screen.
+  String? _commit(StagedSurface? staged) {
+    if (staged == null) return null;
+    final next = MessageProcessor<ComponentImplementation>(
+      catalogs: [basicCatalog(), labChartCatalog()],
+      validationConfig: ValidationConfig.strict,
+    );
+    final errors = <String>[
+      for (final component in staged.components)
+        ?chartComponentError(component),
+    ];
+    final sub = next.model.onError.subscribe((e) => errors.add('$e'));
+    try {
+      next.processMessages(staged.messages('python'));
+    } on Object catch (error) {
+      errors.add('$error');
+    }
+    sub.unsubscribe();
+    if (errors.isNotEmpty || next.model.allSurfaces.isEmpty) {
+      next.dispose();
+      return errors.isEmpty ? 'no surface was created' : errors.first;
+    }
+    next.model.onAction.subscribe((action) {
+      if (!_disposed) unawaited(_dispatch(action.toJson()));
+    });
+    final old = _ui;
+    setState(() => _ui = next);
+    if (old != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+    return null;
+  }
+
+  /// Calls `handle_event(name, context)` in the session after a click on a
+  /// Python-built widget. The click is the user gesture that runs code.
+  Future<void> _dispatch(Map<String, Object?> action) async {
+    if (_running || _disposed) return;
+    final runtime = await _starting;
+    if (runtime == null || _disposed) return;
+    final name = action['name'];
+    final label = 'handle_event(${_quote('$name')}, ...)';
+    setState(() => _running = true);
+    try {
+      _arena = PythonUiArena();
+      final data = _ui?.model.allSurfaces.firstOrNull?.dataModel.get('/');
+      var (output, ok) = await _execute(
+        runtime,
+        'handle_event(EVENT["name"], EVENT["context"])',
+        widget.limits,
+        inputs: {
+          'EVENT': {'name': name, 'context': action['context'] ?? {}},
+          'DATA': data ?? {},
+        },
+      );
+      if (_disposed) return;
+      if (ok) {
+        final rejected = _commit(_arena.staged);
+        if (rejected != null) {
+          output = _join(output, 'Surface rejected: $rejected');
+          ok = false;
+        }
+      } else if (output.contains("'handle_event' is not defined")) {
+        output = 'Define handle_event(name, context) to react to clicks.';
+      }
+      _record(label, output, ok: ok, header: 'Click: $name');
+      if (!ok) _afterRun(_editor.text, output, ok: false);
+    } finally {
+      if (!_disposed) setState(() => _running = false);
+    }
+  }
+
+  Future<(String, bool)> _execute(
+    MontyRuntime runtime,
+    String code,
+    ReplLimits limits, {
+    Map<String, Object?>? inputs,
+  }) async {
+    final ExecutionHandle handle;
+    try {
+      handle = runtime.execute(code, os: _os, inputs: inputs);
+    } on Object catch (error) {
+      return ('$error', false);
+    }
+    _active = handle;
+    String? printed;
+    BridgeRunError? failure;
+    final events = handle.events.listen((event) {
+      if (event is BridgeRunFinished) printed = event.printOutput;
+      if (event is BridgeRunError) {
+        printed = event.printOutput;
+        failure = event;
+      }
+    });
+    var timedOut = false;
+    final deadline = Timer(limits.deadline, () {
+      timedOut = true;
+      unawaited(handle.cancel());
+    });
+    try {
+      final value = await handle.result;
+      final shown = _repr(value);
+      return (_join(printed, shown), true);
+    } on Object catch (error) {
+      if (timedOut) {
+        return (
+          _join(
+            printed,
+            'Stopped: exceeded the ${_seconds(limits.deadline)} deadline. '
+            'Interpreter state was reset.',
+          ),
+          false,
+        );
+      }
+      final message = failure?.displayMessage ?? _describe(error);
+      final reset = _resetsSession(error)
+          ? '\nInterpreter state was reset.'
+          : '';
+      return (_join(printed, '$message$reset'), false);
+    } finally {
+      deadline.cancel();
+      _active = null;
+      await events.cancel();
+    }
+  }
+
+  void _record(
+    String input,
+    String output, {
+    required bool ok,
+    String? header,
+  }) {
+    final limits = widget.limits;
+    final keep = _runMode ? 1 : limits.maxEntries;
+    setState(() {
+      _entries.add(
+        ReplEntry(
+          input: input,
+          output: _clip(output, limits.maxOutputChars),
+          ok: ok,
+          header: header ?? _runHeader(),
+        ),
+      );
+      while (_entries.length > keep) {
+        _entries.removeAt(0);
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_disposed || !_scroll.hasClients) return;
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _chain?.removeListener(_onChain);
+    final active = _active;
+    if (active != null) unawaited(active.cancel());
+    final starting = _starting;
+    if (starting != null) {
+      unawaited(
+        starting.then(_disposeRuntime, onError: (Object _) {}),
+      );
+    }
+    _ui?.dispose();
+    _editor.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mono = context.monospaceOn(theme.textTheme.bodyMedium);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Python (Monty sandbox)', style: theme.textTheme.labelMedium),
+        const SizedBox(height: SoliplexSpacing.s2),
+        if (widget.examples.isNotEmpty && !_runMode) ...[
+          Wrap(
+            spacing: SoliplexSpacing.s2,
+            runSpacing: SoliplexSpacing.s2,
+            children: [
+              for (final example in widget.examples)
+                SoliplexChip.action(
+                  key: ValueKey('python-repl-example:${example.label}'),
+                  label: Text(example.label),
+                  onPressed: () => load(example),
+                ),
+            ],
+          ),
+          const SizedBox(height: SoliplexSpacing.s2),
+        ],
+        if (_runMode)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SoliplexButton.text(
+              key: const ValueKey('python-repl-edit'),
+              onPressed: () => setState(() => _editorOpen = !_editorOpen),
+              icon: Icon(_editorOpen ? Icons.expand_less : Icons.edit),
+              child: Text(_editorOpen ? 'Hide code' : 'Edit code'),
+            ),
+          ),
+        if (!_runMode || _editorOpen)
+          TextField(
+            key: const ValueKey('python-repl-editor'),
+            controller: _editor,
+            onChanged: _onEdit,
+            style: mono,
+            minLines: 3,
+            maxLines: 16,
+            keyboardType: TextInputType.multiline,
+            decoration: const InputDecoration(
+              labelText: 'Python source',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        const SizedBox(height: SoliplexSpacing.s2),
+        _controls(),
+        ..._repairStatus(theme),
+        const SizedBox(height: SoliplexSpacing.s3),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 420),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(context.radii.sm),
+            ),
+            child: ListView(
+              controller: _scroll,
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(SoliplexSpacing.s3),
+              children: [
+                if (_entries.isEmpty)
+                  const Text('Press Run to execute the code.'),
+                for (final entry in _entries)
+                  _EntryView(
+                    key: ObjectKey(entry),
+                    entry: entry,
+                    showSource: widget.showSource,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (_ui?.model.allSurfaces.firstOrNull case final surface?) ...[
+          const SizedBox(height: SoliplexSpacing.s3),
+          Text('Surface built by Python', style: theme.textTheme.labelMedium),
+          const SizedBox(height: SoliplexSpacing.s2),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(context.radii.sm),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(SoliplexSpacing.s3),
+              child: A2uiSurface(key: ObjectKey(surface), surface: surface),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+extension on _PythonReplViewState {
+  Widget _controls() => Wrap(
+    spacing: SoliplexSpacing.s3,
+    runSpacing: SoliplexSpacing.s2,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [
+      SoliplexButton.filled(
+        key: const ValueKey('python-repl-run'),
+        onPressed: _running ? null : () => unawaited(run()),
+        icon: const Icon(Icons.play_arrow),
+        isLoading: _running,
+        child: Text(switch ((_loading, _running)) {
+          (true, _) => 'Loading Monty…',
+          (_, true) => 'Running',
+          _ => 'Run',
+        }),
+      ),
+      if (_repairable && _lastError != null)
+        SoliplexButton.outlined(
+          key: const ValueKey('python-repl-ai-fix'),
+          onPressed: _running || _pending ? null : _fix,
+          icon: const Icon(Icons.auto_fix_high),
+          child: const Text('AI Fix'),
+        ),
+      if (!_runMode)
+        Text(
+          _entries.length == 1
+              ? '1 run shown'
+              : '${_entries.length} runs shown',
+        ),
+    ],
+  );
+
+  /// Progress, the result of a chain, or the question after the last round.
+  List<Widget> _repairStatus(ThemeData theme) {
+    final chain = _chain;
+    final line = switch (chain) {
+      _ when _pending =>
+        'Run failed. Asking the model to fix it '
+            '(attempt $_requested of ${chain!.max})…',
+      _ when _fixedAfter != null =>
+        'Fixed after $_fixedAfter attempt${_fixedAfter == 1 ? '' : 's'}',
+      final RepairChain c when _claimed != null && _running =>
+        'Running the fixed code (attempt $_claimed of ${c.max})…',
+      _ => null,
+    };
+    return [
+      if (line != null) ...[
+        const SizedBox(height: SoliplexSpacing.s2),
+        Row(
+          children: [
+            Expanded(
+              child: Text(line, key: const ValueKey('python-repl-repair')),
+            ),
+            if (_pending)
+              SoliplexButton.text(
+                key: const ValueKey('python-repl-stop'),
+                onPressed: _end,
+                child: const Text('Stop'),
+              ),
+          ],
+        ),
+      ],
+      if (_asking && !_pending) ...[
+        const SizedBox(height: SoliplexSpacing.s2),
+        Row(
+          children: [
+            const Expanded(child: Text('Do you want to try again?')),
+            SoliplexButton.filled(
+              key: const ValueKey('python-repl-yes'),
+              onPressed: _running ? null : _fix,
+              child: const Text('Yes'),
+            ),
+            const SizedBox(width: SoliplexSpacing.s2),
+            SoliplexButton.text(
+              key: const ValueKey('python-repl-no'),
+              onPressed: _end,
+              child: const Text('No'),
+            ),
+          ],
+        ),
+      ],
+    ];
+  }
+}
+
+/// One transcript entry: a header, its output, and its code on request.
+class _EntryView extends StatefulWidget {
+  const _EntryView({
+    required this.entry,
+    required this.showSource,
+    super.key,
+  });
+
+  final ReplEntry entry;
+  final bool showSource;
+
+  @override
+  State<_EntryView> createState() => _EntryViewState();
+}
+
+class _EntryViewState extends State<_EntryView> {
+  late bool _open = widget.showSource;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mono = context.monospaceOn(theme.textTheme.bodyMedium);
+    final entry = widget.entry;
+    final status = entry.ok ? 'ok' : 'failed';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SoliplexSpacing.s2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${entry.header} · $status',
+                  key: const ValueKey('python-repl-entry-header'),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: entry.ok ? null : theme.colorScheme.error,
+                  ),
+                ),
+              ),
+              if (!widget.showSource)
+                SoliplexButton.text(
+                  key: const ValueKey('python-repl-show-code'),
+                  onPressed: () => setState(() => _open = !_open),
+                  child: Text(_open ? 'Hide code' : 'Show code'),
+                ),
+            ],
+          ),
+          if (_open) SelectableText(_prompt(entry.input), style: mono),
+          if (entry.output.isNotEmpty)
+            SelectableText(
+              entry.output,
+              style: mono.copyWith(
+                color: entry.ok
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.error,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+String _prompt(String input) {
+  final lines = input.trimRight().split('\n');
+  return [
+    for (var i = 0; i < lines.length; i++)
+      '${i == 0 ? '>>>' : '...'} ${lines[i]}',
+  ].join('\n');
+}
+
+String _join(String? printed, String tail) {
+  final head = (printed ?? '').trimRight();
+  if (head.isEmpty) return tail;
+  if (tail.isEmpty) return head;
+  return '$head\n$tail';
+}
+
+String _clip(String text, int max) =>
+    text.length <= max ? text : '${text.substring(0, max)}\n… (truncated)';
+
+String _seconds(Duration d) => d.inMilliseconds % 1000 == 0
+    ? '${d.inSeconds} s'
+    : '${d.inMilliseconds} ms';
+
+bool _resetsSession(Object error) =>
+    error is MontyCrashedError ||
+    (error is MontyError &&
+        const {
+          'MemoryError',
+          'TimeoutError',
+        }.contains(error.exception.excType));
+
+String _describe(Object error) => switch (error) {
+  final MontySyntaxError e => e.display(),
+  final MontyRuntimeError e => e.display(),
+  final MontyTypingError e => e.display(),
+  _ => '$error',
+};
+
+/// Python-style repr of a result; empty for None.
+String _repr(MontyValue value, [int depth = 0]) {
+  if (depth > 8) return '...';
+  String seq(List<MontyValue> values) =>
+      values.take(100).map((v) => _repr(v, depth + 1)).join(', ') +
+      (values.length > 100 ? ', ...' : '');
+  return switch (value) {
+    MontyNone() when depth == 0 => '',
+    MontyNone() => 'None',
+    MontyBool(:final value) => value ? 'True' : 'False',
+    MontyString(:final value) => _quote(value),
+    MontyList(:final items) => '[${seq(items)}]',
+    MontyTuple(:final items) when items.length == 1 =>
+      '(${_repr(items.single, depth + 1)},)',
+    MontyTuple(:final items) => '(${seq(items)})',
+    MontyDict(:final pairs) =>
+      '{${pairs.take(100).map((p) => _pair(p, depth)).join(', ')}}',
+    _ => '${value.dartValue}',
+  };
+}
+
+String _pair((MontyValue, MontyValue) pair, int depth) =>
+    '${_repr(pair.$1, depth + 1)}: ${_repr(pair.$2, depth + 1)}';
+
+String _quote(String text) {
+  final escaped = text
+      .replaceAll(r'\', r'\\')
+      .replaceAll("'", r"\'")
+      .replaceAll('\n', r'\n');
+  return "'$escaped'";
+}

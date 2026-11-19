@@ -1,0 +1,12 @@
+dcm:
+  metrics:
+    cyclomatic-complexity:
+      threshold: 10
+    lines-of-code:
+      threshold: 40
+    number-of-parameters:
+      threshold: 5
+    maximum-nesting-level:
+      threshold: 3
+  rules:
+    - avoid-nested-conditional-expressions

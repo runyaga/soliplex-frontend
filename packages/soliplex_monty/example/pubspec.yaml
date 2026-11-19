@@ -1,0 +1,31 @@
+name: soliplex_monty_app
+description: >-
+  The standard Soliplex web client with the soliplex_monty lab catalog
+  registered. Built for local stacks such as soliplex-dojo.
+publish_to: none
+version: 0.119.0+108
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  soliplex_frontend:
+    path: ../../..
+  soliplex_monty:
+    path: ..
+
+dev_dependencies:
+  very_good_analysis: ^10.0.0
+
+flutter:
+  uses-material-design: true
+
+# dart_monty pins hooks ^1.0.2 and code_assets ^1.0.0. soliplex_frontend reaches
+# hooks ^2 through better_player_macos -> objective_c. The web build runs no
+# code-asset hook, so the override only has to compile dart_monty's hook.
+dependency_overrides:
+  code_assets: ^2.2.0
+  hooks: ^2.2.0
