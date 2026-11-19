@@ -13,6 +13,7 @@
 
 import 'package:ag_ui/ag_ui.dart';
 import 'package:meta/meta.dart';
+import 'package:soliplex_client/src/application/a2ui_activity.dart';
 import 'package:soliplex_client/src/application/activity_events.dart';
 import 'package:soliplex_client/src/application/json_patch.dart';
 import 'package:soliplex_client/src/application/run_ending.dart';
@@ -191,13 +192,21 @@ EventProcessingResult _processForDisplay(
       ),
 
     // Activity snapshot events
-    ActivitySnapshotEvent() =>
-      _processActivitySnapshot(conversation, streaming, event),
+    ActivitySnapshotEvent() => _processActivitySnapshot(
+        conversation,
+        streaming,
+        event,
+        createdAt: createdAt,
+      ),
 
     // JSON Patch against the prior ActivitySnapshot's content,
     // mirroring how StateDeltaEvent patches aguiState.
-    ActivityDeltaEvent() =>
-      _processActivityDelta(conversation, streaming, event),
+    ActivityDeltaEvent() => _processActivityDelta(
+        conversation,
+        streaming,
+        event,
+        createdAt: createdAt,
+      ),
 
     // Unhandled event types — pass through unchanged.
     // Explicit cases ensure a compile error if ag_ui adds new event types.
@@ -521,8 +530,9 @@ EventProcessingResult _processToolCallResult(
 EventProcessingResult _processActivitySnapshot(
   Conversation conversation,
   StreamingState streaming,
-  ActivitySnapshotEvent event,
-) {
+  ActivitySnapshotEvent event, {
+  required DateTime? createdAt,
+}) {
   // `content` is `Object?` upstream, but `ActivityRecord.content` is a
   // `Map<String, dynamic>`, so a non-object payload has nowhere to go. Thrown
   // so the caller mints a drop tile, which is the only thing on screen saying
@@ -543,10 +553,20 @@ EventProcessingResult _processActivitySnapshot(
     event,
     logger: _logger,
   );
-  final updatedConversation =
+  var updatedConversation =
       identical(updatedActivities, conversation.activities)
           ? conversation
           : conversation.copyWith(activities: updatedActivities);
+
+  if (!identical(updatedActivities, conversation.activities) &&
+      event.activityType == a2uiActivityType) {
+    updatedConversation = projectA2uiActivity(
+      updatedConversation,
+      updatedActivities
+          .singleWhere((record) => record.messageId == event.messageId),
+      createdAt: createdAt,
+    );
+  }
 
   // The streaming phase label is set by `TOOL_CALL_START`, not from here.
   // Content is opaque under AG-UI, so this layer must not attribute a phase
@@ -790,14 +810,49 @@ EventProcessingResult _processStateDelta(
 }
 
 /// Applies an [ActivityDeltaEvent] to [Conversation.activities],
-/// preserving streaming state. Drop semantics (no prior snapshot,
-/// activityType mismatch, malformed patch ops) live in
-/// [applyActivityEvent]; this wrapper only forwards the result.
+/// preserving streaming state. A2UI rejects an incomplete patch so the prior
+/// surface remains replayable. Other activities use [applyActivityEvent].
 EventProcessingResult _processActivityDelta(
   Conversation conversation,
   StreamingState streaming,
-  ActivityDeltaEvent event,
-) {
+  ActivityDeltaEvent event, {
+  required DateTime? createdAt,
+}) {
+  if (event.activityType == a2uiActivityType) {
+    final index = conversation.activities.indexWhere(
+      (record) =>
+          record.messageId == event.messageId &&
+          record.activityType == a2uiActivityType,
+    );
+    if (index < 0) {
+      throw MalformedResponseException(
+        message:
+            'A2UI activity delta has no matching snapshot: ${event.messageId}',
+      );
+    }
+    final previous = conversation.activities[index];
+    final patched =
+        applyJsonPatch(previous.content, event.patch, logger: _logger);
+    if (!patched.complete) {
+      throw MalformedResponseException(
+        message: 'A2UI activity delta is incomplete: ${event.messageId}',
+      );
+    }
+    final activity = previous.copyWith(
+      content: patched.state,
+      timestamp: event.timestamp ?? previous.timestamp,
+    );
+    return EventProcessingResult(
+      conversation: projectA2uiActivity(
+        conversation.copyWith(
+          activities: [...conversation.activities]..[index] = activity,
+        ),
+        activity,
+        createdAt: createdAt,
+      ),
+      streaming: streaming,
+    );
+  }
   final updated = applyActivityEvent(
     conversation.activities,
     event,

@@ -833,6 +833,12 @@ RunUserMessage? _extractUserMessage(
     return null;
   }
 
+  // An A2UI action opens its run through forwarded props, not a message.
+  final forwarded = runInput['forwardedProps'] ?? runInput['forwarded_props'];
+  if (forwarded case {'a2uiAction': {'userAction': Map<String, dynamic> _}}) {
+    return null;
+  }
+
   // Find the last user message — the one that initiated this run.
   Map<String, dynamic>? lastUserMessage;
   for (var i = rawMessages.length - 1; i >= 0; i--) {

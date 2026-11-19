@@ -1,3 +1,4 @@
+export 'a2ui_activity.dart' show a2uiActivityType;
 export 'activity_events.dart';
 export 'agui_event_processor.dart';
 export 'citation_extractor.dart';

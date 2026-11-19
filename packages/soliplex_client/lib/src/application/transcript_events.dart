@@ -1,4 +1,5 @@
 import 'package:ag_ui/ag_ui.dart';
+import 'package:soliplex_client/src/application/a2ui_activity.dart';
 import 'package:soliplex_client/src/application/json_patch.dart';
 import 'package:soliplex_client/src/domain/transcript.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
@@ -49,6 +50,9 @@ Transcript applyTranscriptEvent(Transcript transcript, BaseEvent event) {
         ToolMessage(id: messageId, toolCallId: toolCallId, content: content),
       ),
     ReasoningEncryptedValueEvent() => _setEncryptedValue(transcript, event),
+    ActivitySnapshotEvent(activityType: a2uiActivityType) ||
+    ActivityDeltaEvent(activityType: a2uiActivityType) =>
+      transcript,
     ActivitySnapshotEvent() => _applyActivitySnapshot(transcript, event),
     ActivityDeltaEvent() => _applyActivityDelta(transcript, event),
     // Listed so a new event type is a compile error here. Nothing in these
