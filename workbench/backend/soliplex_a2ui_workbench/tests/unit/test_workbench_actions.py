@@ -6,6 +6,9 @@ from pathlib import Path
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.testclient import TestClient
 from soliplex_a2ui_workbench.workbench_routes import create_guarded_agui_router
+from pydantic_ai import Agent
+from pydantic_ai.models.test import TestModel
+from pydantic_ai.ui.ag_ui import AGUIAdapter
 
 
 def _register(repo, scope, component="PlaceForm"):
@@ -19,6 +22,12 @@ def _register(repo, scope, component="PlaceForm"):
     content = json.loads((fixture / "content_v1.json").read_text())
     content.update({"activityMessageId": "activity-1", "surfaceId": "surface-1"})
     content["component"] = component
+    if component == "PlaceForm":
+        content.update({"catalogId": "urn:soliplex:catalog:workbench:1", "title": "Intake", "template": "intake"})
+        content.pop("spec", None)
+    else:
+        content.update({"catalogId": "urn:soliplex:catalog:lab:1", "source": "print('idle')"})
+        content.pop("spec", None)
     repo.publish(scope, "initial", 0, layout, [content], registered_program_surfaces=set(), registered_mounts={("activity-1", "surface-1")})
 
 
@@ -29,7 +38,7 @@ def test_intake_reservation_is_idempotent_and_model_free(tmp_path):
     service = WorkbenchActionService(repo)
     payload = {
         "v": 1, "submissionId": "submission-1", "activityMessageId": "activity-1",
-        "surfaceRevision": 1, "actionSchemaVersion": "intake-submit@1",
+        "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1",
         "userAction": {"question": "Compare north and south", "districts": ["north", "south"], "acknowledged": True},
     }
     first = service.accept(scope, payload)
@@ -42,7 +51,16 @@ def test_changed_duplicate_conflicts_and_unreserved_dispatch_rejects(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     service = WorkbenchActionService(repo)
     scope = WorkbenchScope("alice", "server", "room", "thread")
-    assert service.consume_dispatch(scope, {"submissionId": "missing"}) is None
+    assert service.consume_dispatch(scope, {"forwardedProps": {"a2uiAction": {"submissionId": "missing", "actionSchemaVersion": "intake.submit@1"}}}) is None
+    _register(repo, scope)
+    payload = {
+        "v": 1, "submissionId": "changed-1", "activityMessageId": "activity-1",
+        "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1",
+        "userAction": {"question": "Compare", "districts": ["north"], "acknowledged": True},
+    }
+    service.accept(scope, payload)
+    with pytest.raises(PublicationConflict):
+        service.accept(scope, payload | {"userAction": {"question": "Changed", "districts": ["north"], "acknowledged": True}})
 
 
 def test_dispatch_consumes_exact_reserved_envelope_once(tmp_path):
@@ -52,7 +70,7 @@ def test_dispatch_consumes_exact_reserved_envelope_once(tmp_path):
     service = WorkbenchActionService(repo)
     payload = {
         "v": 1, "submissionId": "submission-2", "activityMessageId": "activity-1",
-        "surfaceRevision": 1, "actionSchemaVersion": "intake-submit@1",
+        "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1",
         "userAction": {"question": "Compare these", "districts": ["north"], "acknowledged": True},
     }
     service.accept(scope, payload)
@@ -69,7 +87,7 @@ def test_guarded_agui_route_replays_without_consuming_and_injects_typed_state(tm
     _register(repo, scope)
     payload = {
         "v": 1, "submissionId": "submission-guard", "activityMessageId": "activity-1",
-        "surfaceRevision": 1, "actionSchemaVersion": "intake-submit@1",
+        "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1",
         "userAction": {"question": "Compare values", "districts": ["north"], "acknowledged": True},
     }
     WorkbenchActionService(repo).accept(scope, payload)
@@ -77,15 +95,15 @@ def test_guarded_agui_route_replays_without_consuming_and_injects_typed_state(tm
 
     @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
     async def existing_agui(request: Request):
-        # Soliplex's AGUIAdapter consumes Request.body() after the Depends guard.
-        # This locks in the body-cache handoff used for the typed run state.
-        return json.loads(await request.body())
+        # Exercise the installed adapter path that Soliplex 0.93 actually uses.
+        adapter = await AGUIAdapter.from_request(request, agent=Agent(TestModel()))
+        return adapter.run_input.model_dump(mode="json", by_alias=True)
 
     app = FastAPI()
     app.state.workbench_repository = repo
     app.include_router(create_guarded_agui_router(upstream, scope_provider=scope))
     client = TestClient(app)
-    run_input = {"threadId": "thread", "runId": "run", "forwardedProps": {"a2uiAction": payload}}
+    run_input = {"threadId": "thread", "runId": "run", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": payload}}
     replay = client.post("/v1/rooms/room/agui/thread/run", json=run_input, headers={"Last-Event-ID": "run:0"})
     assert replay.status_code == 200
     assert "workbenchAction" not in replay.json().get("state", {})
@@ -96,14 +114,34 @@ def test_guarded_agui_route_replays_without_consuming_and_injects_typed_state(tm
     assert duplicate.status_code == 409
 
 
+def test_nested_duplicate_json_keys_are_rejected_before_agui_adapter(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    scope = WorkbenchScope("alice", "server", "room", "thread")
+    upstream = APIRouter()
+
+    @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
+    async def handler(request: Request):
+        return await request.body()
+
+    app = FastAPI()
+    app.state.workbench_repository = repo
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=scope))
+    raw = b'{"threadId":"thread","runId":"run","state":{"x":1,"x":2},"messages":[],"tools":[],"context":[],"forwardedProps":{}}'
+    response = TestClient(app).post("/v1/rooms/room/agui/thread/run", content=raw, headers={"content-type": "application/json"})
+    assert response.status_code == 400
+
+
 def test_run_result_persists_client_trace_tags_without_model(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     scope = WorkbenchScope("alice", "server", "room", "thread")
     _register(repo, scope, "PythonRepl")
-    service = WorkbenchActionService(repo)
+    class TraceCapture:
+        def emit(self, event):
+            pass
+    service = WorkbenchActionService(repo, trace_sink=TraceCapture())
     payload = {
         "v": 1, "submissionId": "result-submit-1", "activityMessageId": "activity-1",
-        "surfaceRevision": 1, "actionSchemaVersion": "python-run-result@1",
+        "surfaceRevision": 1, "actionSchemaVersion": "workbench.program.run_result@1",
         "userAction": {"side": "client", "engine": "monty-1.3.0", "invocationId": "invocation-1",
                         "chainId": "chain-1", "outcome": "success", "output": "125"},
     }

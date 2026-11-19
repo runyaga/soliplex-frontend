@@ -11,11 +11,6 @@ from __future__ import annotations
 from ag_ui.core import ActivitySnapshotEvent
 from pydantic_ai import RunContext, ToolReturn
 from soliplex.agents import AgentDependencies
-from soliplex_a2ui_workbench import a2ui_action
-
-# Preserve the lab's existing legacy action behavior. The workbench envelope
-# has a different closed shape and is read only by workbench_actions.
-a2ui_action.install()
 
 ACTIVITY_TYPE = "a2ui-surface"
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
@@ -171,3 +166,4 @@ async def show_python_repl(
     )
     event = _event(ctx, "dojo-python", ops)
     return ToolReturn({"shown": "python_repl"}, metadata=event)
+

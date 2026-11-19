@@ -13,6 +13,21 @@ from soliplex_a2ui_workbench.workbench_repository import (
 FIXTURES = __import__("pathlib").Path(__file__).parents[1] / "fixtures/workbench"
 
 
+class FixtureCatalogValidator:
+    def validate(self, records, manifests):
+        for record in records:
+            if record.get("catalogId") not in manifests or record.get("component") not in manifests[record["catalogId"]]:
+                raise ValueError("unknown fixture catalog component")
+
+
+def fixture_repo(path):
+    return SQLiteWorkbenchRepository(
+        path,
+        catalog_validator=FixtureCatalogValidator(),
+        negotiated_manifests={"fixture": {"Fixture"}},
+    )
+
+
 def snapshot():
     value = json.loads((FIXTURES / "nested_tree_v1.json").read_text())
     value["layoutRevision"] = 1
@@ -39,21 +54,22 @@ def content():
 
 def test_restart_preserves_records_layout_and_duplicate_receipt(tmp_path):
     scope = WorkbenchScope(actor_id="actor_a", server_id="server_a", room_id="room_a", thread_id="thread_a")
-    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    repo = fixture_repo(tmp_path / "workbench.sqlite")
     result = repo.publish(scope, "pub_1", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
     repo.close()
 
-    reopened = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    reopened = fixture_repo(tmp_path / "workbench.sqlite")
     assert reopened.load(scope) == result.snapshot
     assert reopened.get_receipt(scope, "pub_1") == result
     assert reopened.publish(scope, "pub_1", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts()) == result
-    assert reopened.load_content(scope) == content()
+    loaded_content = reopened.load_content(scope)
+    assert [item | {"workbenchCommit": loaded_content[index]["workbenchCommit"]} for index, item in enumerate(content())] == loaded_content
     reopened.close()
 
 
 def test_stale_revision_and_changed_duplicate_do_not_write(tmp_path):
     scope = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t")
-    repo = SQLiteWorkbenchRepository(tmp_path / "db.sqlite")
+    repo = fixture_repo(tmp_path / "db.sqlite")
     repo.publish(scope, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
     with pytest.raises(PublicationConflict):
         repo.publish(scope, "two", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
@@ -67,7 +83,7 @@ def test_stale_revision_and_changed_duplicate_do_not_write(tmp_path):
 
 def test_validation_and_transaction_failure_leave_previous_snapshot(tmp_path):
     scope = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t")
-    repo = SQLiteWorkbenchRepository(tmp_path / "db.sqlite")
+    repo = fixture_repo(tmp_path / "db.sqlite")
     original = repo.publish(scope, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
     invalid = snapshot()
     invalid["nodes"].pop()
@@ -81,7 +97,7 @@ def test_validation_and_transaction_failure_leave_previous_snapshot(tmp_path):
 
 
 def test_scopes_are_isolated(tmp_path):
-    repo = SQLiteWorkbenchRepository(tmp_path / "db.sqlite")
+    repo = fixture_repo(tmp_path / "db.sqlite")
     one = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t1")
     two = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t2")
     repo.publish(one, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
@@ -91,7 +107,7 @@ def test_scopes_are_isolated(tmp_path):
 
 def test_unregistered_mount_rejects_before_writing(tmp_path):
     scope = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t")
-    repo = SQLiteWorkbenchRepository(tmp_path / "db.sqlite")
+    repo = fixture_repo(tmp_path / "db.sqlite")
     with pytest.raises(ValueError, match="not registered"):
         repo.publish(scope, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=set())
     assert repo.load(scope) is None

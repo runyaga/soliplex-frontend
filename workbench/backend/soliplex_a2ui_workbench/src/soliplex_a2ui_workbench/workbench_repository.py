@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
+from .workbench_publication import BUILTIN_CATALOG_MANIFESTS, CatalogValidator, WorkbenchCatalogValidator, build_publication
 from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
 
 
@@ -37,12 +38,21 @@ class PublicationResult:
     sequence: int
     receipt_id: str
     snapshot: dict[str, object]
+    events: list[dict[str, object]]
 
 
 class SQLiteWorkbenchRepository:
     """Single-backend transactional store; caller supplies authenticated scope."""
 
-    def __init__(self, path: str | Path):
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        catalog_validator: CatalogValidator | None = None,
+        negotiated_manifests: Mapping[str, object] | None = None,
+    ):
+        self._catalog_validator = catalog_validator or WorkbenchCatalogValidator()
+        self._negotiated_manifests = negotiated_manifests or BUILTIN_CATALOG_MANIFESTS
         self._db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys=ON")
@@ -73,6 +83,11 @@ class SQLiteWorkbenchRepository:
             CREATE TABLE IF NOT EXISTS workbench_invocation (
                 actor TEXT NOT NULL, server TEXT NOT NULL, room TEXT NOT NULL, thread TEXT NOT NULL,
                 invocation_id TEXT NOT NULL, digest TEXT NOT NULL, receipt_json TEXT NOT NULL,
+                PRIMARY KEY(actor, server, room, thread, invocation_id)
+            );
+            CREATE TABLE IF NOT EXISTS workbench_trace_outbox (
+                actor TEXT NOT NULL, server TEXT NOT NULL, room TEXT NOT NULL, thread TEXT NOT NULL,
+                invocation_id TEXT NOT NULL, event_json TEXT NOT NULL, emitted INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY(actor, server, room, thread, invocation_id)
             );
         """)
@@ -135,14 +150,30 @@ class SQLiteWorkbenchRepository:
             if snapshot.layoutRevision != expected_revision + 1:
                 raise PublicationConflict("layout revision must advance by one")
             next_sequence = sequence + 1
+            scope_digest = hashlib.sha256("/".join(key).encode()).hexdigest()[:24]
+            plan = build_publication(
+                content,
+                self._catalog_validator,
+                self._negotiated_manifests,
+                layout=snapshot.model_dump(mode="json"),
+                sequence=next_sequence,
+                publication_id=publication_key,
+                layout_activity_message_id=f"wb-layout-{scope_digest}",
+                layout_surface_id=f"wb-control-{scope_digest}",
+                registered_program_surfaces=registered_program_surfaces,
+            )
+            committed_rows = []
+            for item in plan["content_records"]:
+                metadata = item["workbenchCommit"]
+                committed_rows.append((item["activityMessageId"], metadata["index"], metadata["count"], json.dumps(item, separators=(",", ":"), ensure_ascii=False)))
             self._db.execute("INSERT INTO workbench_snapshot VALUES(?,?,?,?,?,?,?) ON CONFLICT(actor,server,room,thread) DO UPDATE SET revision=excluded.revision, sequence=excluded.sequence, layout_json=excluded.layout_json", (*key, snapshot.layoutRevision, next_sequence, encoded_layout))
             # Each publication is a complete snapshot; do not retain removed content.
             self._db.execute("DELETE FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=?", key)
-            for record_id, part_index, part_count, record_json in content_rows:
+            for record_id, part_index, part_count, record_json in committed_rows:
                 self._db.execute("INSERT INTO workbench_content VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(actor,server,room,thread,record_id) DO UPDATE SET sequence=excluded.sequence, part_index=excluded.part_index, part_count=excluded.part_count, record_json=excluded.record_json", (*key, record_id, next_sequence, part_index, part_count, record_json))
             receipt_id = hashlib.sha256(("/".join(key) + ":" + publication_key).encode()).hexdigest()[:32]
-            result = PublicationResult(publication_key, next_sequence, receipt_id, snapshot.model_dump(mode="json"))
-            receipt_json = json.dumps({"publication_key": result.publication_key, "sequence": result.sequence, "receipt_id": result.receipt_id, "snapshot": result.snapshot}, separators=(",", ":"), ensure_ascii=False)
+            result = PublicationResult(publication_key, next_sequence, receipt_id, snapshot.model_dump(mode="json"), plan["events"])
+            receipt_json = json.dumps({"publication_key": result.publication_key, "sequence": result.sequence, "receipt_id": result.receipt_id, "snapshot": result.snapshot, "events": result.events}, separators=(",", ":"), ensure_ascii=False)
             self._db.execute("INSERT INTO workbench_receipt VALUES(?,?,?,?,?,?,?)", (*key, publication_key, digest, receipt_json))
             if before_commit:
                 before_commit()
@@ -251,6 +282,8 @@ class SQLiteWorkbenchRepository:
             self._db.execute("INSERT INTO workbench_action VALUES(?,?,?,?,?,?,?,?,?,?)", (*key, digest, encoded, "reserved", expected_revision, json.dumps(receipt)))
             if invocation_id is not None:
                 self._db.execute("INSERT INTO workbench_invocation VALUES(?,?,?,?,?,?,?)", (*scope.key(), invocation_id, invocation_digest, json.dumps(receipt)))
+                if "trace" in details:
+                    self._db.execute("INSERT INTO workbench_trace_outbox VALUES(?,?,?,?,?,?,0)", (*scope.key(), invocation_id, json.dumps(details["trace"], separators=(",", ":"))))
             self._db.execute("COMMIT")
             return receipt
         except BaseException:
@@ -277,6 +310,24 @@ class SQLiteWorkbenchRepository:
             self._db.execute("UPDATE workbench_action SET state='dispatching' WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?", key)
             self._db.execute("COMMIT")
             return envelope
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            raise
+
+    def emit_trace_once(self, scope: WorkbenchScope, invocation_id: str, sink) -> bool:
+        """Deliver one accepted invocation event and mark it emitted atomically."""
+        key = (*scope.key(), invocation_id)
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._db.execute("SELECT event_json, emitted FROM workbench_trace_outbox WHERE actor=? AND server=? AND room=? AND thread=? AND invocation_id=?", key).fetchone()
+            if row is None or row["emitted"]:
+                self._db.execute("COMMIT")
+                return False
+            sink.emit(json.loads(row["event_json"]))
+            self._db.execute("UPDATE workbench_trace_outbox SET emitted=1 WHERE actor=? AND server=? AND room=? AND thread=? AND invocation_id=?", key)
+            self._db.execute("COMMIT")
+            return True
         except BaseException:
             if self._db.in_transaction:
                 self._db.execute("ROLLBACK")

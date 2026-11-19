@@ -1,25 +1,121 @@
-"""Validated, ordered content publication primitives for the workbench."""
+"""Closed catalog validation and full-replacement A2UI wire emission."""
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Protocol, TypedDict, runtime_checkable
+
+from ag_ui.core import ActivitySnapshotEvent
+
+from .workbench_schemas import LayoutSnapshot
+
+BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+GRAPHICS_CATALOG = "urn:soliplex:catalog:graphics:2"
+LAB_CATALOG = "urn:soliplex:catalog:lab:1"
+WORKBENCH_CATALOG = "urn:soliplex:catalog:workbench:1"
+
+BASIC_COMPONENTS = frozenset({"Text", "Card", "Column", "Row", "List", "CheckBox", "TextField", "Slider", "Button"})
+BUILTIN_CATALOG_MANIFESTS: dict[str, frozenset[str]] = {
+    BASIC_CATALOG: BASIC_COMPONENTS,
+    GRAPHICS_CATALOG: frozenset({"Chart"}),
+    LAB_CATALOG: frozenset({"PythonRepl"}),
+    WORKBENCH_CATALOG: frozenset({"PlaceForm"}),
+}
 
 
 @runtime_checkable
 class CatalogValidator(Protocol):
-    """Injected adapter for the negotiated emitter/catalog implementation.
+    def validate(self, records: Sequence[Mapping[str, object]], negotiated_manifests: Mapping[str, object]) -> None: ...
 
-    Implementations must reject records not valid for the exact negotiated
-    manifests. No built-in adapter is provided while the selected emitter is
-    unavailable; callers must supply a reviewed implementation.
-    """
 
-    def validate(
-        self,
-        records: Sequence[Mapping[str, object]],
-        negotiated_manifests: Mapping[str, object],
-    ) -> None: ...
+class WorkbenchCatalogValidator:
+    """Validate only the immutable minimum catalogs known to this package."""
+
+    def validate(self, records: Sequence[Mapping[str, object]], negotiated_manifests: Mapping[str, object]) -> None:
+        for record in records:
+            catalog_id = record.get("catalogId")
+            component = record.get("component")
+            if not isinstance(catalog_id, str) or catalog_id not in BUILTIN_CATALOG_MANIFESTS:
+                raise ValueError("catalog has no package validator")
+            negotiated = negotiated_manifests.get(catalog_id)
+            if not isinstance(negotiated, (Mapping, set, frozenset, list, tuple)):
+                raise ValueError("catalog was not negotiated")
+            negotiated_components = negotiated.keys() if isinstance(negotiated, Mapping) else negotiated
+            if component not in BUILTIN_CATALOG_MANIFESTS[catalog_id] or component not in negotiated_components:
+                raise ValueError("component is absent from negotiated catalog")
+            self._validate_record(catalog_id, str(component), record)
+
+    @staticmethod
+    def _validate_record(catalog_id: str, component: str, record: Mapping[str, object]) -> None:
+        if catalog_id == GRAPHICS_CATALOG and component == "Chart":
+            spec = record.get("spec")
+            if not isinstance(spec, dict) or set(spec) != {"kind", "series"} or spec.get("kind") not in {"bar", "line"}:
+                raise ValueError("invalid graphics:2 Chart spec")
+            series = spec["series"]
+            if not isinstance(series, list) or len(series) != 1:
+                raise ValueError("Chart requires exactly one categorical series")
+            item = series[0]
+            if not isinstance(item, dict) or set(item) != {"id", "label", "points"}:
+                raise ValueError("invalid Chart series")
+            points = item["points"]
+            if not isinstance(points, list) or not 1 <= len(points) <= 32:
+                raise ValueError("Chart requires 1..32 points")
+            point_ids: set[str] = set()
+            for point in points:
+                if not isinstance(point, dict) or set(point) != {"id", "label", "value"}:
+                    raise ValueError("invalid Chart point")
+                value = point["value"]
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+                    raise ValueError("Chart point value must be finite numeric data")
+                if not isinstance(point["id"], str) or point["id"] in point_ids:
+                    raise ValueError("Chart point IDs must be unique strings")
+                point_ids.add(point["id"])
+        elif catalog_id == LAB_CATALOG and component == "PythonRepl":
+            source = record.get("source")
+            if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 12_000:
+                raise ValueError("invalid PythonRepl source")
+        elif catalog_id == WORKBENCH_CATALOG and component == "PlaceForm":
+            if record.get("template") != "intake" or not isinstance(record.get("title"), str):
+                raise ValueError("invalid intake template registration")
+        elif catalog_id == BASIC_CATALOG:
+            props = record.get("properties", {})
+            if not isinstance(props, dict):
+                raise ValueError("basic component properties must be an object")
+            allowed = {
+                "Text": {"text"},
+                "Card": {"children"},
+                "Column": {"children"},
+                "Row": {"children"},
+                "List": {"children"},
+                "CheckBox": {"label", "value"},
+                "TextField": {"label", "value"},
+                "Slider": {"min", "max", "value", "label"},
+                "Button": {"label", "action"},
+            }
+            if component not in allowed or set(props) - allowed[component]:
+                raise ValueError("unsupported or malformed basic component")
+            if component == "Text":
+                text = props.get("text", record.get("text"))
+                if not isinstance(text, (str, dict)):
+                    raise ValueError("basic Text requires a string or binding")
+                if isinstance(text, dict) and (set(text) != {"@path"} or not isinstance(text["@path"], str)):
+                    raise ValueError("invalid basic Text binding")
+            if component in {"Card", "Column", "Row", "List"}:
+                children = props.get("children", record.get("children"))
+                if not isinstance(children, list) or any(not isinstance(child, str) for child in children):
+                    raise ValueError("basic container requires child IDs")
+            if component in {"CheckBox", "TextField"}:
+                label = props.get("label", record.get("label"))
+                value = props.get("value", record.get("value"))
+                if not isinstance(label, str) or not isinstance(value, (bool, str, dict)):
+                    raise ValueError("invalid basic input properties")
+                if isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str)):
+                    raise ValueError("invalid basic input binding")
+            if component == "Slider":
+                low, high = props.get("min", record.get("min")), props.get("max", record.get("max"))
+                if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in (low, high)) or low >= high:
+                    raise ValueError("invalid basic Slider range")
 
 
 class ContentPublication(TypedDict):
@@ -32,38 +128,99 @@ class ContentPublication(TypedDict):
     record: dict[str, object]
 
 
+def _operation(surface_id: str, key: str, fields: Mapping[str, object]) -> dict[str, object]:
+    return {"version": "1.0", key: {"surfaceId": surface_id, **dict(fields)}}
+
+
+def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]:
+    sid = str(record["surfaceId"])
+    catalog_id = str(record["catalogId"])
+    component = str(record["component"])
+    data = {key: record[key] for key in ("spec", "source", "title", "template") if key in record}
+    if component == "Chart":
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": {"@path": "/spec"}}
+    elif component == "PythonRepl":
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}}
+    elif component == "PlaceForm":
+        catalog_id = BASIC_CATALOG
+        data = {"title": record["title"], "district": "north", "acknowledged": False}
+        component_def = {
+            "id": "root", "component": "Card", "children": ["title", "district", "ack", "submit"],
+        }
+        extra = [
+            {"id": "title", "component": "Text", "text": str(record["title"])},
+            {"id": "district", "component": "TextField", "label": "District", "value": {"@path": "/district"}},
+            {"id": "ack", "component": "CheckBox", "label": "Acknowledge", "value": {"@path": "/acknowledged"}},
+            {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake"}},
+        ]
+        return [
+            _operation(sid, "createSurface", {"catalogId": catalog_id}),
+            _operation(sid, "updateDataModel", {"path": "/", "value": data}),
+            _operation(sid, "updateComponents", {"components": [component_def, *extra]}),
+        ]
+    else:
+        properties = record.get("properties", {})
+        if not isinstance(properties, dict):
+            raise ValueError("component properties must be an object")
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, **properties}
+    return [
+        _operation(sid, "createSurface", {"catalogId": BASIC_CATALOG}),
+        _operation(sid, "updateDataModel", {"path": "/", "value": data}),
+        _operation(sid, "updateComponents", {"components": [component_def]}),
+    ]
+
+
+def _event(message_id: str, operations: list[dict[str, object]], metadata: dict[str, object]) -> dict[str, object]:
+    return ActivitySnapshotEvent(
+        messageId=message_id,
+        activityType="a2ui-surface",
+        replace=True,
+        content={"a2ui_operations": operations, **metadata},
+    ).model_dump(mode="json", by_alias=True, exclude_none=True)
+
+
 def build_publication(
     records: Sequence[Mapping[str, object]],
-    validator: CatalogValidator,
+    validator: CatalogValidator | None,
     negotiated_manifests: Mapping[str, object],
     *,
+    layout: Mapping[str, object],
     sequence: int = 1,
-) -> list[ContentPublication]:
-    """Validate all content first, then assign stable identity and part order."""
+    publication_id: str = "workbench-publication",
+    layout_activity_message_id: str = "workbench-layout",
+    layout_surface_id: str = "workbench-layout-surface",
+    registered_program_surfaces: set[str] | None = None,
+) -> dict[str, object]:
+    """Validate then build content-before-layout full replacement events."""
     if validator is None:
         raise TypeError("a CatalogValidator is required")
     if sequence < 1:
         raise ValueError("sequence must be positive")
     frozen = [dict(record) for record in records]
     validator.validate(frozen, negotiated_manifests)
-    count = len(frozen)
-    result: list[ContentPublication] = []
+    if len({record.get("activityMessageId") for record in frozen}) != len(frozen):
+        raise ValueError("activity message IDs must be unique")
+    if len({record.get("surfaceId") for record in frozen}) != len(frozen):
+        raise ValueError("surface IDs must be unique")
+    validated_layout = LayoutSnapshot.model_validate(layout, context={"authenticated_program_surfaces": registered_program_surfaces or set()})
+    count = len(frozen) + 1
+    content_records: list[dict[str, object]] = []
+    events: list[dict[str, object]] = []
     for index, record in enumerate(frozen):
         activity_id = record.get("activityMessageId")
         surface_id = record.get("surfaceId")
-        if not isinstance(activity_id, str) or not activity_id:
-            raise ValueError("content requires stable activityMessageId")
-        if not isinstance(surface_id, str) or not surface_id:
-            raise ValueError("content requires stable surfaceId")
-        result.append(ContentPublication(
-            record_id=activity_id,
-            activity_message_id=activity_id,
-            surface_id=surface_id,
-            sequence=sequence,
-            part_index=index,
-            part_count=count,
-            record=record,
-        ))
-    if len({item["record_id"] for item in result}) != count or len({item["surface_id"] for item in result}) != count:
-        raise ValueError("publication identities must be unique")
-    return result
+        if not isinstance(activity_id, str) or not isinstance(surface_id, str):
+            raise ValueError("content requires stable activity and surface IDs")
+        commit = {"recordId": publication_id, "sequence": sequence, "index": index, "count": count}
+        content_record = record | {"workbenchCommit": commit}
+        content_records.append(content_record)
+        events.append({"kind": "content", "record_id": activity_id, "event": _event(activity_id, _content_operations(record), {"workbenchCommit": commit})})
+    layout_index = len(frozen)
+    layout_commit = {"recordId": publication_id, "sequence": sequence, "index": layout_index, "count": count}
+    operations = [
+        _operation(layout_surface_id, "createSurface", {"catalogId": BASIC_CATALOG}),
+        _operation(layout_surface_id, "updateDataModel", {"path": "/", "value": {"summary": "Workbench", "workbench": validated_layout.model_dump(mode="json")}}),
+        _operation(layout_surface_id, "updateComponents", {"components": [{"id": "root", "component": "Text", "text": {"@path": "/summary"}}]}),
+    ]
+    events.append({"kind": "layout", "record_id": publication_id, "event": _event(layout_activity_message_id, operations, {"workbenchCommit": layout_commit})})
+    return {"content_records": content_records, "events": events}

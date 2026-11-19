@@ -4,25 +4,46 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Mapping
+from typing import Mapping, Protocol
 
 from pydantic import ValidationError
 
 from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope
-from .workbench_schemas import ActionEnvelope, RunResult
+from .workbench_schemas import ActionEnvelope, IntakeSubmit, ProgramExport, RunResult
+from .workbench_tracing import LogfireTraceSink
+
+
+class TraceSink(Protocol):
+    def emit(self, event: Mapping[str, object]) -> None: ...
 
 
 class WorkbenchActionService:
-    def __init__(self, repository: SQLiteWorkbenchRepository):
+    def __init__(self, repository: SQLiteWorkbenchRepository, trace_sink: TraceSink | None = None):
         self.repository = repository
+        self.trace_sink = trace_sink or LogfireTraceSink()
 
     def accept(self, scope: WorkbenchScope, payload: Mapping[str, object]) -> dict[str, object]:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
         if len(encoded) > 16_384:
             raise ValueError("action envelope exceeds 16 KiB")
-        action = ActionEnvelope.model_validate(payload, context={"pinned_engine_manifest": {"monty-1.3.0"}})
-        if action.actionSchemaVersion not in {"intake-submit@1", "program-export@1", "python-run-result@1"}:
+        context_models = {
+            "intake.submit@1": IntakeSubmit,
+            "workbench.program.export_chart@1": ProgramExport,
+            "workbench.program.run_result@1": RunResult,
+        }
+        schema_version = payload.get("actionSchemaVersion")
+        if not isinstance(schema_version, str):
             raise ValueError("unsupported action schema")
+        context_model = context_models.get(schema_version)
+        if context_model is None:
+            raise ValueError("unsupported action schema")
+        typed_context = context_model.model_validate(
+            payload.get("userAction"),
+            context={"pinned_engine_manifest": {"monty-1.3.0"}},
+        )
+        normalized = dict(payload)
+        normalized["userAction"] = typed_context.model_dump(mode="json")
+        action = ActionEnvelope.model_validate(normalized, context={"pinned_engine_manifest": {"monty-1.3.0"}})
         digest = hashlib.sha256(encoded).hexdigest()
         duplicate = self.repository.existing_action(scope, action.submissionId, digest)
         if duplicate is not None:
@@ -37,14 +58,11 @@ class WorkbenchActionService:
         surface_revision = record.get("surfaceRevision", current["revision"])
         if surface_revision != action.surfaceRevision:
             raise ValueError("stale workbench surface revision")
-        surface_revision = record.get("surfaceRevision")
-        if surface_revision is not None and surface_revision != action.surfaceRevision:
-            raise ValueError("stale action surface revision")
         component = record.get("component")
         expected_components = {
-            "intake-submit@1": {"PlaceForm", "IntakeForm"},
-            "program-export@1": {"PythonRepl", "Program"},
-            "python-run-result@1": {"PythonRepl", "Program"},
+            "intake.submit@1": {"PlaceForm", "IntakeForm"},
+            "workbench.program.export_chart@1": {"PythonRepl", "Program"},
+            "workbench.program.run_result@1": {"PythonRepl", "Program"},
         }[action.actionSchemaVersion]
         if component not in expected_components:
             raise ValueError("action source component is not registered for this action")
@@ -64,12 +82,15 @@ class WorkbenchActionService:
                     "invocation_id": action.userAction.invocationId,
                 },
             }
-        return self.repository.reserve_action(
+        receipt = self.repository.reserve_action(
             scope, action.submissionId, digest, action.model_dump(mode="json"),
             expected_revision=int(current["revision"]),
             activity_message_id=action.activityMessageId,
             receipt_details=receipt_details,
         )
+        if isinstance(action.userAction, RunResult):
+            self.repository.emit_trace_once(scope, action.userAction.invocationId, self.trace_sink)
+        return receipt
 
     def consume_dispatch(self, scope: WorkbenchScope, payload: Mapping[str, object]) -> dict[str, object] | None:
         """Read one reserved action from forwardedProps; reconnects must bypass this."""
@@ -78,6 +99,8 @@ class WorkbenchActionService:
             return None
         envelope = wrapper.get("a2uiAction")
         if not isinstance(envelope, dict):
+            return None
+        if envelope.get("actionSchemaVersion") != "intake.submit@1":
             return None
         # The package owns reading this wire shape. Never consult or install
         # pydantic-ai's process-global private adapter patch.
