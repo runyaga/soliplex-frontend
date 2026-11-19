@@ -155,6 +155,7 @@ At the end of each phase give a short summary:
 ## Owner direction: which side Python runs on (added 2026-11-19)
 
 Make the side explicit everywhere:
+
 - **Tools.** Expose `run_python_client` (browser Monty, `ui`, mounted workspace files, runs on a user gesture) and `run_python_server` (server sandbox or server Monty, server data, unattended within limits) as distinct tools.
 - **Traces.** Tag every run `python.side=client|server` with engine version, room, thread, surface and chain id. Client runs reach Logfire through the run-result actions the server records. No Logfire token goes in the browser.
 - **Handoffs.** Interpreter state goes in a thread workspace file. The AG-UI state carries only a pointer, `{side, engine, dump: <file id>, sha256, owner, hop}`, never the dump bytes, which can be 3.5 KB to 4 MB and would be re-sent and re-stored every turn.
@@ -164,6 +165,7 @@ The lab stack sends traces to Logfire project `default`, service `soliplex-a2ui-
 ## Owner direction: nested layouts (added 2026-11-19)
 
 The workbench layout must nest:
+
 - panels inside side bars.
 - split panes inside the canvas.
 - tabs inside panels.
@@ -171,6 +173,7 @@ The workbench layout must nest:
 - a mini program's surface inside a window inside a region.
 
 Design the layout model as a tree, not a fixed set of slots. For the tree, state:
+
 - which nodes the agent may create or move.
 - the maximum depth.
 - how a node is addressed: a stable id, not a path that breaks when a parent moves.
