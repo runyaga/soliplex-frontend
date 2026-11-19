@@ -173,9 +173,8 @@ class RunOrchestrator {
         toolExecutor,
         onReconnectStatus,
         observer: observer,
-        a2uiAction: a2uiAction == null
-            ? null
-            : _anchored(a2uiAction, cachedHistory),
+        a2uiAction:
+            a2uiAction == null ? null : _anchored(a2uiAction, cachedHistory),
         open: () {
           if (a2uiAction != null) _checkActionOnlyTurn(userMessage, a2uiAction);
           return _initializeStream(
