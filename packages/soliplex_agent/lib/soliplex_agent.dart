@@ -5,6 +5,15 @@
 /// `soliplex_logging` — no Flutter imports allowed.
 library;
 
+export 'package:a2ui_agent/a2ui_agent.dart' show CatalogConfig;
+export 'package:a2ui_core/a2ui_core.dart'
+    show
+        A2uiError,
+        A2uiProtocolVersion,
+        A2uiRendererCapabilities,
+        AgentToRendererMessage,
+        Catalog,
+        CatalogApi;
 // Re-export signal types for consumers.
 export 'package:signals_core/signals_core.dart'
     show ReadonlySignal, Signal, computed;
@@ -54,6 +63,7 @@ export 'src/models/agent_result.dart';
 export 'src/models/failure_reason.dart';
 export 'src/models/thread_key.dart';
 // ── Orchestration ──
+export 'src/orchestration/a2ui_reply_parser.dart';
 export 'src/orchestration/ag_ui_llm_provider.dart';
 export 'src/orchestration/agent_llm_provider.dart';
 export 'src/orchestration/chat_fn_llm_provider.dart';
