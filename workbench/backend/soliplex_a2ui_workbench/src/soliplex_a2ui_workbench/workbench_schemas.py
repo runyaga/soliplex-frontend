@@ -4,11 +4,28 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 Id = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")]
 Title = Annotated[str, Field(min_length=1, max_length=80)]
 Source = Annotated[str, Field(min_length=1, max_length=12_000)]
+Engine = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z][A-Za-z0-9_.-]*-[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$",
+    ),
+]
+_ID_ADAPTER = TypeAdapter(Id)
 
 
 class Closed(BaseModel):
@@ -43,7 +60,14 @@ class LayoutSnapshot(Closed):
     shared: dict[str, object]
 
     @model_validator(mode="after")
-    def validate_tree(self) -> LayoutSnapshot:
+    def validate_tree(self, info: ValidationInfo) -> LayoutSnapshot:
+        if info.context is None or "authenticated_program_surfaces" not in info.context:
+            raise ValueError("authenticated program registration metadata is required")
+        program_surfaces = info.context["authenticated_program_surfaces"]
+        if not isinstance(program_surfaces, set):
+            raise ValueError("registered program surfaces must be a set of IDs")
+        for surface_id in program_surfaces:
+            _ID_ADAPTER.validate_python(surface_id, strict=True)
         by_id = {node.id: node for node in self.nodes}
         if len(by_id) != len(self.nodes) or self.rootId not in by_id:
             raise ValueError("duplicate or missing root id")
@@ -66,7 +90,13 @@ class LayoutSnapshot(Closed):
             elif node.kind == "surface":
                 if set(node.payload) != {"activityMessageId", "surfaceId"}:
                     raise ValueError("invalid surface payload")
-                mount = (str(node.payload["activityMessageId"]), str(node.payload["surfaceId"]))
+                activity_id = _ID_ADAPTER.validate_python(
+                    node.payload["activityMessageId"], strict=True
+                )
+                surface_id = _ID_ADAPTER.validate_python(
+                    node.payload["surfaceId"], strict=True
+                )
+                mount = (activity_id, surface_id)
                 if mount in mounts:
                     raise ValueError("duplicate mount")
                 if mount[1] in surface_ids:
@@ -112,6 +142,15 @@ class LayoutSnapshot(Closed):
                     parent_id = parent.parentId
                 if not any(parent.id == "r_canvas" for parent in ancestors):
                     raise ValueError("windows require canvas ancestry")
+            if current.kind == "surface" and current.payload["surfaceId"] in program_surfaces:
+                parent_id = current.parentId
+                has_window = False
+                while parent_id is not None:
+                    parent = by_id[parent_id]
+                    has_window = has_window or parent.kind == "window"
+                    parent_id = parent.parentId
+                if not has_window:
+                    raise ValueError("program surface requires window ancestry")
             for child_id in by_id[node_id].children:
                 walk(child_id, depth + 1)
             visiting.remove(node_id)
@@ -126,11 +165,33 @@ class LayoutSnapshot(Closed):
         if reachable != set(by_id):
             raise ValueError("orphan node")
         self._validate_reserved(by_id)
+        open_mounts = sum(
+            node.kind == "surface" and self._effectively_open(node, by_id)
+            for node in self.nodes
+        )
+        if open_mounts > 12:
+            raise ValueError("open content mount capacity exceeded")
+        expanded_windows = sum(
+            node.kind == "window" and self._effectively_open(node, by_id)
+            for node in self.nodes
+        )
+        if expanded_windows > 2:
+            raise ValueError("expanded window capacity exceeded")
         import json
 
         if len(json.dumps(self.model_dump(mode="json"), separators=(",", ":")).encode("utf-8")) > 65_536:
             raise ValueError("layout exceeds 64 KiB")
         return self
+
+    @staticmethod
+    def _effectively_open(node: LayoutNode, nodes: dict[str, LayoutNode]) -> bool:
+        current = node
+        while True:
+            if current.visibility != "open":
+                return False
+            if current.parentId is None:
+                return True
+            current = nodes[current.parentId]
 
     @staticmethod
     def _allows_child(parent: str, child: str) -> bool:
@@ -182,8 +243,8 @@ class ExportChart(Closed):
 
 
 class RunResult(Closed):
-    side: Literal["client", "server"]
-    engine: Annotated[str, Field(min_length=1, max_length=128)]
+    side: Literal["client"]
+    engine: Engine
     invocationId: Id
     chainId: Id
     outcome: Literal["success", "error", "timeout", "cancelled", "crashed"]
@@ -214,14 +275,7 @@ class ServerPythonNotEnabled(Closed):
 
 class InterpreterStatePointer(Closed):
     side: Literal["client", "server"]
-    engine: Annotated[
-        str,
-        Field(
-            min_length=1,
-            max_length=128,
-            pattern=r"^[A-Za-z][A-Za-z0-9_.-]*-[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$",
-        ),
-    ]
+    engine: Engine
     dump: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     owner: Id
@@ -244,7 +298,10 @@ def validate_registered_mounts(
     for node in snapshot.nodes:
         if node.kind != "surface":
             continue
-        mount = (str(node.payload["activityMessageId"]), str(node.payload["surfaceId"]))
+        mount = (
+            _ID_ADAPTER.validate_python(node.payload["activityMessageId"], strict=True),
+            _ID_ADAPTER.validate_python(node.payload["surfaceId"], strict=True),
+        )
         if mount not in registered_mounts:
             raise ValueError("surface mount is not registered in this scope")
 
