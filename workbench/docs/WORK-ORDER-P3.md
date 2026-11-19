@@ -13,6 +13,7 @@
 | Run tags and file-backed interpreter pointer defined now, Claude owns Logfire wiring | Minimum contract, U01, U03, U08, U10 and U12, design section 5 |
 | B01 and B04 resolved, B07 status Claude owns, U12 requirement retained | Blocker table and integration reviews, design sections 1, 2, 3, 5 and 7 |
 | a2ui_agent ^0.4.0 (owner, 2026-11-19): generated catalog teaching in U12, reply parser in soliplex_agent as U15 | U12 Room teaching, new U15 |
+| B02 resolved by owner decision (2026-11-19): soliplex_a2ui_workbench owns emission and action reading, using soliplex-a2ui wire shapes. Soliplex 0.93 pins ag-ui-protocol >=0.1.18,<0.1.19 and soliplex-a2ui 56bf87c needs >=1.0,<1.1, so no dependency set satisfies both. Swap to soliplex-a2ui when Soliplex moves to AG-UI 1.0. U03 uses a guarded AG-UI router through public routing config, no backend core change | B02 row, U02, U03 |
 | Decision lookup | Amendment searches `Soliplex workbench nested layouts`, `Soliplex Python client server interpreter handoff`, `Soliplex workbench Logfire` failed with `Too many open files`. Indexed decisions remain **UNVERIFIED**. Binding owner amendment dated 2026-11-19 and local ADR path@commit evidence below apply |
 
 | Item | Instruction |
