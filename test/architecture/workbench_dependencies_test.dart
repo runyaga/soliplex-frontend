@@ -51,15 +51,42 @@ void _registerSyntheticScanTest() {
         'packages/soliplex_catalogs/lib/runner.dart',
         "import 'package:soliplex_monty/soliplex_monty.dart';\n",
       ),
+      _SourceFile('pubspec.yaml', 'dependencies:\n  dart_monty: ^1.0.0\n'),
+      _SourceFile(
+        'lib/app.dart',
+        "import 'package:dart_monty/dart_monty.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_client/pubspec.yaml',
+        'dependencies:\n  dart_monty: ^1.0.0\n',
+      ),
+      _SourceFile(
+        'packages/soliplex_client/lib/client.dart',
+        "import 'package:dart_monty/dart_monty.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_agent/pubspec.yaml',
+        'dependencies:\n  dart_monty: ^1.0.0\n',
+      ),
+      _SourceFile(
+        'packages/soliplex_agent/lib/agent.dart',
+        "import 'package:dart_monty/dart_monty.dart';\n",
+      ),
     ];
     final violations = _scanForbiddenEdges(synthetic);
-    expect(violations, hasLength(4));
+    expect(violations, hasLength(10));
     expect(
         violations.map((edge) => edge.from),
         containsAll([
           'packages/soliplex_catalogs/pubspec.yaml',
           'packages/soliplex_catalogs/lib/chart.dart',
           'packages/soliplex_catalogs/lib/runner.dart',
+          'pubspec.yaml',
+          'lib/app.dart',
+          'packages/soliplex_client/pubspec.yaml',
+          'packages/soliplex_client/lib/client.dart',
+          'packages/soliplex_agent/pubspec.yaml',
+          'packages/soliplex_agent/lib/agent.dart',
         ]));
   });
 }
@@ -132,7 +159,9 @@ bool _isForbiddenEdge(_DependencyEdge edge) {
     'packages/soliplex_client/',
     'packages/soliplex_agent/',
   ];
-  final forbiddenCoreEdge = directCoreRoots.any(edge.from.startsWith) &&
+  final isCoreSource =
+      edge.from == 'pubspec.yaml' || directCoreRoots.any(edge.from.startsWith);
+  final forbiddenCoreEdge = isCoreSource &&
       (edge.to.startsWith('package:dart_monty/') ||
           edge.to == 'dependency:dart_monty');
   final forbiddenCatalogEdge =

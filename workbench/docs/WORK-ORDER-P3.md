@@ -12,6 +12,7 @@
 | Real server runner deferred until after minimum, with its own blockers | Deferred U14 and BS01 through BS04 |
 | Run tags and file-backed interpreter pointer defined now, Claude owns Logfire wiring | Minimum contract, U01, U03, U08, U10 and U12, design section 5 |
 | B01 and B04 resolved, B07 status Claude owns, U12 requirement retained | Blocker table and integration reviews, design sections 1, 2, 3, 5 and 7 |
+| a2ui_agent ^0.4.0 (owner, 2026-11-19): generated catalog teaching in U12, reply parser in soliplex_agent as U15 | U12 Room teaching, new U15 |
 | Decision lookup | Amendment searches `Soliplex workbench nested layouts`, `Soliplex Python client server interpreter handoff`, `Soliplex workbench Logfire` failed with `Too many open files`. Indexed decisions remain **UNVERIFIED**. Binding owner amendment dated 2026-11-19 and local ADR path@commit evidence below apply |
 
 | Item | Instruction |
@@ -298,7 +299,7 @@ Sizes are planning estimates. S is one bounded coding session. M is two or three
 | Composition behavior | Example main calls workbenchFlavor with lab and graphics catalogs plus scoped plugin callbacks. Root standard main and standardFlavor remain unchanged. Add path dependency from the example to the independent soliplex_catalogs package. Do not make the root depend on soliplex_monty. Register no unavailable component catalog. |
 | Deployment behavior | Claude owns the B07 setup-stack.sh fix. U12 still requires the following before release. Step3 must preserve workbench source modules and install new room tools and skill from reviewed workbench inputs, rather than restore frozen lab tool lists. Preserve existing room IDs and ACLs to avoid unrelated migration. Copy dependency manifests into build context as needed. Configure persistent package database storage. Step6 resolves catalogs, plugin, example and workspace before analysis, runs gates on all touched packages and exits nonzero on any failed gate. Do not add a broad ignore or treat gates.txt as success. |
 | Existing hazards | Step3 rewrites copied backend modules and both room configs from L. `P/setup-stack.sh:204`, `P/setup-stack.sh:210`. Step6 already copies F into scratch and builds the example, but its gate helper swallows failures and analyzes only the plugin with DCM. `P/setup-stack.sh:359`, `P/setup-stack.sh:395`, `P/setup-stack.sh:402`. These are B07, not evidence of a valid release gate. |
-| Room teaching | Both rooms get the same short tool guide and actual ui signatures. Include immutable handles, list-first children, plain top-level handle_event, valid Text variants, string labels, dictionary Event context, at most 3 side-by-side items, measured CLIENT viewport at the next gesture and data=DATA on redraw. Teach stable IDs, grammar/depth, incremental parent-id/node-kind calls, inherited close and the declared disabled server tool. Do not advertise proposed grid/split/form/template Python helpers. Those remain proposals in `PP/nested-layouts.md:185`. Keep source authored by each selected model. |
+| Room teaching | Generate the catalog part of the room skill with a2ui_agent ^0.4.0 from the registered catalog documents, not by hand. A test fails when the skill text and the catalogs drift apart. Pin a2ui_agent in the package that runs the generator. Both rooms get the same short tool guide and actual ui signatures. Include immutable handles, list-first children, plain top-level handle_event, valid Text variants, string labels, dictionary Event context, at most 3 side-by-side items, measured CLIENT viewport at the next gesture and data=DATA on redraw. Teach stable IDs, grammar/depth, incremental parent-id/node-kind calls, inherited close and the declared disabled server tool. Do not advertise proposed grid/split/form/template Python helpers. Those remain proposals in `PP/nested-layouts.md:185`. Keep source authored by each selected model. |
 | Models | Glimmer endpoint `http://MODEL_HOST:11450/v1`, model `Inferact/Muse-Glimmer-30B-NVFP4-W4A4`, reasoning_strength medium, output budget at least 4096. E4B endpoint root `http://OLLAMA_HOST:11434`, model `gemma4:e4b`, thinking off. Preserve the streamed OpenAI option `reasoning_effort: none`, whose host result is documented at `P/STACK.md:142`. No frontier inference. |
 | Tracing | Reference Claude's separately owned Logfire wiring, own workbench service name and secret file from `P/PROMPT.md:162`. Do not implement that wiring in this unit. Verify no browser token and no model call for server-recorded client run-result actions. Verify python.side, exact engine, room/thread/surface/chain/invocation tags from design section 5. Future real server run tags belong to U14. Disabled server requests are diagnostics, not runs. |
 | Model-free tests | Composition contains exactly one room module and uses the same protected routes. Config parser asserts identical tool schemas for both models, correct settings and no lab private reader installation. Template test fails if step3 reintroduces old lab tool lists or step6 ignores a failing command. All touched package paths appear in deployment gates. Secret value absent from frontend configuration. Run-result action starts zero model calls. |
@@ -318,6 +319,17 @@ Sizes are planning estimates. S is one bounded coding session. M is two or three
 | Packages changed | App tests, plugin example tests and backend tests only. |
 
 ## Deferred unit after the minimum
+
+### U15, a2ui_agent reply parsing for client agent runs, S
+
+| Field | Work |
+| --- | --- |
+| Goal | soliplex_agent turns a model reply in Express or JSON into A2UI messages for client-side agent runs, using a2ui_agent ^0.4.0 (owner, 2026-11-19). |
+| Packages changed | `F/packages/soliplex_agent` adds a2ui_agent ^0.4.0. No dart_monty, no Flutter dependency. ARCH stays green. |
+| Behavior | Negotiate the protocol version and catalogs with the renderer's supported set before parsing. Validate parsed messages against the negotiated catalogs before anything renders. A reply naming a component outside them is rejected with a readable diagnostic. Streamed and complete replies give the same messages. |
+| Model-free tests | Express and JSON fixtures for the minimum Chart, DataTable and intake form parse to identical messages. An unknown component, an unsupported protocol version and a truncated stream are rejected. Chrome run for the pure Dart parts. |
+| Gates | `D(F/packages/soliplex_agent)`, `C(F/packages/soliplex_agent, <the new test files>)`, `ARCH`. All exit 0. |
+| Order | After U05. Independent of the Python server. |
 
 ### U14, real bounded server Python runner, deferred, size UNVERIFIED
 

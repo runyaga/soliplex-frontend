@@ -11,7 +11,7 @@ const _digests = <String, String>{
   'export_action_v1.json':
       'a855f678939f4c955576a19be3a7902df45bc70e7ae9e4460ecc47a9f2452606',
   'handoff_pointer_v1.json':
-      '55af7cbec8b43f29617badd55b12d9cd72a148c55daca78e689c1bfc220b12eb',
+      '257e670dc3261bce37ececea2ed2744a5bdef4ef052014907e37ac4b95659936',
   'intake_action_v1.json':
       '4158e1b2110a938b8678189f36594607c4ddb7bac1eb0ccffde4fad72c5e42c1',
   'layout_rejections_v1.json':
@@ -21,7 +21,7 @@ const _digests = <String, String>{
   'nested_tree_v1.json':
       'c9f314806e63ad08debdfaf961ae054c7c26e0001e79fa320000454cdffe9e0c',
   'python_sides_v1.json':
-      '59059d1915a408804c714f7e4fd58f8d8c3d3f78acbe96bae67faefdee37107e',
+      'e02f91610459c62479b6c78981a952e51353994577afd537469ef97a3308e8c0',
 };
 
 void main() {

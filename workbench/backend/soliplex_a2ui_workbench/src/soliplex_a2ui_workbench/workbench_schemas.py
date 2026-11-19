@@ -25,6 +25,7 @@ Engine = Annotated[
         pattern=r"^[A-Za-z][A-Za-z0-9_.-]*-[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$",
     ),
 ]
+PINNED_ENGINE_MANIFEST = frozenset({"monty-1.3.0"})
 _ID_ADAPTER = TypeAdapter(Id)
 
 
@@ -44,7 +45,7 @@ Points = Annotated[list[Point], Field(min_length=1, max_length=32)]
 class LayoutNode(Closed):
     id: Id
     parentId: Id | None
-    children: list[Id] = Field(max_length=12)
+    children: list[Id]
     kind: Literal["workspace", "region", "split", "tabs", "panel", "window", "surface"]
     title: Title
     size: Literal["small", "medium", "large"]
@@ -113,6 +114,8 @@ class LayoutSnapshot(Closed):
                     raise ValueError("wrong parent kind")
             if node.kind == "split" and len(node.children) > 3:
                 raise ValueError("split capacity exceeded")
+            if node.kind == "tabs" and len(node.children) > 12:
+                raise ValueError("tabs capacity exceeded")
             if node.kind in {"panel", "window"} and len(node.children) > 1:
                 raise ValueError("panel capacity exceeded")
             if node.kind in {"workspace", "region"} and node.id in {"wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"}:
@@ -130,27 +133,6 @@ class LayoutSnapshot(Closed):
                 raise ValueError("multiple parents")
             visiting.add(node_id)
             seen.add(node_id)
-            current = by_id[node_id]
-            if current.kind == "window":
-                ancestors: list[LayoutNode] = []
-                parent_id = current.parentId
-                while parent_id is not None:
-                    parent = by_id[parent_id]
-                    ancestors.append(parent)
-                    if parent.kind == "window":
-                        raise ValueError("nested windows are forbidden")
-                    parent_id = parent.parentId
-                if not any(parent.id == "r_canvas" for parent in ancestors):
-                    raise ValueError("windows require canvas ancestry")
-            if current.kind == "surface" and current.payload["surfaceId"] in program_surfaces:
-                parent_id = current.parentId
-                has_window = False
-                while parent_id is not None:
-                    parent = by_id[parent_id]
-                    has_window = has_window or parent.kind == "window"
-                    parent_id = parent.parentId
-                if not has_window:
-                    raise ValueError("program surface requires window ancestry")
             for child_id in by_id[node_id].children:
                 walk(child_id, depth + 1)
             visiting.remove(node_id)
@@ -164,6 +146,19 @@ class LayoutSnapshot(Closed):
             raise ValueError("orphan node")
         if reachable != set(by_id):
             raise ValueError("orphan node")
+        for node in self.nodes:
+            ancestors = self._ancestors(node, by_id)
+            if node.kind == "window":
+                if any(parent.kind == "window" for parent in ancestors):
+                    raise ValueError("nested windows are forbidden")
+                if not any(parent.id == "r_canvas" for parent in ancestors):
+                    raise ValueError("windows require canvas ancestry")
+            if (
+                node.kind == "surface"
+                and node.payload["surfaceId"] in program_surfaces
+                and not any(parent.kind == "window" for parent in ancestors)
+            ):
+                raise ValueError("program surface requires window ancestry")
         self._validate_reserved(by_id)
         open_mounts = sum(
             node.kind == "surface" and self._effectively_open(node, by_id)
@@ -182,6 +177,20 @@ class LayoutSnapshot(Closed):
         if len(json.dumps(self.model_dump(mode="json"), separators=(",", ":")).encode("utf-8")) > 65_536:
             raise ValueError("layout exceeds 64 KiB")
         return self
+
+    @staticmethod
+    def _ancestors(node: LayoutNode, nodes: dict[str, LayoutNode]) -> list[LayoutNode]:
+        ancestors: list[LayoutNode] = []
+        visited = {node.id}
+        parent_id = node.parentId
+        while parent_id is not None:
+            if parent_id in visited or len(ancestors) >= len(nodes):
+                raise ValueError("cycle in parent ancestry")
+            visited.add(parent_id)
+            parent = nodes[parent_id]
+            ancestors.append(parent)
+            parent_id = parent.parentId
+        return ancestors
 
     @staticmethod
     def _effectively_open(node: LayoutNode, nodes: dict[str, LayoutNode]) -> bool:
@@ -212,6 +221,10 @@ class LayoutSnapshot(Closed):
             region = nodes.get(node_id)
             if region is None or region.kind != "region" or region.parentId != "wb_root" or region.payload != {"role": role}:
                 raise ValueError("reserved region contract mismatch")
+        if nodes["wb_root"].visibility != "open" or any(
+            nodes[node_id].visibility != "open" for node_id in roles
+        ):
+            raise ValueError("reserved nodes must remain open")
         if nodes["r_chat"].children or nodes["r_tray"].children:
             raise ValueError("chat and tray cannot have children")
 
@@ -250,6 +263,11 @@ class RunResult(Closed):
     outcome: Literal["success", "error", "timeout", "cancelled", "crashed"]
     output: Annotated[str, Field(max_length=4000)]
 
+    @field_validator("engine")
+    @classmethod
+    def engine_is_pinned(cls, value: str, info: ValidationInfo) -> str:
+        return _validate_pinned_engine(value, info.context)
+
 
 class ProgramExport(Closed):
     invocationId: Id
@@ -280,6 +298,22 @@ class InterpreterStatePointer(Closed):
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     owner: Id
     hop: Annotated[int, Field(ge=0, le=4)]
+
+    @field_validator("engine")
+    @classmethod
+    def engine_is_pinned(cls, value: str, info: ValidationInfo) -> str:
+        return _validate_pinned_engine(value, info.context)
+
+
+def _validate_pinned_engine(
+    value: str, context: dict[str, object] | None
+) -> str:
+    manifest = PINNED_ENGINE_MANIFEST
+    if context is not None and "pinned_engine_manifest" in context:
+        manifest = context["pinned_engine_manifest"]
+    if not isinstance(manifest, (set, frozenset)) or value not in manifest:
+        raise ValueError("engine is not in the pinned engine manifest")
+    return value
 
 
 def validate_pointer_owner(
