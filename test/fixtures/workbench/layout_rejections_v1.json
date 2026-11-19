@@ -1,0 +1,1 @@
+{"cases":["cycle","duplicate_id","depth_9","orphan","inconsistent_children","wrong_parent_kind","protected_chat_mutation","duplicate_mount","cross_scope_mount","point_bool","point_null","point_nan","duplicate_point_id","oversized_utf8"],"depth8":"accepted","depth9":"rejected"}

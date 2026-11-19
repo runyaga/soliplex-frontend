@@ -13,11 +13,13 @@ requires-python = ">=3.13"
 #   uv pip install -e .     # or a plain editable install
 dependencies = [
     "soliplex >= 0.93, < 0.94",
+    "pydantic >= 2, < 3",
 ]
 
 [dependency-groups]
 dev = [
     "pytest",
+    "pydantic >= 2, < 3",
 ]
 
 # src/ layout: the importable package is src/soliplex_a2ui_workbench/ *within this
