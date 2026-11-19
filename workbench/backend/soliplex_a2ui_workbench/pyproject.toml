@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "soliplex-a2ui-workbench"
+version = "0.1.0"
+requires-python = ">=3.13"
+# What the code under src/soliplex_a2ui_workbench/ imports. Host-side use:
+#   cd src/soliplex_a2ui_workbench
+#   uv sync                 # create/refresh the dev environment
+#   uv run pytest           # run this project's tests
+#   uv pip install -e .     # or a plain editable install
+dependencies = [
+    "soliplex >= 0.93, < 0.94",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+# src/ layout: the importable package is src/soliplex_a2ui_workbench/ *within this
+# project directory*. The Soliplex backend puts that directory on PYTHONPATH
+# as /app/src/soliplex_a2ui_workbench/src (see the stack's docker-compose.yml); the
+# build + test config below points at the same layout for host-side use.
+[tool.hatch.build.targets.wheel]
+packages = ["src/soliplex_a2ui_workbench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+pythonpath = ["src"]
