@@ -1,3 +1,4 @@
+import 'package:a2ui_flutter/a2ui_flutter.dart' show CatalogImplementation;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -204,6 +205,7 @@ class RoomScreen extends StatefulWidget {
     required this.downloadRegistry,
     required this.fileSort,
     this.enableDocumentFilter = false,
+    this.surfaceCatalogs = const [],
     required this.documentSelections,
     this.databaseSelections,
     this.roomReadMarkers,
@@ -227,6 +229,9 @@ class RoomScreen extends StatefulWidget {
   /// The order of the files panel's lists, shared with the room info screen.
   final FileSortPreference fileSort;
   final bool enableDocumentFilter;
+
+  /// A2UI catalogs that chat surfaces render beside the basic catalog.
+  final List<CatalogImplementation> surfaceCatalogs;
   final DocumentSelections documentSelections;
 
   /// Shared per-thread RAG database selections. Null in tests, where each
@@ -1354,6 +1359,9 @@ class _RoomScreenState extends State<RoomScreen> {
       return false;
     }
     if (!_roomIsFrontmost) return false;
+    // Another text field owns the keyboard, such as one inside an A2UI
+    // surface in the timeline. Its keystrokes and pastes are its own.
+    if (_anotherTextFieldHasFocus) return false;
     if (isPasteChord()) {
       // Abstain rather than claim a chord the composer won't act on, so
       // whatever else would answer it still can.
@@ -1378,6 +1386,16 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     _chatFocusNode.requestFocus();
     return false;
+  }
+
+  /// Whether a text field other than the composer has keyboard focus.
+  bool get _anotherTextFieldHasFocus {
+    final focused = FocusManager.instance.primaryFocus;
+    if (focused == null || focused == _chatFocusNode) return false;
+    final context = focused.context;
+    if (context == null) return false;
+    return context.widget is EditableText ||
+        context.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   /// Whether the composer would take pasted text right now, reading the same
@@ -2714,6 +2732,13 @@ class _RoomScreenState extends State<RoomScreen> {
                               executionTrackers: threadView.executionTrackers,
                               runOutcomes: runOutcomes,
                               activeRunId: activeRunId,
+                              surfaceCatalogs: widget.surfaceCatalogs,
+                              onSurfaceAction: (_, action) =>
+                                  threadView.sendAction(
+                                action,
+                                _state.runtime,
+                                stateOverlay: _buildStateOverlay(),
+                              ),
                               onFeedbackSubmit: threadView.submitFeedback,
                               onReportRun: (runId) =>
                                   _reportRun(threadView, runId),

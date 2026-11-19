@@ -22,6 +22,8 @@ workspace:
 dependencies:
   flutter:
     sdk: flutter
+  a2ui_core: 0.7.0
+  a2ui_flutter: 0.3.0
   clock: ^1.1.2
   collection: ^1.18.0
   flutter_appauth: ^12.0.0
@@ -68,6 +70,7 @@ dev_dependencies:
   flutter_native_splash: ^2.4.7
   cross_file: ^0.3.5
   http: ^1.6.0
+  json_schema_builder: ^0.1.7
 
 flutter_launcher_icons:
   android: true

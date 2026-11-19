@@ -1,4 +1,5 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show scheduleMicrotask, unawaited;
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
@@ -407,6 +408,73 @@ class ThreadViewState {
         // session that attached hands off to its own terminal state.
         if (state == null) contextUsage.sendEnded(null);
       },
+    );
+  }
+
+  /// Sends an A2UI [userAction] as an action-only turn on this thread: no user
+  /// message, the action in `forwardedProps.a2uiAction`. While a session holds
+  /// the thread, the latest action waits and is sent when the session ends.
+  void sendAction(
+    Map<String, Object?> userAction,
+    AgentRuntime runtime, {
+    Map<String, dynamic>? stateOverlay,
+  }) {
+    if (_isDisposed) return;
+    final action = <String, dynamic>{
+      'userAction': jsonDecode(jsonEncode(userAction)),
+    };
+    if (_sessionState.value == null) {
+      _spawnAction(action, runtime, stateOverlay);
+      return;
+    }
+    final waiting = _queuedAction != null;
+    _queuedAction = (action, runtime, stateOverlay);
+    if (waiting) return;
+    late final void Function() unsubscribe;
+    unsubscribe = _sessionState.subscribe((state) {
+      if (state != null) return;
+      scheduleMicrotask(() {
+        unsubscribe();
+        final queued = _queuedAction;
+        _queuedAction = null;
+        if (queued == null || _isDisposed) return;
+        sendAction(
+          queued.$1['userAction'] as Map<String, Object?>,
+          queued.$2,
+          stateOverlay: queued.$3,
+        );
+      });
+    });
+  }
+
+  (Map<String, dynamic>, AgentRuntime, Map<String, dynamic>?)? _queuedAction;
+
+  void _spawnAction(
+    Map<String, dynamic> action,
+    AgentRuntime runtime,
+    Map<String, dynamic>? stateOverlay,
+  ) {
+    unawaited(
+      _spawner.spawn(
+        spawnFn: () => runtime.spawn(
+          roomId: _roomId,
+          prompt: const [],
+          threadId: threadId,
+          stateOverlay: stateOverlay,
+          a2uiAction: action,
+        ),
+        errorSignal: _lastSendError,
+        prompt: const [],
+        isDisposed: () => _isDisposed,
+        onSpawned: (session) {
+          _registry.register(threadKey, session);
+          if (_isDisposed) return;
+          _attachSession(session);
+        },
+        onStateTransition: (state) {
+          if (!_isDisposed) _sessionState.value = state;
+        },
+      ),
     );
   }
 

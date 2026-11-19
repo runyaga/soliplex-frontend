@@ -44,6 +44,7 @@ class _AuthExceptionThrowingRuntime extends AgentRuntime {
     bool autoDispose = false,
     AgentSession? parent,
     Map<String, dynamic>? stateOverlay,
+    Map<String, dynamic>? a2uiAction,
   }) {
     return Future<AgentSession>.error(
       const AuthException(

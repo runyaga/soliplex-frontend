@@ -1,3 +1,4 @@
+import 'package:a2ui_flutter/a2ui_flutter.dart' show CatalogImplementation;
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -32,6 +33,7 @@ class RoomAppModule extends AppModule {
     required this.fileSort,
     this.logo,
     this.enableDocumentFilter = false,
+    this.surfaceCatalogs = const [],
   })  : _messageExpansions = MessageExpansions(),
         _uploadRegistry = UploadTrackerRegistry(servers: serverManager.servers),
         _downloadRegistry =
@@ -76,6 +78,9 @@ class RoomAppModule extends AppModule {
   final FileSortPreference fileSort;
   final Widget? logo;
   final bool enableDocumentFilter;
+
+  /// A2UI catalogs that chat surfaces render beside the basic catalog.
+  final List<CatalogImplementation> surfaceCatalogs;
 
   final MessageExpansions _messageExpansions;
   final UploadTrackerRegistry _uploadRegistry;
@@ -140,6 +145,7 @@ class RoomAppModule extends AppModule {
             downloadRegistry: _downloadRegistry,
             fileSort: fileSort,
             enableDocumentFilter: enableDocumentFilter,
+            surfaceCatalogs: surfaceCatalogs,
             documentSelections: documentSelections,
             databaseSelections: databaseSelections,
             roomReadMarkers: roomReadMarkers,

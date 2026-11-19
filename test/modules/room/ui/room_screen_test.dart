@@ -5742,6 +5742,39 @@ void main() {
       expect(composer.focusNode!.hasFocus, isFalse);
     });
 
+    testChord('typing in another focused text field stays in that field',
+        (tester) async {
+      // A2UI surfaces in the timeline carry their own text fields (TextField,
+      // the PythonRepl editor). Type-to-focus must leave them their keystrokes.
+      final composer = await pumpRoom(tester);
+      final other = TextEditingController();
+      final otherFocus = FocusNode();
+      addTearDown(other.dispose);
+      addTearDown(otherFocus.dispose);
+      final entry = OverlayEntry(
+        builder: (_) => Material(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 200,
+              child: TextField(controller: other, focusNode: otherFocus),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(tester.element(find.byType(RoomScreen))).insert(entry);
+      addTearDown(entry.remove);
+      await tester.pump();
+      otherFocus.requestFocus();
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+      await tester.pumpAndSettle();
+
+      expect(composer.focusNode!.hasFocus, isFalse);
+      expect(otherFocus.hasFocus, isTrue);
+    });
+
     testChord('a drawer dragged shut lets the chord through again',
         (tester) async {
       // A drag that carries the drawer the whole way closed settles it without

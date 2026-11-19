@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart' show CatalogImplementation;
 import 'package:soliplex_agent/soliplex_agent.dart' hide State;
 import 'package:soliplex_logging/soliplex_logging.dart';
 
 import '../../../shared/local_time_format.dart' show isSameCalendarDay;
+import '../a2ui/surface_scope.dart';
 import '../lay_out_timeline.dart';
 import '../citation_markers.dart';
 import '../execution_tracker.dart';
@@ -30,6 +32,8 @@ class MessageTimeline extends StatefulWidget {
     this.executionTrackers = const {},
     this.runOutcomes = const {},
     this.activeRunId,
+    this.surfaceCatalogs = const [],
+    this.onSurfaceAction,
     this.onFeedbackSubmit,
     this.onReportRun,
     this.onInspect,
@@ -52,6 +56,13 @@ class MessageTimeline extends StatefulWidget {
 
   /// The run in flight, which is not owed a tile saying it never answered.
   final String? activeRunId;
+
+  /// A2UI catalogs that chat surfaces render beside the basic catalog.
+  final List<CatalogImplementation> surfaceCatalogs;
+
+  /// Receives an action dispatched from the surface of message `messageId`.
+  final void Function(String messageId, Map<String, Object?> action)?
+      onSurfaceAction;
   final void Function(String runId, FeedbackType feedback, String? reason)?
       onFeedbackSubmit;
   final void Function(String runId)? onReportRun;
@@ -68,6 +79,7 @@ final Logger _logger =
 class _MessageTimelineState extends State<MessageTimeline> {
   late final AnchoredScrollController _scrollController;
   late final ScrollToBottomController _scrollToBottomController;
+  ChatSurfaceStore? _surfaceStore;
 
   final Map<String, GlobalKey> _messageKeys = {};
   String? _lastUserMessageId;
@@ -174,6 +186,7 @@ class _MessageTimelineState extends State<MessageTimeline> {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _scrollToBottomController.dispose();
+    _surfaceStore?.dispose();
     super.dispose();
   }
 
@@ -511,7 +524,7 @@ class _MessageTimelineState extends State<MessageTimeline> {
           }
         : null;
 
-    return LayoutBuilder(
+    final content = LayoutBuilder(
       builder: (context, constraints) {
         // The viewport height drops when the keyboard opens (the Scaffold
         // reflows the body shorter); keep the latest message pinned above the
@@ -606,6 +619,29 @@ class _MessageTimelineState extends State<MessageTimeline> {
           ],
         );
       },
+    );
+    return ChatSurfaceScope(
+      store: ChatSurfaceScope.maybeOf(context) ??
+          _storeFor(widget.surfaceCatalogs),
+      activeRunId: widget.activeRunId,
+      child: content,
+    );
+  }
+
+  /// The timeline's own store, rebuilt when the registered catalogs change.
+  ChatSurfaceStore _storeFor(List<CatalogImplementation> catalogs) {
+    final current = _surfaceStore;
+    if (current != null && identical(current.catalogs, catalogs)) {
+      return current;
+    }
+    // Tiles still hold the old store's controllers until this frame rebuilds.
+    if (current != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => current.dispose());
+    }
+    return _surfaceStore = ChatSurfaceStore(
+      catalogs: catalogs,
+      onAction: (messageId, action) =>
+          widget.onSurfaceAction?.call(messageId, action),
     );
   }
 }

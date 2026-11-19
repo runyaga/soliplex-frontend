@@ -1,3 +1,4 @@
+import 'package:a2ui_flutter/a2ui_flutter.dart' show CatalogImplementation;
 import 'package:flutter/foundation.dart' show kIsWeb, Listenable;
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_client_native/soliplex_client_native.dart';
@@ -75,6 +76,8 @@ Future<StandardKit> buildStandardKit({
   bool enableDocumentFilter = true,
   String statusMessageFilePath = StatusMessageConfig.defaultFilePath,
   Duration statusMessagePollInterval = StatusMessageConfig.defaultPollInterval,
+  // A2UI catalogs that chat surfaces render beside the basic catalog.
+  List<CatalogImplementation> surfaceCatalogs = const [],
 }) async {
   final brandLogo = BrandLogo(identity: identity);
 
@@ -200,6 +203,7 @@ Future<StandardKit> buildStandardKit({
         fileSort: fileSort,
         logo: brandLogo,
         enableDocumentFilter: enableDocumentFilter,
+        surfaceCatalogs: surfaceCatalogs,
       ),
       QuizAppModule(serverManager: serverManager),
       VersionsAppModule(

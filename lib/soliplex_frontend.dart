@@ -89,6 +89,7 @@ export 'src/core/status_message_config.dart' show StatusMessageConfig;
 export 'src/core/uncaught_errors.dart' show installUncaughtErrorLogging;
 export 'src/flavors/standard.dart' show standard, standardFlavor;
 export 'src/flavors/standard_kit.dart' show buildStandardKit, StandardKit;
+export 'src/modules/room/a2ui/surface_scope.dart' show ChatSurfaceOrigin;
 // The resolver type for `standard(documentBrowserUrl: ...)`; the provider that
 // installs it stays internal.
 export 'src/modules/room/document_browser_url.dart'
