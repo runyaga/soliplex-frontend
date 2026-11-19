@@ -14,8 +14,8 @@ environment:
   flutter: ">=3.47.0"
 
 dependencies:
-  a2ui_core: 0.7.0
-  a2ui_flutter: 0.3.0
+  a2ui_core: ^0.8.0
+  a2ui_flutter: ^0.4.0
   dart_monty:
     path: ../../../../dart_monty2/packages/dart_monty
   flutter:

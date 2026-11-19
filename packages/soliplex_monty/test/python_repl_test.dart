@@ -1,55 +1,12 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:dart_monty/dart_monty.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 
 import 'support/lab_surface.dart';
-
-/// `flutter test` cannot resolve the worker through package URIs.
-final String worker =
-    Platform.environment['MONTY_WORKER'] ??
-    '../../../../dart_monty2/packages/dart_monty/lib/src/bin/macos-arm64/'
-        'dart_monty_worker';
-
-/// Starts real runtimes on an explicit worker and records them for teardown.
-class Starter {
-  final List<Monty> pools = [];
-  final List<MontyRuntime> runtimes = [];
-  int starts = 0;
-
-  Future<MontyRuntime> call(
-    ResourceLimits limits,
-    Map<String, Object?> externalModules,
-  ) async {
-    starts++;
-    final pool = await Monty.start(
-      maxProcesses: 2,
-      checkoutTimeout: const Duration(seconds: 30),
-      workerLocation: worker,
-    );
-    pools.add(pool);
-    final runtime = await MontyRuntime.start(
-      pool: pool,
-      limits: limits,
-      externalModules: externalModules,
-    );
-    runtimes.add(runtime);
-    return runtime;
-  }
-
-  Future<void> close() async {
-    for (final runtime in runtimes) {
-      await runtime.dispose();
-    }
-    for (final pool in pools) {
-      await pool.close();
-    }
-  }
-}
+import 'support/monty.dart';
 
 List<Map<String, Object?>> withRepl(Map<String, Object?> props) => [
   {
@@ -106,15 +63,12 @@ Future<void> typeSource(WidgetTester tester, String text) async {
 }
 
 void main() {
-  final hasWorker = File(worker).existsSync();
-  final skipMonty = hasWorker ? false : 'No dart_monty worker at $worker';
-
-  late Starter starter;
+  late MontyStarter starter;
   late List<Map<String, Object?>> actions;
   late LabSurfaceController controller;
 
   LabSurfaceController create({ReplLimits limits = const ReplLimits()}) {
-    starter = Starter();
+    starter = MontyStarter();
     actions = [];
     return controller = LabSurfaceController(
       startRuntime: starter.call,
@@ -254,7 +208,7 @@ void main() {
       expect(starter.starts, 1);
       await unmount(tester);
     },
-    skip: skipMonty != false,
+    skip: skipWithoutMonty != false,
   );
 
   testWidgets('an example loads into the editor without running', (
@@ -302,7 +256,7 @@ void main() {
     expect(outputs['Matrices'], endsWith('(6, 42)'));
     expect(outputs['Errors'], endsWith('49'));
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   Future<void> runExample(WidgetTester tester, String label) async {
     await tester.tap(find.byKey(ValueKey('python-repl-example:$label')));
@@ -327,7 +281,7 @@ void main() {
     await waitFor(tester, () => find.text('Count: 4').evaluate().isNotEmpty);
     expect(starter.starts, 1);
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('the catalog surface sends bound values back to Python', (
     tester,
@@ -348,7 +302,7 @@ void main() {
     );
     expect(find.textContaining('size 40 (small)'), findsOneWidget);
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('an invalid surface is rejected and the old one stays', (
     tester,
@@ -367,7 +321,7 @@ void main() {
     expect(result['output'], contains('Surface rejected'));
     expect(find.text('Count: 0'), findsOneWidget);
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('a Python error is shown as output', (tester) async {
     create();
@@ -382,7 +336,7 @@ void main() {
     expect(find.textContaining('ZeroDivisionError'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('a runaway loop is stopped by the feed limit', (tester) async {
     create();
@@ -396,7 +350,7 @@ void main() {
     expect(result['output'], contains('TimeoutError'));
     expect(clock.elapsed, lessThan(const Duration(seconds: 5)));
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('the wall-clock deadline cancels a run and resets state', (
     tester,
@@ -429,7 +383,7 @@ void main() {
     await waitFor(tester, () => idle(tester) && actions.length == 3);
     expect((model('/repl/result')! as Map)['output'], contains('NameError'));
     await unmount(tester);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('disposal mid-run cancels the run and applies no result', (
     tester,
@@ -479,5 +433,5 @@ void main() {
       unawaited(starter.close().whenComplete(() => closed = true));
     });
     await waitFor(tester, () => closed);
-  }, skip: skipMonty != false);
+  }, skip: skipWithoutMonty != false);
 }

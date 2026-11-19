@@ -283,7 +283,7 @@ class PythonUiArena {
         lowered[key] = _lower(key, value, visit, node['component']! as String);
       }
       if (labChartSignatures.containsKey(node['component'])) {
-        lowered['catalogId'] = labChartCatalogId;
+        lowered['@catalogId'] = labChartCatalogId;
         if (node['component'] == 'BarChart') _wireChart(lowered);
       }
       components[index] = lowered;

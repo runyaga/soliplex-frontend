@@ -33,7 +33,7 @@ List<Map<String, Object?>> pythonReplSurfaceMessages() => [
         {
           'id': 'repl',
           'component': 'PythonRepl',
-          'catalogId': labCatalogId,
+          '@catalogId': labCatalogId,
           'source': {'@path': '/repl/source'},
           'outputPath': '/repl/result',
           'examples': replExamples,
