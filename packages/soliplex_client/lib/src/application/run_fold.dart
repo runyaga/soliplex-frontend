@@ -10,6 +10,7 @@ import 'package:soliplex_client/src/domain/conversation.dart';
 import 'package:soliplex_client/src/domain/message_state.dart';
 import 'package:soliplex_client/src/domain/source_reference.dart';
 import 'package:soliplex_client/src/domain/transcript.dart';
+import 'package:soliplex_client/src/domain/workbench_snapshot.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
 
 final Logger _logger =
@@ -36,6 +37,7 @@ class RunFold {
     required String? userMessageId,
     required TurnCitations turnCitations,
     required DateTime? runCreated,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) {
     // The run is marked on the transcript before that transcript is kept as
     // what the run was sent, so a cut-off run reverted to it still names this
@@ -54,6 +56,9 @@ class RunFold {
       eventIndex: 0,
       runCreated: runCreated,
       lastEventTime: null,
+      registeredWorkbenchActivities: List<WorkbenchRegistration>.unmodifiable(
+        registeredWorkbenchActivities,
+      ),
     );
   }
 
@@ -68,6 +73,7 @@ class RunFold {
     required int eventIndex,
     required DateTime? runCreated,
     required DateTime? lastEventTime,
+    required this.registeredWorkbenchActivities,
   })  : _userMessageId = userMessageId,
         _sentTranscript = sentTranscript,
         _unreadable = unreadable,
@@ -89,6 +95,9 @@ class RunFold {
 
   /// What the turn has cited so far, across its runs.
   final TurnCitations turnCitations;
+
+  /// Authenticated activity registrations supplied by the workbench snapshot.
+  final List<WorkbenchRegistration> registeredWorkbenchActivities;
 
   /// The history the run was sent, marked as started on this run, until its
   /// state snapshot or its `RUN_FINISHED` is processed. A run cut off before
@@ -142,6 +151,7 @@ class RunFold {
         eventIndex: eventIndex ?? _eventIndex,
         runCreated: _runCreated,
         lastEventTime: lastEventTime ?? _lastEventTime,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       );
 
   /// This fold paused on a client tool: the outcome its `RUN_FINISHED` parked
@@ -180,6 +190,7 @@ class RunFold {
             streaming,
             event,
             createdAt: timed.undatedRowTime,
+            registeredWorkbenchActivities: registeredWorkbenchActivities,
           );
         } on Object catch (error, stackTrace) {
           return (

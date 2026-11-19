@@ -5,7 +5,8 @@
 /// `soliplex_logging` — no Flutter imports allowed.
 library;
 
-export 'package:a2ui_agent/a2ui_agent.dart' show CatalogConfig;
+export 'package:a2ui_agent/a2ui_agent.dart'
+    show CatalogConfig, InMemoryCatalogProvider;
 export 'package:a2ui_core/a2ui_core.dart'
     show
         A2uiError,

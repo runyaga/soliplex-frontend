@@ -21,6 +21,7 @@ import 'package:soliplex_client/src/domain/thread_history.dart';
 import 'package:soliplex_client/src/domain/thread_info.dart';
 import 'package:soliplex_client/src/domain/thread_label.dart';
 import 'package:soliplex_client/src/domain/thread_page.dart';
+import 'package:soliplex_client/src/domain/workbench_snapshot.dart';
 import 'package:soliplex_client/src/domain/workdir_file.dart';
 import 'package:soliplex_client/src/errors/exceptions.dart';
 import 'package:soliplex_client/src/http/http_transport.dart';
@@ -1121,6 +1122,7 @@ class SoliplexApi {
     String threadId, {
     CancelToken? cancelToken,
     RunFoldObserver? observer,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) async {
     _requireNonEmpty(roomId, 'roomId');
     _requireNonEmpty(threadId, 'threadId');
@@ -1178,6 +1180,7 @@ class SoliplexApi {
       threadId,
       fetch,
       observer: observer,
+      registeredWorkbenchActivities: registeredWorkbenchActivities,
     );
   }
 

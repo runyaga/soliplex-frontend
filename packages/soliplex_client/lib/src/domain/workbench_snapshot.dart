@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:soliplex_client/src/domain/workbench_layout_validator.dart';
+
 /// Defines an authenticated workbench registration role.
 enum WorkbenchRole {
   /// Registers the workspace layout activity.
@@ -111,11 +113,17 @@ class WorkbenchActivityMetadata {
         json['partCount'] is! int) {
       throw const FormatException('Malformed workbench activity metadata');
     }
-    final registrationJson = Map<String, dynamic>.from(
-      json['registration']! as Map<String, dynamic>,
-    );
-    registrationJson['role'] = json['role'];
-    final registration = WorkbenchRegistration.fromJson(registrationJson);
+    final registrationJson = json['registration']! as Map<String, dynamic>;
+    if (registrationJson.length != 2 ||
+        !registrationJson.keys.every(
+          {'activityMessageId', 'surfaceId'}.contains,
+        )) {
+      throw const FormatException('Malformed nested workbench registration');
+    }
+    final trustedRegistrationJson = Map<String, dynamic>.from(registrationJson);
+    trustedRegistrationJson['role'] = json['role'];
+    final registration =
+        WorkbenchRegistration.fromJson(trustedRegistrationJson);
     final index = json['partIndex'] as int;
     final count = json['partCount'] as int;
     if (index < 0 || count < 1 || index >= count) {
@@ -265,13 +273,16 @@ class WorkbenchSnapshot {
         (json['records']! as List).any((item) => item is! Map)) {
       throw const FormatException('Malformed workbench snapshot');
     }
+    final registrations = [
+      for (final item in json['registrations']! as List)
+        WorkbenchRegistration.fromJson(item as Map<String, dynamic>),
+    ];
+    final layout = json['layout'] as Map<String, dynamic>;
+    validateWorkbenchLayout(layout, registrations);
     return WorkbenchSnapshot(
       revision: json['revision'] as int,
-      layout: json['layout'] as Map<String, dynamic>,
-      registrations: [
-        for (final item in json['registrations']! as List)
-          WorkbenchRegistration.fromJson(item as Map<String, dynamic>),
-      ],
+      layout: layout,
+      registrations: registrations,
       records: [
         for (final item in json['records']! as List)
           WorkbenchPublicationPart.fromJson(item as Map<String, dynamic>),

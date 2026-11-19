@@ -1,3 +1,5 @@
+// ignore_for_file: lines_longer_than_80_chars, require_trailing_commas
+
 import 'package:ag_ui/ag_ui.dart';
 import 'package:soliplex_client/src/application/a2ui_activity.dart';
 import 'package:soliplex_client/src/application/agui_event_processor.dart';
@@ -72,12 +74,16 @@ EventProcessingResult _process(
 Conversation _conversation() => Conversation.empty(threadId: 'thread')
     .withStatus(const Running(runId: 'run'));
 
-RunFold _fold() => RunFold.start(
+RunFold _fold({
+  List<WorkbenchRegistration> registrations = const [],
+}) =>
+    RunFold.start(
       Conversation.empty(threadId: 'thread'),
       runId: 'run',
       userMessageId: null,
       turnCitations: const TurnCitations.empty(),
       runCreated: _started,
+      registeredWorkbenchActivities: registrations,
     );
 
 void main() {
@@ -114,18 +120,88 @@ void main() {
         (result.messages.single as GenUiMessage).data['workbench'],
         metadata,
       );
+      final unregistered = projectA2uiActivity(
+        _conversation(),
+        ActivityRecord(
+          messageId: _id,
+          activityType: a2uiActivityType,
+          content: {'a2ui_operations': _operations(), 'workbench': metadata},
+          timestamp: _painted.millisecondsSinceEpoch,
+        ),
+        createdAt: _painted,
+      );
+      expect(
+        (unregistered.messages.single as GenUiMessage).data,
+        isNot(contains('workbench')),
+      );
+    });
+
+    test('foreign operation surfaces fail when registration is injected', () {
+      final metadata = {
+        'role': 'content',
+        'registration': {'activityMessageId': _id, 'surfaceId': 'chart'},
+        'sequence': 2,
+        'revision': 1,
+        'publicationId': 'publication_1',
+        'partIndex': 0,
+        'partCount': 1,
+      };
+      final operations = [
+        ..._operations(),
+        {
+          'version': '1.0',
+          'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
+        },
+      ];
       expect(
         () => projectA2uiActivity(
           _conversation(),
           ActivityRecord(
             messageId: _id,
             activityType: a2uiActivityType,
-            content: {'a2ui_operations': _operations(), 'workbench': metadata},
+            content: {'a2ui_operations': operations, 'workbench': metadata},
             timestamp: _painted.millisecondsSinceEpoch,
           ),
           createdAt: _painted,
+          registeredWorkbenchActivities: [
+            const WorkbenchRegistration(
+              role: WorkbenchRole.content,
+              activityMessageId: _id,
+              surfaceId: 'chart',
+            ),
+          ],
         ),
         throwsA(isA<MalformedResponseException>()),
+      );
+    });
+
+    test('unregistered metadata stays on the standard projection path', () {
+      final metadata = {
+        'role': 'content',
+        'registration': {'activityMessageId': _id, 'surfaceId': 'chart'},
+        'sequence': 2,
+        'revision': 1,
+        'publicationId': 'publication_1',
+        'partIndex': 0,
+        'partCount': 1,
+      };
+      final result = processEvent(
+        _conversation(),
+        const AwaitingText(),
+        _snapshot(content: {
+          'a2ui_operations': _operations(),
+          'workbench': metadata,
+        }),
+        createdAt: _painted,
+      );
+      expect(result.conversation.messages, hasLength(1));
+      expect(
+        (result.conversation.messages.single as GenUiMessage).data,
+        containsPair('messages', _operations()),
+      );
+      expect(
+        (result.conversation.messages.single as GenUiMessage).data,
+        isNot(contains('workbench')),
       );
     });
 
@@ -537,6 +613,22 @@ void main() {
     test(
       'live and stored history use identical generated messages and dates',
       () {
+        const registrations = [
+          WorkbenchRegistration(
+            role: WorkbenchRole.content,
+            activityMessageId: _id,
+            surfaceId: 'chart',
+          ),
+        ];
+        final metadata = {
+          'role': 'content',
+          'registration': {'activityMessageId': _id, 'surfaceId': 'chart'},
+          'sequence': 1,
+          'revision': 1,
+          'publicationId': 'publication_1',
+          'partIndex': 0,
+          'partCount': 1,
+        };
         final events = <BaseEvent>[
           RunStartedEvent(
             threadId: 'thread',
@@ -544,12 +636,18 @@ void main() {
             timestamp: _started.millisecondsSinceEpoch,
           ),
           _snapshot(content: {'status': 'building'}),
-          _snapshot(),
-          _snapshot(),
+          _snapshot(content: {
+            'a2ui_operations': _operations(),
+            'workbench': metadata,
+          }),
+          _snapshot(content: {
+            'a2ui_operations': _operations(),
+            'workbench': metadata,
+          }),
           const RunFinishedEvent(threadId: 'thread', runId: 'run'),
         ];
         final live = events.fold(
-          _fold(),
+          _fold(registrations: registrations),
           (fold, event) => fold.apply(DecodedEvent(event, event.toJson())).fold,
         );
         final history = replayThreadHistory(
@@ -575,6 +673,7 @@ void main() {
           null,
           null,
           observer: null,
+          registeredWorkbenchActivities: registrations,
         );
         final streamed =
             live.conversation.messages.whereType<GenUiMessage>().single;
@@ -583,9 +682,54 @@ void main() {
         expect(replayed.runId, streamed.runId);
         expect(replayed.createdAt, streamed.createdAt);
         expect(replayed.data, streamed.data);
+        expect(streamed.data['workbench'], metadata);
         expect(history.transcript.messages, isEmpty);
       },
     );
+
+    test(
+        'history treats metadata without injected registrations as ordinary A2UI',
+        () {
+      final event = _snapshot(content: {
+        'a2ui_operations': _operations(),
+        'workbench': {
+          'role': 'content',
+          'registration': {'activityMessageId': _id, 'surfaceId': 'chart'},
+          'sequence': 1,
+          'revision': 1,
+          'publicationId': 'publication_1',
+          'partIndex': 0,
+          'partCount': 1,
+        },
+      });
+      final history = replayThreadHistory(
+        [
+          (
+            runId: 'run',
+            parentRunId: null,
+            created: _started,
+            fetchError: null,
+            fetchStackTrace: null,
+            payload: (
+              events: [event.toJson()],
+              userMessage: null,
+              toolResults: <ToolMessage>[],
+              endsWithToolMessage: false,
+            ),
+          ),
+        ],
+        'thread',
+        null,
+        null,
+        {},
+        null,
+        null,
+        observer: null,
+      );
+      final message = history.messages.single as GenUiMessage;
+      expect(message.data['messages'], _operations());
+      expect(message.data, isNot(contains('workbench')));
+    });
   });
 
   group('A2UI action history', () {

@@ -40,12 +40,13 @@ class A2uiNegotiatedReply {
     Stream<String> chunks,
   ) async {
     final stream = _processor.openStream();
-    final messages = <AgentToRendererMessage>[];
+    final response = StringBuffer();
     await for (final chunk in chunks) {
-      _collect(stream.feed(chunk), messages);
+      response.write(chunk);
+      _checkStreamParts(stream.feed(chunk));
     }
-    _collect(stream.close(), messages);
-    return messages;
+    _checkStreamParts(stream.close());
+    return parse(response.toString());
   }
 }
 
@@ -55,9 +56,8 @@ InferenceFormatFactory _formatFactory(A2uiReplyFormat format) =>
       A2uiReplyFormat.json => const DirectJsonFormatFactory(),
     };
 
-void _collect(List<StreamPart> parts, List<AgentToRendererMessage> messages) {
+void _checkStreamParts(List<StreamPart> parts) {
   for (final part in parts) {
-    if (part case A2uiPart(:final a2ui)) messages.addAll(a2ui);
     if (part case ErrorPart(:final error)) throw error;
   }
 }

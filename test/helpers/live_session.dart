@@ -276,6 +276,7 @@ class StoredHistoryApi extends FakeSoliplexApi {
     String threadId, {
     CancelToken? cancelToken,
     RunFoldObserver? observer,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) async {
     final runs = stored;
     if (nextThreadHistoryError != null || runs == null) {
@@ -284,6 +285,7 @@ class StoredHistoryApi extends FakeSoliplexApi {
         threadId,
         cancelToken: cancelToken,
         observer: observer,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       );
     }
     return storedHistory(runs, observer: observer);

@@ -9,6 +9,8 @@ import 'package:soliplex_client/src/utils/cancel_token.dart';
 import 'package:soliplex_client/src/utils/url_builder.dart';
 import 'package:test/test.dart';
 
+import '../../../../test/fixtures/workbench/workbench_fixtures.g.dart';
+
 class _CaptureClient implements SoliplexHttpClient {
   String? method;
   Uri? uri;
@@ -31,7 +33,7 @@ class _CaptureClient implements SoliplexHttpClient {
         utf8.encode(
           jsonEncode(<String, Object?>{
             'revision': 1,
-            'layout': {},
+            'layout': jsonDecode(workbenchFixtures['layout_tree_v1.json']!),
             'registrations': <Object?>[],
             'records': <Object?>[],
           }),

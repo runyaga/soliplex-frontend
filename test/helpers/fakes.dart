@@ -652,6 +652,7 @@ class FakeSoliplexApi extends SoliplexApi {
     String threadId, {
     CancelToken? cancelToken,
     RunFoldObserver? observer,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) async {
     if (nextThreadHistoryError != null) throw nextThreadHistoryError!;
     if (nextThreadHistory != null) return nextThreadHistory!;

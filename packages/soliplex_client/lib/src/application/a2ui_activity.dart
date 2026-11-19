@@ -122,7 +122,7 @@ Conversation projectA2uiActivity(
         );
 }
 
-WorkbenchActivityMetadata _workbenchMetadata(
+WorkbenchActivityMetadata? _workbenchMetadata(
   Object? raw,
   String messageId,
   List<Map<String, dynamic>> messages,
@@ -135,10 +135,10 @@ WorkbenchActivityMetadata _workbenchMetadata(
   try {
     metadata = WorkbenchActivityMetadata.fromJson(raw);
   } on Object {
-    _malformed(messageId, 'workbench metadata');
+    return null;
   }
   if (metadata.registration.activityMessageId != messageId) {
-    _malformed(messageId, 'foreign registration');
+    return null;
   }
   if (!registeredWorkbenchActivities.any(
     (registration) =>
@@ -146,22 +146,18 @@ WorkbenchActivityMetadata _workbenchMetadata(
         registration.activityMessageId == messageId &&
         registration.surfaceId == metadata.registration.surfaceId,
   )) {
-    _malformed(messageId, 'unregistered workbench activity');
+    return null;
   }
   final surfaces = <String>{};
   for (final message in messages) {
     for (final operationKey in _operations) {
       final operation = message[operationKey];
-      if (operation is Map && operation[operationKey] is Map) {
-        final body = operation[operationKey] as Map;
-        if (body['surfaceId'] is String) {
-          surfaces.add(body['surfaceId'] as String);
-        }
+      if (operation is Map && operation['surfaceId'] is String) {
+        surfaces.add(operation['surfaceId'] as String);
       }
     }
   }
-  if (surfaces.isNotEmpty &&
-      !surfaces.contains(metadata.registration.surfaceId)) {
+  if (surfaces.any((surface) => surface != metadata.registration.surfaceId)) {
     _malformed(messageId, 'foreign surface registration');
   }
   return metadata;
