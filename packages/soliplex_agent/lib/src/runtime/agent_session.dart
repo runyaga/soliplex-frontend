@@ -411,12 +411,14 @@ class AgentSession implements ToolExecutionContext {
   ///
   /// Called internally by `AgentRuntime`. Extensions are attached before
   /// the run starts. The run is fire-and-forget — terminal states flow
-  /// through [_onStateChange] into [_completeWith].
+  /// through [_onStateChange] into [_completeWith]. [a2uiAction] makes the
+  /// turn action-only, as `RunOrchestrator.runToCompletion` describes.
   Future<void> start({
     required List<MessagePart> userMessage,
     String? existingRunId,
     ThreadHistory? cachedHistory,
     Map<String, dynamic>? stateOverlay,
+    Map<String, dynamic>? a2uiAction,
   }) =>
       _begin(
         () => _orchestrator.runToCompletion(
@@ -428,6 +430,7 @@ class AgentSession implements ToolExecutionContext {
           stateOverlay: stateOverlay,
           onReconnectStatus: _onReconnectStatus,
           observer: _runFold,
+          a2uiAction: a2uiAction,
         ),
       );
 

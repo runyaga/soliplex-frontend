@@ -208,6 +208,10 @@ class AgentRuntime {
   /// When [parent] is provided, the new session is registered as a child
   /// of that parent. Cancelling or disposing the parent will cascade to
   /// all children.
+  ///
+  /// A non-null [a2uiAction] starts an action-only turn on the existing
+  /// [threadId]: [prompt] must be empty, and the action travels as
+  /// `forwardedProps.a2uiAction` instead of a user message.
   Future<AgentSession> spawn({
     required String roomId,
     required List<MessagePart> prompt,
@@ -217,7 +221,13 @@ class AgentRuntime {
     bool autoDispose = false,
     AgentSession? parent,
     Map<String, dynamic>? stateOverlay,
+    Map<String, dynamic>? a2uiAction,
   }) async {
+    if (a2uiAction != null && (threadId == null || prompt.isNotEmpty)) {
+      throw ArgumentError(
+        'An action-only turn needs an existing thread and no prompt',
+      );
+    }
     _guardNotDisposed();
     await _waitForSlot();
     _guardSpawnDepth(parent);
@@ -241,6 +251,7 @@ class AgentRuntime {
         existingRunId: existingRunId,
         cachedHistory: history,
         stateOverlay: stateOverlay,
+        a2uiAction: a2uiAction,
       ),
       parent: parent,
       timeout: timeout,

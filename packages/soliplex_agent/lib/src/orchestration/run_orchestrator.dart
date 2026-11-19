@@ -153,6 +153,10 @@ class RunOrchestrator {
   /// [observer] is told each run of the turn as it starts, each event once
   /// folded, and how each run ended, as history replay tells it of a stored
   /// run (`RunFoldObserver` names the one difference).
+  ///
+  /// A non-null [a2uiAction] makes this an action-only turn: [userMessage]
+  /// must be empty, no user message is appended, and every run of the turn
+  /// sends [a2uiAction] as `forwardedProps.a2uiAction`.
   Future<RunState> runToCompletion({
     required ThreadKey key,
     required List<MessagePart> userMessage,
@@ -162,19 +166,27 @@ class RunOrchestrator {
     Map<String, dynamic>? stateOverlay,
     void Function(ReconnectStatus)? onReconnectStatus,
     RunFoldObserver? observer,
+    Map<String, dynamic>? a2uiAction,
   }) =>
       _toCompletion(
         key,
         toolExecutor,
         onReconnectStatus,
         observer: observer,
-        open: () => _initializeStream(
-          key,
-          userMessage,
-          existingRunId,
-          cachedHistory,
-          stateOverlay,
-        ),
+        a2uiAction: a2uiAction == null
+            ? null
+            : _anchored(a2uiAction, cachedHistory),
+        open: () {
+          if (a2uiAction != null) _checkActionOnlyTurn(userMessage, a2uiAction);
+          return _initializeStream(
+            key,
+            userMessage,
+            existingRunId,
+            cachedHistory,
+            stateOverlay,
+            actionOnly: a2uiAction != null,
+          );
+        },
       );
 
   /// Follows [run], already going on the backend, to the end of its turn, as
@@ -210,6 +222,7 @@ class RunOrchestrator {
     void Function(ReconnectStatus)? onReconnectStatus, {
     required RunFoldObserver? observer,
     required Future<void> Function() open,
+    Map<String, dynamic>? a2uiAction,
   }) async {
     _guardRunToCompletion();
     _runToCompletionActive = true;
@@ -227,7 +240,10 @@ class RunOrchestrator {
     _toolDepth = 0;
     try {
       try {
-        _turnForwardedProps = _forwardedProps?.call();
+        final resolved = _forwardedProps?.call();
+        _turnForwardedProps = a2uiAction == null
+            ? resolved
+            : {...?resolved, 'a2uiAction': a2uiAction};
         await open();
       } on Object catch (error, stackTrace) {
         _handleStartError(key, error, stackTrace);
@@ -445,11 +461,13 @@ class RunOrchestrator {
     List<MessagePart> userMessage,
     String? existingRunId,
     ThreadHistory? cachedHistory,
-    Map<String, dynamic>? stateOverlay,
-  ) async {
+    Map<String, dynamic>? stateOverlay, {
+    bool actionOnly = false,
+  }) async {
     _cancelToken ??= CancelToken();
-    final conversation =
-        _buildConversation(key, userMessage, cachedHistory, stateOverlay);
+    final conversation = actionOnly
+        ? _conversationOpenedBy(key, null, cachedHistory, stateOverlay)
+        : _buildConversation(key, userMessage, cachedHistory, stateOverlay);
     final input = _buildInput(key, conversation);
     final handle = await _llmProvider.startRun(
       key: key,
@@ -956,7 +974,7 @@ class RunOrchestrator {
   /// message, which the run's fold stamps and keys the turn's citations by.
   Conversation _conversationOpenedBy(
     ThreadKey key,
-    TextMessage userMessage,
+    TextMessage? userMessage,
     ThreadHistory? cachedHistory,
     Map<String, dynamic>? stateOverlay,
   ) {
@@ -973,21 +991,21 @@ class RunOrchestrator {
     final aguiState =
         stateOverlay == null ? baseState : _mergeState(baseState, stateOverlay);
     _fold = null;
-    _userMessageId = userMessage.id;
-    return appendUserMessage(
-      Conversation(
-        threadId: key.threadId,
-        messages: cachedHistory?.messages ?? const <ChatMessage>[],
-        aguiState: aguiState,
-        aguiStateIncomplete: cachedHistory?.aguiStateIncomplete ?? false,
-        messageStates: cachedHistory?.messageStates ?? const {},
-        // Every send builds this afresh, so a run that ended earlier in the
-        // thread loses its outcome unless it is carried over here.
-        runOutcomes: cachedHistory?.runOutcomes ?? const {},
-        transcript: cachedHistory?.transcript ?? const Transcript(),
-      ),
-      userMessage,
+    _userMessageId = userMessage?.id;
+    final conversation = Conversation(
+      threadId: key.threadId,
+      messages: cachedHistory?.messages ?? const <ChatMessage>[],
+      aguiState: aguiState,
+      aguiStateIncomplete: cachedHistory?.aguiStateIncomplete ?? false,
+      messageStates: cachedHistory?.messageStates ?? const {},
+      // Every send builds this afresh, so a run that ended earlier in the
+      // thread loses its outcome unless it is carried over here.
+      runOutcomes: cachedHistory?.runOutcomes ?? const {},
+      transcript: cachedHistory?.transcript ?? const Transcript(),
     );
+    return userMessage == null
+        ? conversation
+        : appendUserMessage(conversation, userMessage);
   }
 
   /// Recursively deep-merges [overlay] into [base].
@@ -1348,4 +1366,31 @@ class RunOrchestrator {
         );
     }
   }
+}
+
+/// Throws [ArgumentError] unless [userMessage] is empty and [a2uiAction]
+/// holds a `userAction` with a nonempty `name` and `surfaceId`.
+void _checkActionOnlyTurn(
+  List<MessagePart> userMessage,
+  Map<String, dynamic> a2uiAction,
+) {
+  final userAction = a2uiAction['userAction'];
+  bool named(Object? value) => value is String && value.trim().isNotEmpty;
+  if (userMessage.isNotEmpty ||
+      userAction is! Map ||
+      !named(userAction['name']) ||
+      !named(userAction['surfaceId'])) {
+    throw ArgumentError('An action-only turn needs a2uiAction and no prompt');
+  }
+}
+
+/// [a2uiAction] with `afterMessageId`, the id of the last message in
+/// [history]'s transcript, so a server places the action once at that point
+/// in every run of the turn, continuations included.
+Map<String, dynamic> _anchored(
+  Map<String, dynamic> a2uiAction,
+  ThreadHistory? history,
+) {
+  final last = history?.transcript.messages.lastOrNull;
+  return {...a2uiAction, if (last != null) 'afterMessageId': last.id};
 }
