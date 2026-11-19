@@ -6,8 +6,10 @@ export 'package:ag_ui/ag_ui.dart' hide CancelToken;
 
 export 'src/api/api.dart';
 export 'src/application/application.dart';
+export 'src/application/workbench_client.dart';
 export 'src/auth/auth.dart';
 export 'src/domain/domain.dart';
+export 'src/domain/workbench_snapshot.dart';
 export 'src/errors/errors.dart';
 export 'src/http/http.dart';
 export 'src/utils/utils.dart';
