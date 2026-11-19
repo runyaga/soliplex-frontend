@@ -179,6 +179,11 @@ for rel, expected in [('backend/Dockerfile', 2), ('soliplex-dev/Dockerfile', 1)]
     write(q, s)
 q = p/'backend/environment/installation.yaml'
 data = yaml.safe_load(q.read_text())
+router_ops = data.setdefault('app_router_operations', [])
+router_ops[:] = [op for op in router_ops if op.get('group_name') != 'agui']
+router_ops.append({'kind': 'add', 'group_name': 'agui',
+    'router_name': 'soliplex_a2ui_workbench.workbench_routes.guarded_router',
+    'replace_existing': True, 'prefix': '/api'})
 for a in data['agent_configs']:
     for old in ('usage_limits', 'run_timeout_seconds'):
         a.pop(old, None)

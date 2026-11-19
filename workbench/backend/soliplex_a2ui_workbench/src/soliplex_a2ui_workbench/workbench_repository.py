@@ -64,6 +64,17 @@ class SQLiteWorkbenchRepository:
                 publication_key TEXT NOT NULL, digest TEXT NOT NULL, receipt_json TEXT NOT NULL,
                 PRIMARY KEY(actor, server, room, thread, publication_key)
             );
+            CREATE TABLE IF NOT EXISTS workbench_action (
+                actor TEXT NOT NULL, server TEXT NOT NULL, room TEXT NOT NULL, thread TEXT NOT NULL,
+                submission_id TEXT NOT NULL, digest TEXT NOT NULL, envelope_json TEXT NOT NULL,
+                state TEXT NOT NULL, layout_revision INTEGER NOT NULL, receipt_json TEXT NOT NULL,
+                PRIMARY KEY(actor, server, room, thread, submission_id)
+            );
+            CREATE TABLE IF NOT EXISTS workbench_invocation (
+                actor TEXT NOT NULL, server TEXT NOT NULL, room TEXT NOT NULL, thread TEXT NOT NULL,
+                invocation_id TEXT NOT NULL, digest TEXT NOT NULL, receipt_json TEXT NOT NULL,
+                PRIMARY KEY(actor, server, room, thread, invocation_id)
+            );
         """)
 
     def publish(
@@ -145,6 +156,131 @@ class SQLiteWorkbenchRepository:
     def load(self, scope: WorkbenchScope) -> dict[str, object] | None:
         row = self._db.execute("SELECT layout_json FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchone()
         return json.loads(row["layout_json"]) if row else None
+
+    def load_snapshot(self, scope: WorkbenchScope) -> dict[str, object]:
+        self._db.execute("BEGIN")
+        try:
+            row = self._db.execute(
+                "SELECT revision, sequence, layout_json FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?",
+                scope.key(),
+            ).fetchone()
+            content_rows = self._db.execute(
+                "SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=? ORDER BY sequence, part_index",
+                scope.key(),
+            ).fetchall()
+            result = {
+                "revision": row["revision"] if row else 0,
+                "sequence": row["sequence"] if row else 0,
+                "layout": json.loads(row["layout_json"]) if row else None,
+                "content": [json.loads(item["record_json"]) for item in content_rows],
+            }
+            self._db.execute("COMMIT")
+            return result
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            raise
+
+    def restore_node(self, scope: WorkbenchScope, node_id: str) -> dict[str, object]:
+        """Clear one accepted ancestor close while retaining every descendant."""
+        key = scope.key()
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._db.execute("SELECT revision, sequence, layout_json FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?", key).fetchone()
+            if row is None:
+                raise ValueError("workbench layout is not registered")
+            layout = json.loads(row["layout_json"])
+            target = next((node for node in layout["nodes"] if node["id"] == node_id), None)
+            if target is None or target["visibility"] != "closed":
+                raise ValueError("restore target is not a closed registered node")
+            target["visibility"] = "open"
+            layout["layoutRevision"] = row["revision"] + 1
+            content = self.load_content(scope)
+            registered_mounts = {(str(item["activityMessageId"]), str(item["surfaceId"])) for item in content}
+            program_surfaces = {str(item["surfaceId"]) for item in content if item.get("component") in {"Program", "PythonRepl"}}
+            snapshot = LayoutSnapshot.model_validate(layout, context={"authenticated_program_surfaces": program_surfaces})
+            validate_registered_mounts(snapshot, registered_mounts)
+            encoded = json.dumps(snapshot.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False)
+            sequence = row["sequence"] + 1
+            self._db.execute("UPDATE workbench_snapshot SET revision=?, sequence=?, layout_json=? WHERE actor=? AND server=? AND room=? AND thread=?", (layout["layoutRevision"], sequence, encoded, *key))
+            self._db.execute("COMMIT")
+            return {"status": "restored", "nodeId": node_id, "revision": layout["layoutRevision"], "sequence": sequence}
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            raise
+
+    def existing_action(self, scope: WorkbenchScope, submission_id: str, digest: str) -> dict[str, object] | None:
+        row = self._db.execute(
+            "SELECT digest, receipt_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?",
+            (*scope.key(), submission_id),
+        ).fetchone()
+        if row is None:
+            return None
+        if row["digest"] != digest:
+            raise PublicationConflict("submission ID reused with different body")
+        return json.loads(row["receipt_json"])
+
+    def reserve_action(self, scope: WorkbenchScope, submission_id: str, digest: str, envelope: Mapping[str, object], *, expected_revision: int, activity_message_id: str, receipt_details: Mapping[str, object] | None = None) -> dict[str, object]:
+        key = (*scope.key(), submission_id)
+        encoded = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False)
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._db.execute("SELECT digest, receipt_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?", key).fetchone()
+            if row:
+                if row["digest"] != digest:
+                    raise PublicationConflict("submission ID reused with different body")
+                self._db.execute("COMMIT")
+                return json.loads(row["receipt_json"])
+            snapshot = self._db.execute("SELECT revision FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchone()
+            records = self._db.execute("SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchall()
+            is_registered = any(json.loads(record["record_json"]).get("activityMessageId") == activity_message_id for record in records)
+            if snapshot is None or snapshot["revision"] != expected_revision or not is_registered:
+                raise PublicationConflict("action revision or registration became stale")
+            details = dict(receipt_details or {})
+            invocation_id = details.pop("invocationId", None)
+            invocation_digest = details.pop("invocationDigest", None)
+            if invocation_id is not None:
+                invocation = self._db.execute("SELECT digest, receipt_json FROM workbench_invocation WHERE actor=? AND server=? AND room=? AND thread=? AND invocation_id=?", (*scope.key(), invocation_id)).fetchone()
+                if invocation:
+                    if invocation["digest"] != invocation_digest:
+                        raise PublicationConflict("invocation ID reused with different result")
+                    self._db.execute("COMMIT")
+                    return json.loads(invocation["receipt_json"])
+            receipt = {"status": "reserved", "submissionId": submission_id, **details}
+            self._db.execute("INSERT INTO workbench_action VALUES(?,?,?,?,?,?,?,?,?,?)", (*key, digest, encoded, "reserved", expected_revision, json.dumps(receipt)))
+            if invocation_id is not None:
+                self._db.execute("INSERT INTO workbench_invocation VALUES(?,?,?,?,?,?,?)", (*scope.key(), invocation_id, invocation_digest, json.dumps(receipt)))
+            self._db.execute("COMMIT")
+            return receipt
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            raise
+
+    def consume_action(self, scope: WorkbenchScope, submission_id: str, digest: str) -> dict[str, object] | None:
+        key = (*scope.key(), submission_id)
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._db.execute("SELECT digest, envelope_json, state, layout_revision FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?", key).fetchone()
+            if not row or row["digest"] != digest or row["state"] != "reserved":
+                self._db.execute("ROLLBACK")
+                return None
+            envelope = json.loads(row["envelope_json"])
+            current = self._db.execute("SELECT revision FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchone()
+            records = self._db.execute("SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchall()
+            registered = any(json.loads(record["record_json"]).get("activityMessageId") == envelope.get("activityMessageId") for record in records)
+            if current is None or current["revision"] != row["layout_revision"] or not registered:
+                self._db.execute("UPDATE workbench_action SET state='unresolved' WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?", key)
+                self._db.execute("COMMIT")
+                return None
+            self._db.execute("UPDATE workbench_action SET state='dispatching' WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?", key)
+            self._db.execute("COMMIT")
+            return envelope
+        except BaseException:
+            if self._db.in_transaction:
+                self._db.execute("ROLLBACK")
+            raise
 
     def load_content(self, scope: WorkbenchScope) -> list[dict[str, object]]:
         rows = self._db.execute("SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=? ORDER BY sequence, part_index", scope.key()).fetchall()

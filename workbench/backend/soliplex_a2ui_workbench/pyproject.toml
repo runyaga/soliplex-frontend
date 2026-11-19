@@ -12,6 +12,7 @@ requires-python = ">=3.13"
 #   uv run pytest           # run this project's tests
 #   uv pip install -e .     # or a plain editable install
 dependencies = [
+    "fastapi >= 0.115, < 1",
     "soliplex >= 0.93, < 0.94",
     "pydantic >= 2, < 3",
 ]
@@ -19,6 +20,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest",
+    "httpx >= 0.27, < 1",
     "pydantic >= 2, < 3",
 ]
 

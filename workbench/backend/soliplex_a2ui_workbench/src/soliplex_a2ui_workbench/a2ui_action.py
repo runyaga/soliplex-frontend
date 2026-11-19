@@ -10,14 +10,14 @@ that anchor, so the model reads the action once per run and before anything
 it produced in reply. The message text is ``A2UI user action:`` plus the
 action JSON, as ``soliplex_a2ui.apply_user_action`` writes it.
 
-:func:`install` makes pydantic-ai's AG-UI adapter build its model input
-through :func:`with_user_action`. The stored run input is unchanged.
+:func:`install` retains the legacy lab action projection. Workbench
+submissions use :mod:`workbench_actions` and do not rely on this patch.
 """
 
 from __future__ import annotations
 
-import functools
 import hashlib
+import functools
 import json
 from collections.abc import Sequence
 from typing import Any
@@ -84,10 +84,7 @@ def with_user_action(
 
 
 def install() -> None:
-    """Route the AG-UI adapter's model input through :func:`with_user_action`.
-
-    Idempotent, so a hot reload of this module installs it once.
-    """
+    """Install the existing lab-only action projection for legacy surfaces."""
     from pydantic_ai.ui.ag_ui import _adapter
 
     adapter = _adapter.AGUIAdapter
@@ -105,3 +102,5 @@ def install() -> None:
     prop.__set_name__(adapter, "messages")
     adapter.messages = prop
     adapter._soliplex_a2ui_lab_action = True
+
+

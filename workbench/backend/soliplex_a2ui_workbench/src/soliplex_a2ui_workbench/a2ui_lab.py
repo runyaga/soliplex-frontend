@@ -11,10 +11,10 @@ from __future__ import annotations
 from ag_ui.core import ActivitySnapshotEvent
 from pydantic_ai import RunContext, ToolReturn
 from soliplex.agents import AgentDependencies
-
 from soliplex_a2ui_workbench import a2ui_action
 
-# Action-only runs reach the model as one user message per run.
+# Preserve the lab's existing legacy action behavior. The workbench envelope
+# has a different closed shape and is read only by workbench_actions.
 a2ui_action.install()
 
 ACTIVITY_TYPE = "a2ui-surface"
