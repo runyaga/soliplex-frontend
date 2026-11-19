@@ -45,9 +45,42 @@ class WorkbenchCatalogValidator:
             if component not in BUILTIN_CATALOG_MANIFESTS[catalog_id] or component not in negotiated_components:
                 raise ValueError("component is absent from negotiated catalog")
             self._validate_record(catalog_id, str(component), record)
+            operations = _content_operations(record)
+            self._validate_emitted_components(operations, negotiated_manifests)
+
+    @staticmethod
+    def _validate_emitted_components(operations: Sequence[Mapping[str, object]], negotiated_manifests: Mapping[str, object]) -> None:
+        """Validate the exact component objects the emitter will publish."""
+        for operation in operations:
+            update = operation.get("updateComponents")
+            if not isinstance(update, dict):
+                continue
+            components = update.get("components")
+            if not isinstance(components, list):
+                raise ValueError("emitted component list is invalid")
+            for item in components:
+                if not isinstance(item, dict):
+                    raise ValueError("emitted component must be an object")
+                name = item.get("component")
+                catalog_id = item.get("@catalogId", BASIC_CATALOG)
+                negotiated = negotiated_manifests.get(catalog_id)
+                negotiated_components = negotiated.keys() if isinstance(negotiated, Mapping) else negotiated
+                if not isinstance(name, str) or name not in BUILTIN_CATALOG_MANIFESTS.get(catalog_id, ()) or not isinstance(negotiated_components, (set, frozenset, list, tuple, dict)) or name not in negotiated_components:
+                    raise ValueError("emitted component is not in a negotiated catalog")
+                if catalog_id == BASIC_CATALOG:
+                    _validate_basic_component(item)
 
     @staticmethod
     def _validate_record(catalog_id: str, component: str, record: Mapping[str, object]) -> None:
+        common = {"activityMessageId", "surfaceId", "catalogId", "component", "surfaceRevision"}
+        record_shapes = {
+            (GRAPHICS_CATALOG, "Chart"): common | {"spec"},
+            (LAB_CATALOG, "PythonRepl"): common | {"source", "title"},
+            (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title"},
+        }
+        allowed_record_keys = record_shapes.get((catalog_id, component), common | {"properties"})
+        if set(record) - allowed_record_keys:
+            raise ValueError("content record contains fields the emitter does not use")
         if catalog_id == GRAPHICS_CATALOG and component == "Chart":
             spec = record.get("spec")
             if not isinstance(spec, dict) or set(spec) != {"kind", "series"} or spec.get("kind") not in {"bar", "line"}:
@@ -82,6 +115,8 @@ class WorkbenchCatalogValidator:
             props = record.get("properties", {})
             if not isinstance(props, dict):
                 raise ValueError("basic component properties must be an object")
+            if set(record) - {"activityMessageId", "surfaceId", "catalogId", "component", "surfaceRevision", "properties"}:
+                raise ValueError("basic component fields must be provided in properties")
             allowed = {
                 "Text": {"text"},
                 "Card": {"children"},
@@ -96,26 +131,88 @@ class WorkbenchCatalogValidator:
             if component not in allowed or set(props) - allowed[component]:
                 raise ValueError("unsupported or malformed basic component")
             if component == "Text":
-                text = props.get("text", record.get("text"))
+                text = props.get("text")
                 if not isinstance(text, (str, dict)):
                     raise ValueError("basic Text requires a string or binding")
                 if isinstance(text, dict) and (set(text) != {"@path"} or not isinstance(text["@path"], str)):
                     raise ValueError("invalid basic Text binding")
             if component in {"Card", "Column", "Row", "List"}:
-                children = props.get("children", record.get("children"))
+                children = props.get("children")
                 if not isinstance(children, list) or any(not isinstance(child, str) for child in children):
                     raise ValueError("basic container requires child IDs")
             if component in {"CheckBox", "TextField"}:
-                label = props.get("label", record.get("label"))
-                value = props.get("value", record.get("value"))
+                label = props.get("label")
+                value = props.get("value")
                 if not isinstance(label, str) or not isinstance(value, (bool, str, dict)):
                     raise ValueError("invalid basic input properties")
                 if isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str)):
                     raise ValueError("invalid basic input binding")
             if component == "Slider":
-                low, high = props.get("min", record.get("min")), props.get("max", record.get("max"))
+                low, high = props.get("min"), props.get("max")
                 if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in (low, high)) or low >= high:
                     raise ValueError("invalid basic Slider range")
+            if component == "Button":
+                label, action = props.get("label"), props.get("action")
+                if not isinstance(label, str) or not isinstance(action, dict) or not isinstance(action.get("name"), str) or not action["name"] or set(action) - {"name", "context"} or ("context" in action and not isinstance(action["context"], dict)):
+                    raise ValueError("invalid basic Button action")
+
+
+def _validate_basic_component(item: Mapping[str, object]) -> None:
+    """Check an emitted basic-catalog definition as a closed object."""
+    component = item.get("component")
+    common = {"id", "component", "@catalogId"}
+    shapes = {
+        "Text": common | {"text"},
+        "Card": common | {"children"},
+        "Column": common | {"children"},
+        "Row": common | {"children"},
+        "List": common | {"children"},
+        "CheckBox": common | {"label", "value"},
+        "TextField": common | {"label", "value"},
+        "Slider": common | {"min", "max", "value", "label"},
+        "Button": common | {"label", "action"},
+    }
+    allowed = shapes.get(component)
+    if allowed is None or set(item) - allowed or not isinstance(item.get("id"), str) or not item.get("id"):
+        raise ValueError("invalid emitted basic component shape")
+    required = {
+        "Text": {"text"},
+        "Card": {"children"},
+        "Column": {"children"},
+        "Row": {"children"},
+        "List": {"children"},
+        "CheckBox": {"label", "value"},
+        "TextField": {"label", "value"},
+        "Slider": {"min", "max", "value"},
+        "Button": {"label", "action"},
+    }[component]
+    if required - set(item):
+        raise ValueError("emitted component is missing required properties")
+    if component == "Button":
+        action = item.get("action")
+        if not isinstance(item.get("label"), str) or not isinstance(action, dict) or not isinstance(action.get("name"), str) or not action["name"] or set(action) - {"name", "context"} or ("context" in action and not isinstance(action["context"], dict)):
+            raise ValueError("invalid emitted Button action")
+    if component == "Text":
+        text = item["text"]
+        if not isinstance(text, (str, dict)) or (isinstance(text, dict) and (set(text) != {"@path"} or not isinstance(text["@path"], str))):
+            raise ValueError("emitted Text requires string or path binding")
+    if component in {"Card", "Column", "Row", "List"}:
+        if not isinstance(item["children"], list) or any(not isinstance(child, str) or not child for child in item["children"]):
+            raise ValueError("emitted container children must be component IDs")
+    if component == "CheckBox":
+        value = item["value"]
+        if not isinstance(item["label"], str) or not isinstance(value, (bool, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
+            raise ValueError("invalid emitted CheckBox properties")
+    if component == "TextField":
+        value = item["value"]
+        if not isinstance(item["label"], str) or not isinstance(value, (str, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
+            raise ValueError("invalid emitted TextField properties")
+    if component == "Slider":
+        low, high, value = item["min"], item["max"], item["value"]
+        if not all(isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number) for number in (low, high, value)) or low >= high or not low <= value <= high:
+            raise ValueError("invalid emitted Slider properties")
+        if "label" in item and not isinstance(item["label"], str):
+            raise ValueError("invalid emitted Slider label")
 
 
 class ContentPublication(TypedDict):

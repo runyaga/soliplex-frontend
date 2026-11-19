@@ -59,7 +59,7 @@ def _guard_app(repo, scope):
     async def downstream(request: Request):
         handler_calls.append("entered")
         adapter = await AGUIAdapter.from_request(request, agent=Agent(TestModel()))
-        return {"state": adapter.run_input.state, "message_count": len(adapter.run_input.messages)}
+        return {"state": adapter.run_input.state, "message_count": len(adapter.run_input.messages), "messages": [message.model_dump(mode="json", by_alias=True) for message in adapter.run_input.messages]}
 
     app = FastAPI()
     app.state.workbench_repository = repo
@@ -121,7 +121,9 @@ def test_matched_path_parameters_allow_room_named_agui(tmp_path):
         json={"threadId": scope.thread_id, "runId": "run-4", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}},
     )
     assert response.status_code == 200
-    assert response.json()["state"]["workbenchAction"] == envelope
+    assert [message["role"] for message in response.json()["messages"]] == ["assistant", "tool"]
+    assert response.json()["messages"][0]["toolCalls"][0]["function"]["name"] == "workbench_intake"
+    assert response.json()["messages"][0]["toolCalls"][0]["id"] == response.json()["messages"][1]["toolCallId"]
 
 
 def test_raw_action_json_rejects_duplicate_keys(tmp_path):

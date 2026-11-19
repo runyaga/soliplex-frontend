@@ -17,6 +17,42 @@ class TraceSink(Protocol):
     def emit(self, event: Mapping[str, object]) -> None: ...
 
 
+WORKBENCH_INTAKE_TOOL_NAME = "workbench_intake"
+
+
+def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, object]]:
+    """Build a stable AG-UI assistant tool-call and untrusted tool-result pair."""
+    submission_id = envelope.get("submissionId")
+    context = envelope.get("userAction")
+    if not isinstance(submission_id, str) or not isinstance(context, Mapping):
+        raise ValueError("validated intake reservation is malformed")
+    digest = hashlib.sha256(submission_id.encode("utf-8")).hexdigest()[:24]
+    call_id = f"workbench-intake-{digest}"
+    result = {
+        "kind": "untrusted_user_submitted_data",
+        "actionSchemaVersion": "intake.submit@1",
+        "submissionId": submission_id,
+        "context": dict(context),
+    }
+    return [
+        {
+            "id": f"{call_id}-assistant",
+            "role": "assistant",
+            "toolCalls": [{
+                "id": call_id,
+                "type": "function",
+                "function": {"name": WORKBENCH_INTAKE_TOOL_NAME, "arguments": json.dumps({"submissionId": submission_id}, separators=(",", ":"))},
+            }],
+        },
+        {
+            "id": f"{call_id}-result",
+            "role": "tool",
+            "toolCallId": call_id,
+            "content": json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+        },
+    ]
+
+
 class WorkbenchActionService:
     def __init__(self, repository: SQLiteWorkbenchRepository, trace_sink: TraceSink | None = None):
         self.repository = repository
@@ -50,14 +86,14 @@ class WorkbenchActionService:
             return duplicate
         current = self.repository.load_snapshot(scope)
         if current["layout"] is None:
-            raise ValueError("stale workbench surface revision")
+            raise PublicationConflict("stale workbench surface revision")
         registered = {str(record.get("activityMessageId")): record for record in current["content"]}
         record = registered.get(action.activityMessageId)
         if record is None:
             raise ValueError("action surface is not registered in this thread")
         surface_revision = record.get("surfaceRevision", current["revision"])
         if surface_revision != action.surfaceRevision:
-            raise ValueError("stale workbench surface revision")
+            raise PublicationConflict("stale workbench surface revision")
         component = record.get("component")
         expected_components = {
             "intake.submit@1": {"PlaceForm", "IntakeForm"},

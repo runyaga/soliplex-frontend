@@ -1,4 +1,4 @@
-from soliplex_a2ui_workbench.workbench_actions import WorkbenchActionService
+from soliplex_a2ui_workbench.workbench_actions import WorkbenchActionService, synthetic_intake_messages
 from soliplex_a2ui_workbench.workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope, PublicationConflict
 import pytest
 import json
@@ -47,6 +47,18 @@ def test_intake_reservation_is_idempotent_and_model_free(tmp_path):
     assert first["status"] == "reserved"
 
 
+def test_synthetic_intake_tool_pair_ids_are_stable_for_reservation():
+    envelope = {
+        "submissionId": "stable-submit-1",
+        "actionSchemaVersion": "intake.submit@1",
+        "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True},
+    }
+    first = synthetic_intake_messages(envelope)
+    second = synthetic_intake_messages(envelope)
+    assert first == second
+    assert first[0]["toolCalls"][0]["id"] == first[1]["toolCallId"]
+
+
 def test_changed_duplicate_conflicts_and_unreserved_dispatch_rejects(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     service = WorkbenchActionService(repo)
@@ -81,7 +93,7 @@ def test_dispatch_consumes_exact_reserved_envelope_once(tmp_path):
         service.accept(scope, payload | {"surfaceRevision": 2})
 
 
-def test_guarded_agui_route_replays_without_consuming_and_injects_typed_state(tmp_path):
+def test_guarded_agui_route_replays_without_consuming_and_adds_synthetic_tool_pair(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     scope = WorkbenchScope("alice", "server", "room", "thread")
     _register(repo, scope)
@@ -104,12 +116,19 @@ def test_guarded_agui_route_replays_without_consuming_and_injects_typed_state(tm
     app.include_router(create_guarded_agui_router(upstream, scope_provider=scope))
     client = TestClient(app)
     run_input = {"threadId": "thread", "runId": "run", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": payload}}
-    replay = client.post("/v1/rooms/room/agui/thread/run", json=run_input, headers={"Last-Event-ID": "run:0"})
+    replay_payload = run_input | {"forwardedProps": {}}
+    replay = client.post("/v1/rooms/room/agui/thread/run", json=replay_payload, headers={"Last-Event-ID": "run:0"})
     assert replay.status_code == 200
     assert "workbenchAction" not in replay.json().get("state", {})
     accepted = client.post("/v1/rooms/room/agui/thread/run", json=run_input)
     assert accepted.status_code == 200
-    assert accepted.json()["state"]["workbenchAction"] == payload
+    messages = accepted.json()["messages"]
+    assert [message["role"] for message in messages] == ["assistant", "tool"]
+    assert messages[0]["toolCalls"][0]["function"]["name"] == "workbench_intake"
+    assert messages[0]["toolCalls"][0]["id"] == messages[1]["toolCallId"]
+    reconnect = client.post("/v1/rooms/room/agui/thread/run", json=replay_payload, headers={"Last-Event-ID": "run:1"})
+    assert reconnect.status_code == 200
+    assert reconnect.json()["messages"] == []
     duplicate = client.post("/v1/rooms/room/agui/thread/run", json=run_input)
     assert duplicate.status_code == 409
 
@@ -129,6 +148,23 @@ def test_nested_duplicate_json_keys_are_rejected_before_agui_adapter(tmp_path):
     raw = b'{"threadId":"thread","runId":"run","state":{"x":1,"x":2},"messages":[],"tools":[],"context":[],"forwardedProps":{}}'
     response = TestClient(app).post("/v1/rooms/room/agui/thread/run", content=raw, headers={"content-type": "application/json"})
     assert response.status_code == 400
+
+
+def test_workbench_reconnect_rejects_client_workbench_fields(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    scope = WorkbenchScope("alice", "server", "room", "thread")
+    upstream = APIRouter()
+
+    @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
+    async def handler(request: Request):
+        return {"ok": True}
+
+    app = FastAPI()
+    app.state.workbench_repository = repo
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=scope))
+    payload = {"threadId": "thread", "runId": "run", "state": {"workbenchAction": {"forged": True}}, "messages": [], "tools": [], "context": [], "forwardedProps": {}}
+    response = TestClient(app).post("/v1/rooms/room/agui/thread/run", json=payload, headers={"Last-Event-ID": "run:0"})
+    assert response.status_code == 422
 
 
 def test_run_result_persists_client_trace_tags_without_model(tmp_path):

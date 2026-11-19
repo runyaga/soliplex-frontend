@@ -47,6 +47,34 @@ def test_missing_validator_is_not_silently_accepted():
 
 def test_builtin_validator_rejects_unknown_catalog_and_invalid_chart():
     record = json.loads((FIXTURES / "content_v1.json").read_text())
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    validator = WorkbenchCatalogValidator()
+    built = build_publication([record], validator, {record["catalogId"]: {"Chart"}}, layout=layout)
+    assert built["events"][0]["event"]["content"]["a2ui_operations"]
     record["spec"] = {"bad": "shape"}
     with pytest.raises(ValueError, match="invalid graphics:2 Chart spec"):
-        build_publication([record], WorkbenchCatalogValidator(), {record["catalogId"]: {"Chart"}}, layout=json.loads((FIXTURES / "layout_tree_v1.json").read_text()))
+        build_publication([record], validator, {record["catalogId"]: {"Chart"}}, layout=layout)
+    unknown = record | {"catalogId": "urn:unknown", "spec": {}}
+    with pytest.raises(ValueError, match="catalog has no package validator"):
+        build_publication([unknown], validator, {"urn:unknown": {"Chart"}}, layout=layout)
+
+
+def test_builtin_validator_accepts_valid_basic_button_and_rejects_invalid_emitted_action():
+    validator = WorkbenchCatalogValidator()
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    basic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+    record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Button", "properties": {"label": "Go", "action": {"name": "submit"}}}
+    built = build_publication([record], validator, {basic: {"Button"}}, layout=layout)
+    assert built["events"][0]["event"]["content"]["a2ui_operations"][2]["updateComponents"]["components"][0]["action"] == {"name": "submit"}
+    invalid = record | {"properties": {"label": "Go", "action": 123}}
+    with pytest.raises(ValueError):
+        build_publication([invalid], validator, {basic: {"Button"}}, layout=layout)
+
+
+def test_basic_emitter_rejects_top_level_properties_it_does_not_copy():
+    validator = WorkbenchCatalogValidator()
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    basic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+    record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Text", "text": "Hello"}
+    with pytest.raises(ValueError):
+        build_publication([record], validator, {basic: {"Text"}}, layout=layout)
