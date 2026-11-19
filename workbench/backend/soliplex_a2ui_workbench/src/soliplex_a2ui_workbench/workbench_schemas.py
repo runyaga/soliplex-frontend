@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from types import MappingProxyType
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -86,7 +88,12 @@ class LayoutSnapshot(Closed):
                 if set(node.payload) != {"role"}:
                     raise ValueError("invalid region payload")
             elif node.kind == "split":
-                if node.payload.keys() != {"axis"} or node.payload["axis"] not in {"horizontal", "vertical"}:
+                axis = node.payload.get("axis")
+                if (
+                    node.payload.keys() != {"axis"}
+                    or not isinstance(axis, str)
+                    or axis not in {"horizontal", "vertical"}
+                ):
                     raise ValueError("invalid split payload")
             elif node.kind == "surface":
                 if set(node.payload) != {"activityMessageId", "surfaceId"}:
@@ -172,9 +179,10 @@ class LayoutSnapshot(Closed):
         )
         if expanded_windows > 2:
             raise ValueError("expanded window capacity exceeded")
-        import json
-
-        if len(json.dumps(self.model_dump(mode="json"), separators=(",", ":")).encode("utf-8")) > 65_536:
+        control_data = json.dumps(
+            self.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        if len(control_data) > 65_536:
             raise ValueError("layout exceeds 64 KiB")
         return self
 
@@ -296,7 +304,7 @@ class InterpreterStatePointer(Closed):
     engine: Engine
     dump: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
-    owner: Id
+    owner: Annotated[str, Field(min_length=1, max_length=128)]
     hop: Annotated[int, Field(ge=0, le=4)]
 
     @field_validator("engine")
@@ -362,9 +370,10 @@ class ActionEnvelope(Closed):
 
     @model_validator(mode="after")
     def within_utf8_limit(self) -> ActionEnvelope:
-        import json
-
-        if len(json.dumps(self.model_dump(mode="json"), separators=(",", ":")).encode("utf-8")) > 16_384:
+        encoded = json.dumps(
+            self.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        if len(encoded) > 16_384:
             raise ValueError("action envelope exceeds 16 KiB")
         return self
 
@@ -451,3 +460,20 @@ class RepairProgram(Closed):
         if len(value.encode("utf-8")) > 12_000:
             raise ValueError("source exceeds UTF-8 byte limit")
         return value
+
+
+# Both minimum room registrations use this immutable callable-name/schema map.
+MINIMUM_ROOM_TOOL_MANIFEST = MappingProxyType(
+    {
+        "get_workbench": GetWorkbench,
+        "open_panel": OpenPanel,
+        "place_form": PlaceForm,
+        "show_chart": ShowChart,
+        "run_python_client": RunPythonClient,
+        "run_python_server": RunPythonServer,
+        "create_container": CreateContainer,
+        "move_panel": MovePanel,
+        "close_panel": ClosePanel,
+        "repair_program": RepairProgram,
+    }
+)

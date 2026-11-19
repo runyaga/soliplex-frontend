@@ -114,7 +114,7 @@ def python_repl_operations(
         _op(sid, "updateComponents", {"components": [
             {"id": "root", "component": "Column", "children": ["title", "repl"]},
             {"id": "title", "component": "Text", "text": title},
-            {"id": "repl", "component": "PythonRepl", "catalogId": LAB_CATALOG,
+            {"id": "repl", "component": "PythonRepl", "@catalogId": LAB_CATALOG,
              "source": {"@path": "/repl/source"},
              "outputPath": "/repl/result",
              "mode": mode,

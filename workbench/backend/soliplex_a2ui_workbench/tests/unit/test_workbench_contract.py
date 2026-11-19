@@ -1,9 +1,12 @@
 """Cross-language workbench fixtures and closed contract checks."""
 
 import hashlib
+import importlib.util
 import json
 import re
 import signal
+import sys
+import types
 from copy import deepcopy
 from pathlib import Path
 
@@ -12,19 +15,12 @@ from pydantic import ValidationError
 
 from soliplex_a2ui_workbench.workbench_schemas import (
     ActionEnvelope,
-    ClosePanel,
-    CreateContainer,
     ExportChart,
-    GetWorkbench,
     InterpreterStatePointer,
     LayoutSnapshot,
-    MovePanel,
-    OpenPanel,
     PlaceForm,
     Point,
-    RepairProgram,
     RunPythonClient,
-    RunPythonServer,
     RunResult,
     ServerPythonNotEnabled,
     ShowChart,
@@ -32,13 +28,9 @@ from soliplex_a2ui_workbench.workbench_schemas import (
     validate_pointer_owner,
     validate_registered_mounts,
 )
+from soliplex_a2ui_workbench import workbench_schemas
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "workbench"
-_EXPECTED_TOOL_NAMES = {
-    "get_workbench", "open_panel", "place_form", "show_chart",
-    "run_python_client", "run_python_server", "create_container",
-    "move_panel", "close_panel", "repair_program",
-}
 EXPECTED = {
     "content_v1.json": "cdafd25c553cf668cf02e7f91fbe1e8c61d3af9dc99c4385d3729478610e90eb",
     "export_action_v1.json": "a855f678939f4c955576a19be3a7902df45bc70e7ae9e4460ecc47a9f2452606",
@@ -305,6 +297,115 @@ def test_layout_rejects_duplicate_ids_or_broken_edges() -> None:
             validate_layout(candidate)
 
 
+def test_layout_budget_counts_utf8_bytes_not_ascii_escapes() -> None:
+    candidate = fixture("nested_tree_v1.json")
+    candidate["shared"] = {"label": "界" * 11_000}
+    encoded = json.dumps(candidate, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    assert len(encoded) == 36_880
+    accepted = LayoutSnapshot.model_validate(
+        candidate,
+        context={"authenticated_program_surfaces": {"surface_python"}},
+    )
+    assert len(json.dumps(accepted.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8")) < 65_536
+
+
+def test_run_result_envelope_budget_counts_utf8_bytes_not_ascii_escapes() -> None:
+    envelope = {
+        "v": 1,
+        "submissionId": "submission_1",
+        "activityMessageId": "activity_python",
+        "surfaceRevision": 1,
+        "actionSchemaVersion": "workbench.program.run_result@1",
+        "userAction": {
+            "side": "client",
+            "engine": "monty-1.3.0",
+            "invocationId": "invocation_1",
+            "chainId": "chain_1",
+            "outcome": "success",
+            "output": "é" * 3_000,
+        },
+    }
+    encoded = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    assert len(encoded) == 6_286
+    assert ActionEnvelope.model_validate(envelope).userAction.output == "é" * 3_000
+
+
+def test_malformed_split_axis_is_a_pydantic_validation_error() -> None:
+    candidate = fixture("nested_tree_v1.json")
+    split = next(node for node in candidate["nodes"] if node["kind"] == "split")
+    split["payload"] = {"axis": []}
+    with pytest.raises(ValidationError):
+        validate_layout(candidate)
+
+
+def test_minimum_tool_manifest_is_authoritative_and_closed() -> None:
+    manifest = workbench_schemas.MINIMUM_ROOM_TOOL_MANIFEST
+    expected = {
+        "get_workbench", "open_panel", "place_form", "show_chart",
+        "run_python_client", "run_python_server", "create_container",
+        "move_panel", "close_panel", "repair_program",
+    }
+    assert set(manifest) == expected
+    for name, model in manifest.items():
+        assert model.__name__
+        schema = model.model_json_schema()
+        assert schema["additionalProperties"] is False
+        assert len(schema.get("properties", {})) <= 5
+        assert _all_objects_closed(schema)
+    assert "show_table" not in manifest
+    assert all("AfterMinimum" not in model.__name__ for model in manifest.values())
+
+
+def test_python_repl_component_uses_canonical_catalog_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    lab = _load_a2ui_lab_for_test(monkeypatch)
+    operations = lab.python_repl_operations()
+    update = next(operation["updateComponents"] for operation in operations if "updateComponents" in operation)
+    component = next(item for item in update["components"] if item["id"] == "repl")
+    assert component["@catalogId"] == lab.LAB_CATALOG
+    assert "catalogId" not in component
+
+
+def _load_a2ui_lab_for_test(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
+    for module_name, attributes in {
+        "ag_ui.core": {"ActivitySnapshotEvent": object},
+        "pydantic_ai": {"RunContext": object, "ToolReturn": object},
+        "soliplex.agents": {"AgentDependencies": object},
+        "soliplex_a2ui_workbench.a2ui_action": {
+            "install": lambda: None,
+        },
+    }.items():
+        stub = types.ModuleType(module_name)
+        for name, value in attributes.items():
+            setattr(stub, name, value)
+        monkeypatch.setitem(sys.modules, module_name, stub)
+    for package_name in ("ag_ui", "soliplex"):
+        monkeypatch.setitem(sys.modules, package_name, types.ModuleType(package_name))
+    monkeypatch.setattr(sys.modules["ag_ui"], "core", sys.modules["ag_ui.core"], raising=False)
+    monkeypatch.setattr(sys.modules["soliplex"], "agents", sys.modules["soliplex.agents"], raising=False)
+    path = Path(__file__).parents[2] / "src/soliplex_a2ui_workbench/a2ui_lab.py"
+    spec = importlib.util.spec_from_file_location("isolated_a2ui_lab", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize(
+    "owner",
+    ["123e4567-e89b-12d3-a456-426614174000", "server:actor:room:thread", "x" * 128],
+)
+def test_pointer_accepts_design_owner_strings(owner: str) -> None:
+    pointer = fixture("handoff_pointer_v1.json")
+    validated = InterpreterStatePointer.model_validate({**pointer, "owner": owner})
+    assert validated.owner == owner
+
+
+def test_pointer_rejects_owner_over_design_limit() -> None:
+    pointer = fixture("handoff_pointer_v1.json")
+    with pytest.raises(ValidationError):
+        InterpreterStatePointer.model_validate({**pointer, "owner": "x" * 129})
+
+
 def test_layout_rejects_cycle_protected_chat_and_duplicate_mount() -> None:
     source = fixture("nested_tree_v1.json")
     cycle = deepcopy(source)
@@ -454,29 +555,28 @@ def test_layout_rejects_depth_nine_after_nested_reparenting() -> None:
 
 
 def test_tool_schemas_are_closed_and_minimum_only() -> None:
-    tools = [GetWorkbench, OpenPanel, PlaceForm, ShowChart, RunPythonClient, RunPythonServer, CreateContainer, MovePanel, ClosePanel, RepairProgram]
-    callable_names = {_callable_name(tool.__name__) for tool in tools}
-    _assert_tool_names(callable_names)
-    for tool in tools:
+    manifest = workbench_schemas.MINIMUM_ROOM_TOOL_MANIFEST
+    assert set(manifest) == {
+        "get_workbench", "open_panel", "place_form", "show_chart",
+        "run_python_client", "run_python_server", "create_container",
+        "move_panel", "close_panel", "repair_program",
+    }
+    assert "show_table" not in manifest
+    assert not any(
+        model.__name__ in {"ShowTable", "PlaceFormAfterMinimum", "ShowChartAfterMinimum"}
+        for model in manifest.values()
+    )
+    for callable_name, tool in manifest.items():
         schema = tool.model_json_schema()
+        model_callable_name = re.sub(r"(?<!^)(?=[A-Z])", "_", tool.__name__).lower()
+        assert callable_name == model_callable_name
         assert schema["additionalProperties"] is False
         assert len(schema.get("properties", {})) <= 5
         assert _all_objects_closed(schema)
+    assert manifest["place_form"].model_json_schema()["properties"]["template"]["const"] == "intake"
     assert "selection_group" not in ShowChart.model_fields
-
-
-def _callable_name(model_name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", model_name).lower()
-
-
-def _assert_tool_names(names: set[str]) -> None:
-    assert names == _EXPECTED_TOOL_NAMES
-
-
-def test_show_table_model_name_maps_to_its_real_callable_name() -> None:
-    assert _callable_name("ShowTable") == "show_table"
-    with pytest.raises(AssertionError):
-        _assert_tool_names(_EXPECTED_TOOL_NAMES | {_callable_name("ShowTable")})
+    with pytest.raises(TypeError):
+        manifest["show_table"] = ShowChart
 
 
 def _all_objects_closed(value: object) -> bool:
