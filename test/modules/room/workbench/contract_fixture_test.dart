@@ -7,11 +7,11 @@ import '../../../fixtures/workbench/workbench_fixtures.g.dart';
 
 const _digests = <String, String>{
   'snapshot_content_v1.json':
-      '32c52154c5e36a3474faa4742f19f6ddebb475bace80fda1130f4ae9a78cea84',
+      '1615980ad68b18de8bf4af23b60a4c158dbbfa4c9f7ca8fb69b4ab232e47a7d6',
   'snapshot_fresh_v1.json':
       'cfb1c76e3cced37771b26483fdff0d4e3d847cffd6b2e7db18aeb122fabcc886',
   'content_v1.json':
-      'cdafd25c553cf668cf02e7f91fbe1e8c61d3af9dc99c4385d3729478610e90eb',
+      '55c062166bf65c5a34700d0e484edf054963dc4bda5ea88dcaec6eeb9d13f2e2',
   'export_action_v1.json':
       'a855f678939f4c955576a19be3a7902df45bc70e7ae9e4460ecc47a9f2452606',
   'handoff_pointer_v1.json':

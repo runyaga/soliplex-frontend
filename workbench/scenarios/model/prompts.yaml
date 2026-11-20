@@ -22,14 +22,10 @@
     "prompt": "Show a bar chart of north 80, south 76 on the canvas. Use the labels North and South and title Scenario regions.",
     "assertions": [
       {
-        "kind": "text",
-        "name": "North: 80",
-        "region": "canvas"
-      },
-      {
-        "kind": "text",
-        "name": "South: 76",
-        "region": "canvas"
+        "kind": "role",
+        "name": "bar chart: Scenario regions; North: 80, South: 76",
+        "region": "canvas",
+        "role": "img"
       }
     ]
   },
@@ -191,28 +187,19 @@
     "prompt": "Move the chart to the right sidebar. Preserve the chart data and remove its old placement.",
     "assertions": [
       {
-        "kind": "text",
-        "name": "North: 80",
+        "kind": "role",
+        "name": "bar chart: Scenario regions; North: 80, South: 76",
         "region": "right",
-        "count": 1
-      },
-      {
-        "kind": "text",
-        "name": "South: 76",
-        "region": "right",
-        "count": 1
+        "count": 1,
+        "role": "img"
       }
     ],
     "setup_assertions": [
       {
-        "kind": "text",
-        "name": "North: 80",
-        "region": "canvas"
-      },
-      {
-        "kind": "text",
-        "name": "South: 76",
-        "region": "canvas"
+        "kind": "role",
+        "name": "bar chart: Scenario regions; North: 80, South: 76",
+        "region": "canvas",
+        "role": "img"
       }
     ]
   },

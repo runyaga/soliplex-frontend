@@ -9,6 +9,7 @@ from typing import Protocol, TypedDict, runtime_checkable
 
 from ag_ui.core import ActivitySnapshotEvent
 
+from .chart_validation import validate_chart
 from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
 
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
@@ -42,7 +43,7 @@ class WorkbenchCatalogValidator:
                 raise ValueError("catalog has no package validator")
             negotiated = negotiated_manifests.get(catalog_id)
             if not isinstance(negotiated, (Mapping, set, frozenset, list, tuple)):
-                raise ValueError("catalog was not negotiated")
+                raise ValueError("catalog was not negotiated")  # noqa: TRY004 - retryable payload validation
             negotiated_components = negotiated.keys() if isinstance(negotiated, Mapping) else negotiated
             if component not in BUILTIN_CATALOG_MANIFESTS[catalog_id] or component not in negotiated_components:
                 raise ValueError("component is absent from negotiated catalog")
@@ -59,11 +60,11 @@ class WorkbenchCatalogValidator:
                 continue
             components = update.get("components")
             if not isinstance(components, list):
-                raise ValueError("emitted component list is invalid")
+                raise ValueError("emitted component list is invalid")  # noqa: TRY004 - retryable payload validation
             component_ids: set[str] = set()
             for item in components:
                 if not isinstance(item, dict):
-                    raise ValueError("emitted component must be an object")
+                    raise ValueError("emitted component must be an object")  # noqa: TRY004 - retryable payload validation
                 component_id = item.get("id")
                 if not isinstance(component_id, str) or not component_id or component_id in component_ids:
                     raise ValueError("emitted component IDs must be unique")
@@ -99,7 +100,7 @@ class WorkbenchCatalogValidator:
             if type(revision) is not int or revision < 0:
                 raise ValueError("surfaceRevision must be a non-negative integer")
         record_shapes = {
-            (GRAPHICS_CATALOG, "Chart"): common | {"spec"},
+            (GRAPHICS_CATALOG, "Chart"): common | {"spec", "selection", "description", "height"},
             (LAB_CATALOG, "PythonRepl"): common | {"source", "title", "output"},
             (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title"},
         }
@@ -111,34 +112,7 @@ class WorkbenchCatalogValidator:
             if not isinstance(value, str) or not _IDENTIFIER.fullmatch(value):
                 raise ValueError(f"{key} must be a valid identifier")
         if catalog_id == GRAPHICS_CATALOG and component == "Chart":
-            spec = record.get("spec")
-            if not isinstance(spec, dict) or set(spec) != {"kind", "series"} or spec.get("kind") not in {"bar", "line"}:
-                raise ValueError("invalid graphics:2 Chart spec")
-            series = spec["series"]
-            if not isinstance(series, list) or len(series) != 1:
-                raise ValueError("Chart requires exactly one categorical series")
-            item = series[0]
-            if not isinstance(item, dict) or set(item) != {"id", "label", "points"}:
-                raise ValueError("invalid Chart series")
-            points = item["points"]
-            if not isinstance(points, list) or not 1 <= len(points) <= 32:
-                raise ValueError("Chart requires 1..32 points")
-            point_ids: set[str] = set()
-            for point in points:
-                if not isinstance(point, dict) or set(point) != {"id", "label", "value"}:
-                    raise ValueError("invalid Chart point")
-                value = point["value"]
-                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or abs(value) > 1e9:
-                    raise ValueError("Chart point value must be finite numeric data")
-                if not isinstance(point["id"], str) or not _IDENTIFIER.fullmatch(point["id"]) or point["id"] in point_ids:
-                    raise ValueError("Chart point IDs must be unique identifiers")
-                if not isinstance(point["label"], str) or not point["label"] or len(point["label"]) > 80:
-                    raise ValueError("Chart point labels must be short strings")
-                point_ids.add(point["id"])
-            if not isinstance(item["id"], str) or not _IDENTIFIER.fullmatch(item["id"]):
-                raise ValueError("Chart series ID must be an identifier")
-            if not isinstance(item["label"], str) or not item["label"] or len(item["label"]) > 80:
-                raise ValueError("Chart series label must be a short string")
+            validate_chart({key: record[key] for key in ("spec", "selection", "description", "height") if key in record})
         elif catalog_id == LAB_CATALOG and component == "PythonRepl":
             source = record.get("source")
             output = record.get("output", "")
@@ -242,9 +216,11 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         text = item["text"]
         if not isinstance(text, (str, dict)) or (isinstance(text, dict) and (set(text) != {"@path"} or not isinstance(text["@path"], str))):
             raise ValueError("emitted Text requires string or path binding")
-    if component in {"Card", "Column", "Row", "List"}:
-        if not isinstance(item["children"], list) or any(not isinstance(child, str) or not child for child in item["children"]):
-            raise ValueError("emitted container children must be component IDs")
+    if component in {"Card", "Column", "Row", "List"} and (
+        not isinstance(item["children"], list)
+        or any(not isinstance(child, str) or not child for child in item["children"])
+    ):
+        raise ValueError("emitted container children must be component IDs")
     if component == "CheckBox":
         value = item["value"]
         if not isinstance(item["label"], str) or not isinstance(value, (bool, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
@@ -289,7 +265,7 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     component = str(record["component"])
     data = {key: record[key] for key in ("spec", "source", "title", "template", "output") if key in record}
     if component == "Chart":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": {"@path": "/spec"}}
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": record["spec"], "selection": record["selection"], "description": record["description"], **({"height": record["height"]} if "height" in record else {})}
     elif component == "PythonRepl":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", "onWorkbench": {"event": {
             "name": "workbench.program.layout", "context": {
@@ -381,7 +357,7 @@ def build_publication(
         activity_id = record.get("activityMessageId")
         surface_id = record.get("surfaceId")
         if not isinstance(activity_id, str) or not isinstance(surface_id, str):
-            raise ValueError("content requires stable activity and surface IDs")
+            raise ValueError("content requires stable activity and surface IDs")  # noqa: TRY004 - retryable payload validation
         commit = {"recordId": publication_id, "sequence": sequence, "index": index, "count": count}
         content_record = record | {"workbenchCommit": commit} if legacy_journal else dict(record)
         content_records.append(content_record)

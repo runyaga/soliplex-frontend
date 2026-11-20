@@ -12,6 +12,7 @@ environment:
   flutter: ">=3.47.0"
 
 workspace:
+  - packages/soliplex_catalogs
   - packages/soliplex_agent
   - packages/soliplex_client
   - packages/soliplex_client_native
@@ -49,6 +50,8 @@ dependencies:
   mime: ^2.0.0
   url_launcher: ^6.3.1
   web: ^1.1.1
+  soliplex_catalogs:
+    path: packages/soliplex_catalogs
   soliplex_agent:
     path: packages/soliplex_agent
   soliplex_client:

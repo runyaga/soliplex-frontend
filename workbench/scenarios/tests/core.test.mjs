@@ -179,3 +179,17 @@ test('canvas matches use container ancestry even when composer geometry overlaps
   assert.deepEqual((await workspaceMatches(page, { ...assertion, region: 'workspace' })).map(item => item.target), [canvas]);
   assert.deepEqual((await workspaceMatches(page, { ...assertion, name: 'Submit', region: 'left' })).map(item => item.target), [left]);
 });
+
+test('chart scenarios require image semantics with title and series', async () => {
+  const deterministic = await loadCases(new URL('../deterministic/cases.json', import.meta.url));
+  const model = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  for (const item of [...deterministic, ...model]) {
+    if (!['chart_on_canvas', 'move_panel', 'bar_chart', 'move_chart_right'].includes(item.id)) continue;
+    for (const assertion of [...item.assertions, ...(item.setup_assertions ?? [])]) {
+      assert.equal(assertion.kind, 'role');
+      assert.equal(assertion.role, 'img');
+      assert.match(assertion.name, /bar chart: Scenario regions; North: 80, South: 76/);
+    }
+  }
+
+});

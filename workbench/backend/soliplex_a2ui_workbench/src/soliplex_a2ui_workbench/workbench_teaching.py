@@ -37,6 +37,11 @@ TOOL_EXAMPLES = {
     },
 }
 
+CHART_EXAMPLES = {
+    kind: {**TOOL_EXAMPLES["show_chart"], "kind": kind}
+    for kind in ("bar", "line", "pie", "gauge")
+}
+
 DEMO = """import ui
 result_window = ""
 
@@ -72,6 +77,10 @@ def room_skill(skill_name):
     for name, arguments in TOOL_EXAMPLES.items():
         MINIMUM_ROOM_TOOL_MANIFEST[name].model_validate(arguments)
         examples.append(f"- `{name}({json.dumps(arguments, ensure_ascii=False)})`")
+    chart_examples = "\n".join(
+        f"- `show_chart({json.dumps(arguments)})`"
+        for arguments in CHART_EXAMPLES.values()
+    )
     basic = next(c for c in generated["catalogs"] if "Text" in c["components"])
     variants = ", ".join(basic["components"]["Text"]["properties"]["variant"]["enum"])
     signatures = "\n".join(
@@ -134,6 +143,22 @@ closed content leaf while keeping its owning window in place.
 ## One example per registered tool
 
 {chr(10).join(examples)}
+
+## Chart examples
+
+{chart_examples}
+
+Bar and line accept signed values. Pie values are nonnegative. Gauge uses exactly
+one point; its default scale is 0..100. Set scale={{"min_value":0,"max_value":100,"target":80}} to change that scale. Charts are static; selection is an empty list.
+
+Programs can use import chart and import ui, then publish a standalone chart:
+`ui.show(ui.graphics.Chart(chart.bar([{{"id":"a","label":"A","value":2}}], title="Counts"), [], "Counts"))`.
+The chart module also provides line(series), pie(slices), gauge(value,
+min_value=0, max_value=100), scatter(series), radar(axes, series), and
+candlestick(candles). All return specs for ui.graphics.Chart. Each series has
+an id, optional label, and points (bar/line: id, label, value; scatter: id, x, y).
+Radar values align with axes and range from 0 to 100; candles use id, x, open,
+high, low, close. Client charts appear only after the user presses Run.
 
 ## Python ui API
 

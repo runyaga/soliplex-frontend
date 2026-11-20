@@ -59,7 +59,6 @@ import '../agent_runtime_manager.dart';
 import '../../../interfaces/workbench_presentation.dart';
 import '../a2ui/surface_scope.dart' show ChatSurfaceScope, ChatSurfaceStore;
 import '../a2ui/surface_view.dart' show ChatSurfaceView;
-import '../workbench/chart_placeholder_catalog.dart';
 import '../room_state.dart';
 import '../../../stores/run_registry.dart';
 import '../thread_list_state.dart';
@@ -269,11 +268,7 @@ class _RoomScreenState extends State<RoomScreen> {
       _workbenchSurfaceStores.putIfAbsent(
         threadId,
         () => ChatSurfaceStore(
-          catalogs: [
-            ...widget.surfaceCatalogs,
-            if (!widget.surfaceCatalogs.any((c) => c.id == graphicsCatalogId))
-              chartPlaceholderCatalog(),
-          ],
+          catalogs: widget.surfaceCatalogs,
           onAction: (activityMessageId, action) {
             final threadView = _state.activeThreadView;
             if (threadView?.threadId != threadId) return;

@@ -20,14 +20,10 @@
     "id": "chart_on_canvas",
     "assertions": [
       {
-        "kind": "text",
-        "name": "North: 80",
-        "region": "canvas"
-      },
-      {
-        "kind": "text",
-        "name": "South: 76",
-        "region": "canvas"
+        "kind": "role",
+        "name": "bar chart: Scenario regions; North: 80, South: 76",
+        "region": "canvas",
+        "role": "img"
       }
     ]
   },
@@ -123,14 +119,10 @@
     "id": "move_panel",
     "assertions": [
       {
-        "kind": "text",
-        "name": "North: 80",
-        "region": "right"
-      },
-      {
-        "kind": "text",
-        "name": "South: 76",
-        "region": "right"
+        "kind": "role",
+        "name": "bar chart: Scenario regions; North: 80, South: 76",
+        "region": "right",
+        "role": "img"
       }
     ]
   },

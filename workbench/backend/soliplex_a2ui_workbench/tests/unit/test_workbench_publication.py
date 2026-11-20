@@ -4,12 +4,11 @@ import json
 from pathlib import Path
 
 import pytest
-
 from soliplex_a2ui_workbench.workbench_publication import (
     BASIC_CATALOG,
     CatalogValidator,
-    build_publication,
     WorkbenchCatalogValidator,
+    build_publication,
 )
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/workbench"
@@ -103,7 +102,7 @@ def test_builtin_validator_rejects_unknown_catalog_and_invalid_chart():
     )
     assert built["events"][0]["event"]["content"]["a2ui_operations"]
     record["spec"] = {"bad": "shape"}
-    with pytest.raises(ValueError, match="invalid graphics:2 Chart spec"):
+    with pytest.raises(ValueError, match="violates catalog constraint"):
         build_publication(
             [record],
             validator,
@@ -306,8 +305,8 @@ def test_basic_container_cannot_reference_unemitted_component():
 @pytest.mark.parametrize(
     "mutate",
     [
-        lambda spec: spec["series"][0].update(id={"bad": "id"}),
-        lambda spec: spec["series"][0]["points"][0].update(label={"bad": "label"}),
+        lambda spec: spec["points"][0].update(id={"bad": "id"}),
+        lambda spec: spec["points"][0].update(label={"bad": "label"}),
     ],
 )
 def test_chart_validator_rejects_object_ids_and_labels(mutate):

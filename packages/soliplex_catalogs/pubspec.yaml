@@ -1,0 +1,24 @@
+name: soliplex_catalogs
+description: Soliplex A2UI custom catalogs (graphics and demo components) for chat surfaces.
+version: 0.0.1-dev
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  a2ui_core: ^0.8.0
+  a2ui_flutter: ^0.4.0
+  fl_chart: 1.3.1
+  flutter:
+    sdk: flutter
+  json_schema_builder: ^0.1.7
+  soliplex_design:
+    path: ../soliplex_design
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.0.0

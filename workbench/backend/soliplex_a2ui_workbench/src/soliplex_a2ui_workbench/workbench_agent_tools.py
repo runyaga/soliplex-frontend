@@ -97,14 +97,16 @@ async def show_chart(
     kind: str,
     points: list[dict[str, object]],
     parent_id: str,
+    scale: dict[str, float | None] | None = None,
 ) -> ToolReturn:
     """Show a chart using the supplied data points.
 
     Args:
         title: Short chart heading.
-        kind: Chart style, either ``bar`` or ``line``.
+        kind: Chart style, ``bar``, ``line``, ``pie``, or ``gauge``.
         points: Data points, each with a unique ``id``, display ``label``, and numeric ``value``.
         parent_id: Existing container node where the chart should be placed.
+        scale: Optional gauge scale with min_value (0), max_value (100), and target.
     """
     return await _call(
         workbench_tools.show_chart,
@@ -113,6 +115,7 @@ async def show_chart(
         kind=kind,
         points=points,
         parent_id=parent_id,
+        scale=scale,
     )
 
 
@@ -269,6 +272,13 @@ async def _call(function, ctx: RunContext[AgentDependencies], **kwargs):
                 "Programs need a window on the canvas: call create_container(kind='window', "
                 "parent_id='r_canvas', title='Program') first, or pass a window id. "
                 "run_python_client also accepts parent_id='r_canvas' to create one automatically."
+            )
+        if function.__name__ == "show_chart":
+            correction = (
+                "Use kind bar, line, pie, or gauge and points=[{id:'a', label:'A', value:2}]. "
+                "IDs must be unique. Pie values must be nonnegative. "
+                "Gauge takes exactly one point within scale.min_value..scale.max_value (defaults 0..100); "
+                "target, if supplied, must be on that scale."
             )
         # The error envelope survives AG-UI versions without tool outcome fields.
         # ModelRetry also makes this a rejected call in the model's own history.

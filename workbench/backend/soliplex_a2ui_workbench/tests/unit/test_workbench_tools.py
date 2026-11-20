@@ -2,18 +2,19 @@
 
 import json
 from pathlib import Path
+
 import pytest
 from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
 from soliplex_a2ui_workbench.workbench_repository import (
     SQLiteWorkbenchRepository,
     WorkbenchScope,
 )
+from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 from soliplex_a2ui_workbench.workbench_templates import (
     MINIMUM_ROOM_REGISTRATIONS,
     MINIMUM_ROOM_TOOLS,
     validate_room_registrations,
 )
-from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/workbench"
 
@@ -69,14 +70,8 @@ def test_form_chart_and_get_workbench_publish_successive_revisions(ctx):
         if row["component"] == "Chart"
     )
     assert chart_record["spec"] == {
-        "kind": "bar",
-        "series": [
-            {
-                "id": "values",
-                "label": "Counts",
-                "points": [{"id": "north", "label": "North", "value": 80}],
-            }
-        ],
+        "kind": "bar", "title": "Counts",
+        "points": [{"id": "north", "label": "North", "value": 80}],
     }
 
 

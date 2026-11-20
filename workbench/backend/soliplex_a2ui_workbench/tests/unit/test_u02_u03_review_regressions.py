@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 
 import pytest
-
 from soliplex_a2ui_workbench.workbench_publication import build_publication
-from soliplex_a2ui_workbench.workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope
-
+from soliplex_a2ui_workbench.workbench_repository import (
+    SQLiteWorkbenchRepository,
+    WorkbenchScope,
+)
 
 FIXTURES = Path(__file__).parents[1] / "fixtures/workbench"
 
@@ -29,6 +30,8 @@ def _registered_repo(tmp_path, component="PlaceForm"):
     else:
         record.update(catalogId="urn:soliplex:catalog:lab:1", source="print('idle')")
         record.pop("spec", None)
+    record.pop("selection", None)
+    record.pop("description", None)
     repo.publish(scope, "initial", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity-1", "surface-1")})
     return repo, scope, record
 

@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_client/soliplex_client.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_frontend/src/modules/room/a2ui/surface_scope.dart';
 import 'package:soliplex_frontend/src/modules/room/a2ui/surface_view.dart';
-import 'package:soliplex_frontend/src/modules/room/workbench/chart_placeholder_catalog.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/layout_tree.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/surface_mount_registry.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/workbench_host.dart';
@@ -263,7 +263,7 @@ void main() {
     var starts = 0;
     final store = ChatSurfaceStore(
       catalogs: [
-        chartPlaceholderCatalog(),
+        chartGraphicsCatalog(),
         labCatalog(
           startRuntime: (_, _) async {
             starts++;

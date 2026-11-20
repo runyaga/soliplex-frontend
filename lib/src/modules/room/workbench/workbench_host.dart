@@ -208,6 +208,17 @@ class WorkbenchHost extends StatelessWidget {
     );
   }
 
+  // Semantic sizes use the review's 1/2/3 weights. Small windows retain a
+  // readable mobile-sized viewport; taller content scrolls inside the chrome.
+  int _weight(LayoutNode node) => switch (node.size) {
+        'small' => 1,
+        'large' => 3,
+        _ => 2,
+      };
+
+  double _height(LayoutNode node) =>
+      SoliplexBreakpoints.mobile * (_weight(node) + 1) / 2;
+
   Widget _render(BuildContext context, LayoutNode node) {
     if (node.visibility != 'open') return const SizedBox.shrink();
     if (node.kind == 'region' && node.payload['role'] == 'chat') return chat;
@@ -225,23 +236,40 @@ class WorkbenchHost extends StatelessWidget {
       final horizontal = node.payload['axis'] == 'horizontal';
       return LayoutBuilder(
         builder: (context, constraints) {
-          if (!horizontal || constraints.maxWidth < 240 * children.length) {
+          final stacked = !horizontal ||
+              constraints.maxWidth <
+                  SoliplexBreakpoints.tablet / 2 * children.length;
+          if (stacked && constraints.hasBoundedHeight) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final child in children)
-                  SizedBox(height: 240, child: _render(context, child)),
+                  Expanded(
+                      flex: _weight(child), child: _render(context, child)),
+              ],
+            );
+          }
+          if (!horizontal ||
+              constraints.maxWidth <
+                  SoliplexBreakpoints.tablet / 2 * children.length) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final child in children)
+                  SizedBox(
+                      height: _height(child), child: _render(context, child)),
               ],
             );
           }
           return SizedBox(
-            height: SoliplexBreakpoints.tablet / 2,
+            height: children.map(_height).reduce((a, b) => a > b ? a : b),
             child: Flex(
               direction: horizontal ? Axis.horizontal : Axis.vertical,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final child in children)
-                  Expanded(child: _render(context, child)),
+                  Expanded(
+                      flex: _weight(child), child: _render(context, child)),
               ],
             ),
           );
@@ -253,7 +281,7 @@ class WorkbenchHost extends StatelessWidget {
       return DefaultTabController(
         length: children.length,
         child: SizedBox(
-          height: 360,
+          height: _height(node),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -288,9 +316,9 @@ class WorkbenchHost extends StatelessWidget {
               container: true,
               explicitChildNodes: true,
               label: 'Workbench window ${node.title}',
-              child: SizedBox(width: 640, height: 480, child: chrome),
+              child: SizedBox(height: _height(node), child: chrome),
             )
-          : chrome;
+          : SizedBox(height: _height(node), child: chrome);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

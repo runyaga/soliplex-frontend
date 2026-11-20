@@ -306,12 +306,13 @@ def show_chart(
     kind: str,
     points: list[dict[str, object]],
     parent_id: str,
+    scale: dict[str, float | None] | None = None,
 ) -> dict[str, object]:
     """Publish one categorical graphics:2 Chart without running a renderer."""
     activity_id, surface_id = _record_ids()
     return _content_result(
         ctx,
-        chart_record(activity_id, surface_id, title, kind, points),
+        chart_record(activity_id, surface_id, title, kind, points, scale),
         parent_id,
         title=title,
     )
