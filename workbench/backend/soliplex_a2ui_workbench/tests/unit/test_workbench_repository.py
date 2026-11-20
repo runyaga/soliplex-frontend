@@ -22,10 +22,12 @@ class FixtureCatalogValidator:
 
 
 def fixture_repo(path):
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG
+
     return SQLiteWorkbenchRepository(
         path,
         catalog_validator=FixtureCatalogValidator(),
-        negotiated_manifests={"fixture": {"Fixture"}},
+        negotiated_manifests={"fixture": {"Fixture"}, BASIC_CATALOG: {"Text"}},
     )
 
 
@@ -64,7 +66,7 @@ def test_restart_preserves_records_layout_and_duplicate_receipt(tmp_path):
     assert reopened.get_receipt(scope, "pub_1") == result
     assert reopened.publish(scope, "pub_1", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts()) == result
     loaded_content = reopened.load_content(scope)
-    assert [item | {"workbenchCommit": loaded_content[index]["workbenchCommit"]} for index, item in enumerate(content())] == loaded_content
+    assert [item | {"surfaceRevision": 1, "workbenchCommit": loaded_content[index]["workbenchCommit"]} for index, item in enumerate(content())] == loaded_content
     reopened.close()
 
 
@@ -97,6 +99,50 @@ def test_surface_revision_regression_leaves_snapshot_and_receipts_unchanged(tmp_
     assert repo.load_snapshot(scope) == before_snapshot
     assert repo.get_receipt(scope, "surface-five") == before_receipt == first
     assert repo.get_receipt(scope, "surface-one") is None
+    repo.close()
+
+
+def test_surface_revision_bool_is_rejected_and_omission_preserves_effective_revision(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "strict-surface-revision.sqlite")
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    layout["nodes"][2]["children"] = ["panel-form"]
+    layout["nodes"].extend([
+        {"id": "panel-form", "parentId": "r_left", "children": ["surface-form"], "kind": "panel", "title": "Form", "size": "medium", "visibility": "open", "payload": {}},
+        {"id": "surface-form", "parentId": "panel-form", "children": [], "kind": "surface", "title": "Form", "size": "medium", "visibility": "open", "payload": {"activityMessageId": "activity-form", "surfaceId": "surface-form"}},
+    ])
+    from soliplex_a2ui_workbench.workbench_publication import WORKBENCH_CATALOG
+    original = {"activityMessageId": "activity-form", "surfaceId": "surface-form", "catalogId": WORKBENCH_CATALOG, "component": "PlaceForm", "title": "Form", "template": "intake", "surfaceRevision": 5}
+    repo.publish(scope, "surface-five", 0, layout, [original], registered_program_surfaces=set(), registered_mounts={("activity-form", "surface-form")})
+    before = repo.load_snapshot(scope)
+    next_layout = json.loads(json.dumps(layout))
+    next_layout["layoutRevision"] = 2
+    with pytest.raises(ValueError, match="surfaceRevision"):
+        repo.publish(scope, "surface-bool", 1, next_layout, [original | {"surfaceRevision": True}], registered_program_surfaces=set(), registered_mounts={("activity-form", "surface-form")})
+    assert repo.load_snapshot(scope) == before
+    assert repo.get_receipt(scope, "surface-bool") is None
+    omitted = {key: value for key, value in original.items() if key != "surfaceRevision"}
+    repo.publish(scope, "surface-omitted", 1, next_layout, [omitted], registered_program_surfaces=set(), registered_mounts={("activity-form", "surface-form")})
+    assert repo.load_content(scope)[0]["surfaceRevision"] == 5
+    repo.close()
+
+
+def test_explicit_empty_negotiation_does_not_fall_back_to_builtin_catalogs(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "empty-negotiation.sqlite", negotiated_manifests={})
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    record = json.loads((FIXTURES / "content_v1.json").read_text())
+    record["activityMessageId"] = "activity-chart"
+    record["surfaceId"] = "surface-chart"
+    layout["nodes"][2]["children"] = ["panel-chart"]
+    layout["nodes"].extend([
+        {"id": "panel-chart", "parentId": "r_left", "children": ["surface-chart"], "kind": "panel", "title": "Chart", "size": "medium", "visibility": "open", "payload": {}},
+        {"id": "surface-chart", "parentId": "panel-chart", "children": [], "kind": "surface", "title": "Chart", "size": "medium", "visibility": "open", "payload": {"activityMessageId": "activity-chart", "surfaceId": "surface-chart"}},
+    ])
+    with pytest.raises(ValueError, match="negotiated"):
+        repo.publish(scope, "empty-negotiation", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity-chart", "surface-chart")})
+    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.get_receipt(scope, "empty-negotiation") is None
     repo.close()
 
 

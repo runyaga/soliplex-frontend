@@ -72,7 +72,14 @@ class WorkbenchCatalogValidator:
                 catalog_id = item.get("@catalogId", BASIC_CATALOG)
                 negotiated = negotiated_manifests.get(catalog_id)
                 negotiated_components = negotiated.keys() if isinstance(negotiated, Mapping) else negotiated
-                if not isinstance(name, str) or name not in BUILTIN_CATALOG_MANIFESTS.get(catalog_id, ()) or not isinstance(negotiated_components, (set, frozenset, list, tuple, dict)) or name not in negotiated_components:
+                if (
+                    not isinstance(catalog_id, str)
+                    or not isinstance(name, str)
+                    or catalog_id not in negotiated_manifests
+                    or (catalog_id in BUILTIN_CATALOG_MANIFESTS and name not in BUILTIN_CATALOG_MANIFESTS[catalog_id])
+                    or not isinstance(negotiated_components, (set, frozenset, list, tuple, dict))
+                    or name not in negotiated_components
+                ):
                     raise ValueError("emitted component is not in a negotiated catalog")
                 if catalog_id == BASIC_CATALOG:
                     _validate_basic_component(item)
@@ -85,6 +92,10 @@ class WorkbenchCatalogValidator:
     @staticmethod
     def _validate_record(catalog_id: str, component: str, record: Mapping[str, object]) -> None:
         common = {"activityMessageId", "surfaceId", "catalogId", "component", "surfaceRevision"}
+        if "surfaceRevision" in record:
+            revision = record["surfaceRevision"]
+            if type(revision) is not int or revision < 0:
+                raise ValueError("surfaceRevision must be a non-negative integer")
         record_shapes = {
             (GRAPHICS_CATALOG, "Chart"): common | {"spec"},
             (LAB_CATALOG, "PythonRepl"): common | {"source", "title"},
@@ -332,6 +343,11 @@ def build_publication(
     if sequence < 1:
         raise ValueError("sequence must be positive")
     frozen = [dict(record) for record in records]
+    for record in frozen:
+        if "surfaceRevision" in record:
+            revision = record["surfaceRevision"]
+            if type(revision) is not int or revision < 0:
+                raise ValueError("surfaceRevision must be a non-negative integer")
     validator.validate(frozen, negotiated_manifests)
     if len({record.get("activityMessageId") for record in frozen}) != len(frozen):
         raise ValueError("activity message IDs must be unique")
@@ -357,5 +373,8 @@ def build_publication(
         _operation(layout_surface_id, "updateDataModel", {"path": "/", "value": {"summary": "Workbench", "workbench": validated_layout.model_dump(mode="json")}}),
         _operation(layout_surface_id, "updateComponents", {"components": [{"id": "root", "component": "Text", "text": {"@path": "/summary"}}]}),
     ]
+    for record in frozen:
+        WorkbenchCatalogValidator._validate_emitted_components(_content_operations(record), negotiated_manifests)
+    WorkbenchCatalogValidator._validate_emitted_components(operations, negotiated_manifests)
     events.append({"kind": "layout", "record_id": publication_id, "event": _event(layout_activity_message_id, operations, {"workbenchCommit": layout_commit})})
     return {"content_records": content_records, "events": events}

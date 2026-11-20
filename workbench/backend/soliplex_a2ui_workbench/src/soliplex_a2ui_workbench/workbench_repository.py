@@ -63,7 +63,7 @@ class SQLiteWorkbenchRepository:
         negotiated_manifests: Mapping[str, object] | None = None,
     ):
         self._catalog_validator = catalog_validator or WorkbenchCatalogValidator()
-        self._negotiated_manifests = negotiated_manifests or BUILTIN_CATALOG_MANIFESTS
+        self._negotiated_manifests = BUILTIN_CATALOG_MANIFESTS if negotiated_manifests is None else negotiated_manifests
         self._lock = threading.RLock()
         self._db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
@@ -171,23 +171,23 @@ class SQLiteWorkbenchRepository:
                 for row in stored_content
                 for item in [json.loads(row["record_json"])]
             }
+            effective_content: list[dict[str, object]] = []
             for incoming in content:
                 identity = (incoming.get("activityMessageId"), incoming.get("surfaceId"))
                 previous = previous_surfaces.get(identity)
-                old_revision = previous.get("surfaceRevision") if previous is not None else None
-                new_revision = incoming.get("surfaceRevision")
-                if (
-                    isinstance(old_revision, int)
-                    and not isinstance(old_revision, bool)
-                    and isinstance(new_revision, int)
-                    and not isinstance(new_revision, bool)
-                    and new_revision < old_revision
-                ):
+                old_revision = previous.get("surfaceRevision", revision) if previous is not None else None
+                if old_revision is not None and (type(old_revision) is not int or old_revision < 0):
+                    raise PublicationConflict("stored surface revision is invalid")
+                new_revision = incoming.get("surfaceRevision", old_revision if old_revision is not None else snapshot.layoutRevision)
+                if type(new_revision) is not int or new_revision < 0:
+                    raise ValueError("surfaceRevision must be a non-negative integer")
+                if old_revision is not None and new_revision < old_revision:
                     raise PublicationConflict("surface revision cannot regress")
+                effective_content.append(dict(incoming) | {"surfaceRevision": new_revision})
             next_sequence = sequence + 1
             scope_digest = hashlib.sha256("/".join(key).encode()).hexdigest()[:24]
             plan = build_publication(
-                content,
+                effective_content,
                 self._catalog_validator,
                 self._negotiated_manifests,
                 layout=snapshot.model_dump(mode="json"),

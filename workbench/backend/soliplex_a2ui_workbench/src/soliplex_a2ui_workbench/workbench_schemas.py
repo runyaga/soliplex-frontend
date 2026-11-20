@@ -364,7 +364,7 @@ class ActionEnvelope(Closed):
     v: Literal[1]
     submissionId: Annotated[str, Field(min_length=1, max_length=64)]
     activityMessageId: Id
-    surfaceRevision: Annotated[int, Field(ge=0)]
+    surfaceRevision: Annotated[int, Field(ge=0, strict=True)]
     actionSchemaVersion: Annotated[str, Field(min_length=1, max_length=128)]
     userAction: IntakeSubmit | ProgramExport | RunResult
 

@@ -176,7 +176,8 @@ def test_publication_emits_content_then_layout_wire_events():
         def validate(self, records, manifests):
             assert records[0]["catalogId"] in manifests
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
-    plan = build_publication([record], Validator(), {record["catalogId"]: {"Chart"}}, layout=layout)
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG
+    plan = build_publication([record], Validator(), {record["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
     events = plan["events"]
     assert [event["kind"] for event in events] == ["content", "layout"]
     assert events[0]["event"]["content"]["a2ui_operations"]

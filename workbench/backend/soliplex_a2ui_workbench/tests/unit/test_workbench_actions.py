@@ -209,6 +209,27 @@ def test_run_result_persists_client_trace_tags_without_model(tmp_path):
         service.accept(scope, changed)
 
 
+def test_run_result_invocation_id_is_bound_to_originating_surface(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "invocation-origin.sqlite")
+    scope = WorkbenchScope("alice", "server", "room", "thread")
+    _register(repo, scope, "PythonRepl")
+    current = repo.load_snapshot(scope)
+    layout = current["layout"]
+    layout["layoutRevision"] = 2
+    second_panel = {"id": "panel_chart_2", "parentId": "r_right", "children": ["surface-chart-2"], "kind": "panel", "title": "Second program", "size": "medium", "visibility": "open", "payload": {}}
+    next(node for node in layout["nodes"] if node["id"] == "r_right")["children"].append("panel_chart_2")
+    layout["nodes"].append(second_panel)
+    layout["nodes"].append({"id": "surface-chart-2", "parentId": "panel_chart_2", "children": [], "kind": "surface", "title": "Second program", "size": "medium", "visibility": "open", "payload": {"activityMessageId": "activity-2", "surfaceId": "surface-2"}})
+    first_record = {key: value for key, value in current["content"][0].items() if key != "workbenchCommit"} | {"surfaceRevision": 2}
+    second_record = first_record | {"activityMessageId": "activity-2", "surfaceId": "surface-2"}
+    repo.publish(scope, "add-second-program", 1, layout, [first_record, second_record], registered_program_surfaces=set(), registered_mounts={("activity-1", "surface-1"), ("activity-2", "surface-2")})
+    service = WorkbenchActionService(repo, trace_sink=type("Sink", (), {"emit": lambda self, event: None})())
+    common = {"v": 1, "surfaceRevision": 2, "actionSchemaVersion": "workbench.program.run_result@1", "userAction": {"side": "client", "engine": "monty-1.3.0", "invocationId": "shared-invocation", "chainId": "chain-1", "outcome": "success", "output": "125"}}
+    service.accept(scope, common | {"submissionId": "origin-one", "activityMessageId": "activity-1"})
+    with pytest.raises(PublicationConflict, match="invocation ID reused"):
+        service.accept(scope, common | {"submissionId": "origin-two", "activityMessageId": "activity-2"})
+
+
 def test_restore_does_not_invalidate_pending_intake_reservation(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     scope = WorkbenchScope("alice", "server", "room", "thread")
@@ -219,7 +240,7 @@ def test_restore_does_not_invalidate_pending_intake_reservation(tmp_path):
     records = [{key: value for key, value in record.items() if key != "workbenchCommit"} for record in repo.load_content(scope)]
     repo.publish(scope, "close-panel", 1, layout | {"layoutRevision": 2}, records, registered_program_surfaces=set(), registered_mounts={("activity-1", "surface-1")})
     service = WorkbenchActionService(repo)
-    envelope = {"v": 1, "submissionId": "pending-before-restore", "activityMessageId": "activity-1", "surfaceRevision": 2, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
+    envelope = {"v": 1, "submissionId": "pending-before-restore", "activityMessageId": "activity-1", "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
     service.accept(scope, envelope)
     before = repo.load_snapshot(scope)
     assert next(node for node in before["layout"]["nodes"] if node["id"] == "panel-closed")["visibility"] == "closed"

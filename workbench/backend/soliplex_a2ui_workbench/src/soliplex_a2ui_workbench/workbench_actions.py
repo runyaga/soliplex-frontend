@@ -107,9 +107,14 @@ class WorkbenchActionService:
         receipt_details: dict[str, object] = {}
         if isinstance(action.userAction, RunResult):
             invocation_data = action.userAction.model_dump(mode="json")
+            invocation_identity = {
+                "result": invocation_data,
+                "activityMessageId": action.activityMessageId,
+                "surfaceId": str(record.get("surfaceId")),
+            }
             receipt_details = {
                 "invocationId": action.userAction.invocationId,
-                "invocationDigest": hashlib.sha256(json.dumps(invocation_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+                "invocationDigest": hashlib.sha256(json.dumps(invocation_identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
                 "trace": {
                     "python.side": "client",
                     "python.engine": action.userAction.engine,

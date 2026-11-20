@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from soliplex_a2ui_workbench.workbench_publication import (
+    BASIC_CATALOG,
     CatalogValidator,
     ContentPublication,
     build_publication,
@@ -25,7 +26,7 @@ class FixtureValidator:
 def test_publication_uses_injected_validator_and_ordered_parts():
     contents = [json.loads((FIXTURES / "content_v1.json").read_text())]
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
-    built = build_publication(contents, FixtureValidator(), {contents[0]["catalogId"]: {"Chart"}}, layout=layout)
+    built = build_publication(contents, FixtureValidator(), {contents[0]["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
     assert isinstance(FixtureValidator(), CatalogValidator)
     assert [event["kind"] for event in built["events"]] == ["content", "layout"]
     assert built["content_records"][0]["workbenchCommit"] == {"recordId": "workbench-publication", "sequence": 1, "index": 0, "count": 2}
@@ -45,18 +46,31 @@ def test_missing_validator_is_not_silently_accepted():
         build_publication([], None, {}, layout=layout)
 
 
+def test_empty_negotiation_rejects_emitted_layout_component():
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    with pytest.raises(ValueError, match="negotiated"):
+        build_publication([], WorkbenchCatalogValidator(), {}, layout=layout)
+
+
+@pytest.mark.parametrize("revision", [True, -1, 1.0, "5"])
+def test_catalog_rejects_non_strict_surface_revision(revision):
+    record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": BASIC_CATALOG, "component": "Text", "properties": {"text": "Hi"}, "surfaceRevision": revision}
+    with pytest.raises(ValueError, match="surfaceRevision"):
+        build_publication([record], WorkbenchCatalogValidator(), {BASIC_CATALOG: {"Text"}}, layout=json.loads((FIXTURES / "layout_tree_v1.json").read_text()))
+
+
 def test_builtin_validator_rejects_unknown_catalog_and_invalid_chart():
     record = json.loads((FIXTURES / "content_v1.json").read_text())
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
     validator = WorkbenchCatalogValidator()
-    built = build_publication([record], validator, {record["catalogId"]: {"Chart"}}, layout=layout)
+    built = build_publication([record], validator, {record["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
     assert built["events"][0]["event"]["content"]["a2ui_operations"]
     record["spec"] = {"bad": "shape"}
     with pytest.raises(ValueError, match="invalid graphics:2 Chart spec"):
-        build_publication([record], validator, {record["catalogId"]: {"Chart"}}, layout=layout)
+        build_publication([record], validator, {record["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
     unknown = record | {"catalogId": "urn:unknown", "spec": {}}
     with pytest.raises(ValueError, match="catalog has no package validator"):
-        build_publication([unknown], validator, {"urn:unknown": {"Chart"}}, layout=layout)
+        build_publication([unknown], validator, {"urn:unknown": {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
 
 
 def test_builtin_validator_accepts_valid_basic_button_and_rejects_invalid_emitted_action():
@@ -64,11 +78,11 @@ def test_builtin_validator_accepts_valid_basic_button_and_rejects_invalid_emitte
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
     basic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
     record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Button", "properties": {"label": "Go", "action": {"name": "submit"}}}
-    built = build_publication([record], validator, {basic: {"Button"}}, layout=layout)
+    built = build_publication([record], validator, {basic: {"Button", "Text"}}, layout=layout)
     assert built["events"][0]["event"]["content"]["a2ui_operations"][2]["updateComponents"]["components"][0]["action"] == {"name": "submit"}
     invalid = record | {"properties": {"label": "Go", "action": 123}}
     with pytest.raises(ValueError):
-        build_publication([invalid], validator, {basic: {"Button"}}, layout=layout)
+        build_publication([invalid], validator, {basic: {"Button", "Text"}}, layout=layout)
 
 
 def test_emitted_component_validator_rejects_invalid_wire_action_even_if_record_validation_is_stubbed(monkeypatch):
@@ -78,7 +92,7 @@ def test_emitted_component_validator_rejects_invalid_wire_action_even_if_record_
     record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Button", "properties": {"label": "Go", "action": 123}}
     monkeypatch.setattr(WorkbenchCatalogValidator, "_validate_record", staticmethod(lambda *_args: None))
     with pytest.raises(ValueError, match="Button action"):
-        build_publication([record], validator, {basic: {"Button"}}, layout=layout)
+        build_publication([record], validator, {basic: {"Button", "Text"}}, layout=layout)
 
 
 def test_basic_emitter_rejects_top_level_properties_it_does_not_copy():
@@ -121,12 +135,12 @@ def test_basic_choice_picker_requires_renderer_option_objects():
     validator = WorkbenchCatalogValidator()
     options = [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}]
     valid = {"activityMessageId": "choices", "surfaceId": "choices_surface", "catalogId": BASIC_CATALOG, "component": "ChoicePicker", "properties": {"label": "Districts", "variant": "multipleSelection", "options": options, "value": {"@path": "/districts"}, "displayStyle": "chips"}}
-    built = build_publication([valid], validator, {BASIC_CATALOG: {"ChoicePicker"}}, layout=layout)
+    built = build_publication([valid], validator, {BASIC_CATALOG: {"ChoicePicker", "Text"}}, layout=layout)
     emitted = built["events"][0]["event"]["content"]["a2ui_operations"][2]["updateComponents"]["components"][0]
     assert emitted["options"] == options
     invalid = valid | {"properties": valid["properties"] | {"options": ["north", "south"]}}
     with pytest.raises(ValueError, match="ChoicePicker"):
-        build_publication([invalid], validator, {BASIC_CATALOG: {"ChoicePicker"}}, layout=layout)
+        build_publication([invalid], validator, {BASIC_CATALOG: {"ChoicePicker", "Text"}}, layout=layout)
 
 
 def test_basic_container_cannot_reference_unemitted_component():
@@ -135,7 +149,7 @@ def test_basic_container_cannot_reference_unemitted_component():
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
     record = {"activityMessageId": "card", "surfaceId": "card_surface", "catalogId": BASIC_CATALOG, "component": "Card", "properties": {"children": ["missing-child"]}}
     with pytest.raises(ValueError, match="component reference"):
-        build_publication([record], WorkbenchCatalogValidator(), {BASIC_CATALOG: {"Card"}}, layout=layout)
+        build_publication([record], WorkbenchCatalogValidator(), {BASIC_CATALOG: {"Card", "Text"}}, layout=layout)
 
 
 @pytest.mark.parametrize("mutate", [
@@ -147,4 +161,4 @@ def test_chart_validator_rejects_object_ids_and_labels(mutate):
     mutate(record["spec"])
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
     with pytest.raises(ValueError):
-        build_publication([record], WorkbenchCatalogValidator(), {record["catalogId"]: {"Chart"}}, layout=layout)
+        build_publication([record], WorkbenchCatalogValidator(), {record["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
