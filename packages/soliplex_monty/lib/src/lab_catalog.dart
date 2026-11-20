@@ -43,9 +43,16 @@ class ReplLimits {
     this.retries = 2,
     this.maxRetries = 5,
     this.maxErrorChars = 2000,
+    this.maxSuspensions = 1000000,
   });
 
   final int maxMemory;
+
+  /// Host calls a session may make over its lifetime. An app window keeps one
+  /// session across every event and each redraw makes many ui calls, so the
+  /// dart_monty default of 1000 ends an app after a few dozen clicks. The
+  /// per-run feed duration and deadline bound a runaway program.
+  final int maxSuspensions;
   final Duration maxFeedDuration;
   final Duration deadline;
   final int maxEntries;
@@ -563,6 +570,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   ResourceLimits get _resourceLimits => ResourceLimits(
     maxMemory: widget.limits.maxMemory,
     maxFeedDuration: widget.limits.maxFeedDuration,
+    maxSuspensions: widget.limits.maxSuspensions,
   );
 
   /// Runs the editor after Run or an authorized live repair arrival.

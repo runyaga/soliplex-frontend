@@ -235,4 +235,42 @@ void main() {
     },
     skip: skipWithoutMonty != false,
   );
+
+  testWidgets('a long interactive session outlasts the host-call budget', (
+    tester,
+  ) async {
+    final starter = MontyStarter();
+    final controller = LabSurfaceController(
+      startRuntime: starter.call,
+      onActionPayload: (_) {},
+    );
+    final semantics = tester.ensureSemantics();
+    await _mount(tester, controller);
+    await repl.tapRun(tester);
+    await repl.waitFor(
+      tester,
+      () => repl.idle(tester) && find.text('Count: 0').evaluate().isNotEmpty,
+    );
+    // Each redraw makes about twenty ui calls, so sixty clicks pass the
+    // 1000-suspension session default.
+    for (var count = 1; count <= 60; count++) {
+      await tester.runAsync(() => tester.tap(find.text('+1')));
+      await tester.pump();
+      await repl.waitFor(
+        tester,
+        () =>
+            repl.idle(tester) &&
+            (find.text('Count: $count').evaluate().isNotEmpty ||
+                find.textContaining('suspension limit').evaluate().isNotEmpty),
+      );
+      expect(
+        find.textContaining('suspension limit'),
+        findsNothing,
+        reason: 'click $count',
+      );
+    }
+    expect(find.text('Count: 60'), findsOneWidget);
+    semantics.dispose();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
