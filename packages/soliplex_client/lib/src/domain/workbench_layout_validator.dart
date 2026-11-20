@@ -80,6 +80,7 @@ void _validateNodeShape(Object? raw) {
 }
 
 void _validateRoot(String rootId, Map<String, Map<String, dynamic>> nodes) {
+  _need(rootId != 'wb_root', 'reserved region contract mismatch');
   final root = nodes[rootId];
   _need(
     root == null || root['kind'] != 'workspace' || root['parentId'] != null,
@@ -187,6 +188,13 @@ void _validateReachability(
 ) {
   final seen = <String>{};
   final visiting = <String>{};
+  final parents = <String, int>{};
+  for (final node in nodes.values) {
+    for (final child in (node['children'] as List).cast<String>()) {
+      parents.update(child, (count) => count + 1, ifAbsent: () => 1);
+    }
+  }
+  _need(parents.values.any((count) => count > 1), 'multiple parents');
   void visit(String id, int depth) {
     _need(depth > 8, 'maximum depth exceeded');
     _need(!visiting.add(id), 'cycle');
@@ -197,7 +205,21 @@ void _validateReachability(
     visiting.remove(id);
   }
 
-  visit(rootId, 1);
+  for (final id in nodes.keys) {
+    if (!seen.contains(id)) visit(id, 1);
+  }
+  // Nodes visited through any component may include valid disconnected
+  // subgraphs. Recheck reachability from the reserved root separately.
+  seen.clear();
+  void visitRoot(String id, int depth) {
+    _need(depth > 8, 'maximum depth exceeded');
+    if (!seen.add(id)) return;
+    for (final child in (nodes[id]!['children'] as List).cast<String>()) {
+      visitRoot(child, depth + 1);
+    }
+  }
+
+  visitRoot(rootId, 1);
   _need(seen.length != nodes.length, 'orphan node');
 }
 
@@ -217,14 +239,14 @@ void _validateReserved(
     _need(
       node == null ||
           node['kind'] != 'region' ||
-          node['parentId'] != rootId ||
+          node['parentId'] != 'wb_root' ||
           (node['payload'] as Map)['role'] != entry.value,
       'reserved region contract mismatch',
     );
     _need(node!['visibility'] != 'open', 'reserved nodes must remain open');
   }
   _need(
-    nodes[rootId]!['visibility'] != 'open',
+    nodes['wb_root']!['visibility'] != 'open',
     'reserved nodes must remain open',
   );
   _need(
@@ -331,7 +353,7 @@ bool _allowsChild(String parent, String child) => switch (parent) {
 bool _id(Object? value) =>
     value is String && RegExp(r'^[A-Za-z][A-Za-z0-9_-]{0,63}$').hasMatch(value);
 bool _text(Object? value, int max) =>
-    value is String && value.isNotEmpty && value.length <= max;
+    value is String && value.isNotEmpty && value.runes.length <= max;
 bool _hasKeys(Map<dynamic, dynamic> value, Set<String> keys) =>
     value.length == keys.length && value.keys.every(keys.contains);
 int _utf8Length(Object? value) => utf8.encode(jsonEncode(value)).length;

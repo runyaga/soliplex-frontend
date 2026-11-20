@@ -147,6 +147,17 @@ void main() {
     );
   });
 
+  test('propagates SDK stream validation errors', () async {
+    await expectLater(
+      parser.negotiate(_capabilities).parseStream(
+            Stream<String>.value(
+              '<a2ui>surface("surface_chart"); root = Unknown()</a2ui>',
+            ),
+          ),
+      throwsA(isA<A2uiError>()),
+    );
+  });
+
   test('streaming across a value token boundary returns canonical messages',
       () async {
     const response = '<a2ui>surface("surface_chart"); '
@@ -155,11 +166,13 @@ void main() {
         '"value":80}]}]})</a2ui>';
     final split = response.indexOf('Nor') + 1;
     final complete = parser.negotiate(_capabilities).parse(response);
+    var streamedPartCount = 0;
     final streamed = await parser.negotiate(_capabilities).parseStream(
           Stream<String>.fromIterable([
             response.substring(0, split),
             response.substring(split),
           ]),
+          onPart: (_) => streamedPartCount++,
         );
     expect(_messageJson(streamed), _messageJson(complete));
     expect(_messageJson(streamed).single['createSurface']['components'], [
@@ -181,6 +194,7 @@ void main() {
         },
       },
     ]);
+    expect(streamedPartCount, greaterThan(0));
   });
 
   test('Text streaming inside a value returns only the final message',

@@ -58,15 +58,54 @@ void main() {
         .cast<String>();
     expect(layoutCases, hasLength(10));
     for (final name in layoutCases) {
-      expect(
-        () => _parseSnapshot(
-          _rejectedLayout(name),
-          excludeActivity: name == 'cross_scope_mount' ? 'activity_form' : null,
-        ),
-        throwsFormatException,
-        reason: name,
-      );
+      WorkbenchSnapshot parse() => _parseSnapshot(
+            _rejectedLayout(name),
+            excludeActivity:
+                name == 'cross_scope_mount' ? 'activity_form' : null,
+          );
+      final expectedReason = switch (name) {
+        'cycle' => 'cycle',
+        'wrong_parent_kind' => 'wrong parent kind',
+        'protected_chat_mutation' => 'chat and tray cannot have children',
+        _ => null,
+      };
+      if (expectedReason == null) {
+        expect(parse, throwsFormatException, reason: name);
+      } else {
+        expect(
+          parse,
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.message,
+              'message',
+              contains(expectedReason),
+            ),
+          ),
+          reason: name,
+        );
+      }
     }
+  });
+
+  test('enforces Python root identity and Unicode title length', () {
+    final renamedRoot = jsonDecode(
+      workbenchFixtures['layout_tree_v1.json']!,
+    ) as Map<String, dynamic>;
+    renamedRoot['rootId'] = 'other_root';
+    final nodes = renamedRoot['nodes'] as List;
+    (nodes.firstWhere((n) => n['id'] == 'wb_root') as Map)['id'] = 'other_root';
+    for (final node in nodes) {
+      if (node['parentId'] == 'wb_root') node['parentId'] = 'other_root';
+    }
+    expect(() => _parseSnapshot(renamedRoot), throwsFormatException);
+
+    final unicodeTitle = jsonDecode(
+      workbenchFixtures['layout_tree_v1.json']!,
+    ) as Map<String, dynamic>;
+    final root = (unicodeTitle['nodes'] as List)
+        .firstWhere((n) => n['id'] == 'wb_root') as Map;
+    root['title'] = '😀' * 80;
+    expect(() => _parseSnapshot(unicodeTitle), returnsNormally);
   });
 
   test(
@@ -110,6 +149,35 @@ void main() {
     },
   );
 
+  test('rejects publication records with sequence splits or missing parts', () {
+    final records = [
+      {
+        'recordId': 'r1',
+        'sequence': 4,
+        'partIndex': 0,
+        'partCount': 2,
+        'content': <String, Object?>{}
+      },
+      {
+        'recordId': 'r1',
+        'sequence': 5,
+        'partIndex': 1,
+        'partCount': 2,
+        'content': <String, Object?>{}
+      },
+    ];
+    final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    expect(
+      () => _parseSnapshot(layout, records: records),
+      throwsFormatException,
+    );
+    expect(
+      () => _parseSnapshot(layout, records: [records.first]),
+      throwsFormatException,
+    );
+  });
+
   test('rejects unknown roles and malformed registration metadata', () {
     expect(
       () => WorkbenchRegistration.fromJson({
@@ -151,6 +219,7 @@ void main() {
 WorkbenchSnapshot _parseSnapshot(
   Map<String, dynamic> layout, {
   String? excludeActivity,
+  List<Map<String, Object?>> records = const [],
 }) {
   final registrations = [
     for (final node in (layout['nodes'] as List).cast<Map<String, dynamic>>())
@@ -168,7 +237,7 @@ WorkbenchSnapshot _parseSnapshot(
     'revision': 1,
     'layout': layout,
     'registrations': registrations,
-    'records': <Object?>[],
+    'records': records,
   });
 }
 
@@ -263,13 +332,36 @@ Map<String, dynamic> _rejectedLayout(String name) {
         'r_right'
       ];
     case 'wrong_parent_kind':
-      (nodes.firstWhere((n) => n['id'] == 'r_chat') as Map)['children'] = [
-        'r_left'
-      ];
+      final nested = jsonDecode(workbenchFixtures['nested_tree_v1.json']!)
+          as Map<String, dynamic>;
+      final nestedNodes = nested['nodes'] as List;
+      final leftPanel = nestedNodes.firstWhere((n) => n['id'] == 'left_panel');
+      leftPanel['children'] = ['wrong_region'];
+      nestedNodes.add({
+        'id': 'wrong_region',
+        'parentId': 'left_panel',
+        'children': <Object?>[],
+        'kind': 'region',
+        'title': 'Wrong region',
+        'size': 'medium',
+        'visibility': 'open',
+        'payload': {'role': 'other'},
+      });
+      return nested;
     case 'protected_chat_mutation':
       (nodes.firstWhere((n) => n['id'] == 'r_chat') as Map)['children'] = [
-        'r_tray'
+        'chat_panel',
       ];
+      nodes.add({
+        'id': 'chat_panel',
+        'parentId': 'r_chat',
+        'children': <Object?>[],
+        'kind': 'panel',
+        'title': 'Chat panel',
+        'size': 'medium',
+        'visibility': 'open',
+        'payload': <String, Object?>{},
+      });
     case 'duplicate_mount':
       final nested = jsonDecode(workbenchFixtures['nested_tree_v1.json']!)
           as Map<String, dynamic>;

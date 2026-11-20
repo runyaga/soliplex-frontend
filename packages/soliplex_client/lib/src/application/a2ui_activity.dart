@@ -129,7 +129,7 @@ WorkbenchActivityMetadata? _workbenchMetadata(
   List<WorkbenchRegistration> registeredWorkbenchActivities,
 ) {
   if (raw is! Map<String, dynamic>) {
-    _malformed(messageId, 'workbench metadata');
+    return null;
   }
   final WorkbenchActivityMetadata metadata;
   try {

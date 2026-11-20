@@ -205,6 +205,24 @@ void main() {
       );
     });
 
+    test('scalar unregistered metadata stays on the standard path', () {
+      final result = processEvent(
+        _conversation(),
+        const AwaitingText(),
+        _snapshot(content: {
+          'a2ui_operations': _operations(),
+          'status': 'building',
+          'workbench': 'unregistered',
+        }),
+        createdAt: _painted,
+      );
+      expect(result.conversation.messages, hasLength(1));
+      expect(
+        (result.conversation.messages.single as GenUiMessage).data,
+        containsPair('messages', _operations()),
+      );
+    });
+
     test('creates one generated message without adding model history', () {
       final result = _process(_conversation(), _snapshot());
       final message = result.conversation.messages.single as GenUiMessage;

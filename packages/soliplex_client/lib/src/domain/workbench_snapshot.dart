@@ -317,15 +317,24 @@ List<WorkbenchPublicationPart> _orderedRecords(
       return a.partIndex.compareTo(b.partIndex);
     });
   final identities = <String>{};
+  final partsByRecord = <String, List<WorkbenchPublicationPart>>{};
   for (final record in ordered) {
     if (!identities.add(record.identity)) {
       throw const FormatException('Duplicate workbench publication part');
     }
-    if (ordered.any(
-      (item) =>
-          item.recordId == record.recordId &&
-          item.partCount != record.partCount,
-    )) {
+    partsByRecord.putIfAbsent(record.recordId, () => []).add(record);
+  }
+  for (final parts in partsByRecord.values) {
+    final first = parts.first;
+    final indices = parts.map((part) => part.partIndex).toSet();
+    if (parts.any(
+          (part) =>
+              part.partCount != first.partCount ||
+              part.sequence != first.sequence,
+        ) ||
+        indices.length != first.partCount ||
+        !List<int>.generate(first.partCount, (index) => index)
+            .every(indices.contains)) {
       throw const FormatException('Inconsistent workbench publication parts');
     }
   }

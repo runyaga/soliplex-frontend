@@ -37,15 +37,16 @@ class A2uiNegotiatedReply {
 
   /// Parses a streamed reply incrementally and returns the emitted messages.
   Future<List<AgentToRendererMessage>> parseStream(
-    Stream<String> chunks,
-  ) async {
-    final stream = _processor.openStream();
+    Stream<String> chunks, {
+    void Function(ResponsePart part)? onPart,
+  }) async {
+    final stream = _processor.openContinuingStream();
     final response = StringBuffer();
     await for (final chunk in chunks) {
       response.write(chunk);
-      _checkStreamParts(stream.feed(chunk));
+      _consumeStreamParts(stream.feed(chunk), onPart);
     }
-    _checkStreamParts(stream.close());
+    _consumeStreamParts(stream.close(), onPart);
     return parse(response.toString());
   }
 }
@@ -56,8 +57,16 @@ InferenceFormatFactory _formatFactory(A2uiReplyFormat format) =>
       A2uiReplyFormat.json => const DirectJsonFormatFactory(),
     };
 
-void _checkStreamParts(List<StreamPart> parts) {
+void _consumeStreamParts(
+  List<StreamPart> parts,
+  void Function(ResponsePart part)? onPart,
+) {
   for (final part in parts) {
-    if (part case ErrorPart(:final error)) throw error;
+    switch (part) {
+      case ErrorPart(:final error):
+        throw error;
+      case ResponsePart():
+        onPart?.call(part);
+    }
   }
 }
