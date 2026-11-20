@@ -58,6 +58,34 @@ def _reject_client_workbench_intake_tool(payload: dict[str, object]) -> None:
                 raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
 
 
+def _reject_client_workbench_fields(payload: dict[str, object]) -> None:
+    state = payload.get("state")
+    if isinstance(state, dict) and "workbenchAction" in state:
+        raise HTTPException(422, "workbenchAction is server-owned")
+    _reject_client_workbench_intake_tool(payload)
+    messages = payload.get("messages")
+    if not isinstance(messages, list):
+        return
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        calls = message.get("toolCalls", message.get("tool_calls"))
+        if message.get("name") == WORKBENCH_INTAKE_TOOL_NAME or (
+            isinstance(calls, list)
+            and any(
+                isinstance(call, dict)
+                and isinstance(call.get("function"), dict)
+                and call["function"].get("name") == WORKBENCH_INTAKE_TOOL_NAME
+                for call in calls
+            )
+        ) or (
+            message.get("role") == "tool"
+            and isinstance(message.get("toolCallId", message.get("tool_call_id")), str)
+            and message.get("toolCallId", message.get("tool_call_id")).startswith("workbench-intake-")
+        ):
+            raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
+
+
 def _validate_issued_intake_history(payload: dict[str, object], issued: list[dict[str, object]]) -> None:
     messages = payload.get("messages")
     if not isinstance(messages, list):
@@ -74,6 +102,16 @@ def _validate_issued_intake_history(payload: dict[str, object], issued: list[dic
             ])
     except (TypeError, ValueError, ValidationError) as exc:
         raise HTTPException(422, "invalid AG-UI message history") from exc
+    message_ids = [message.get("id") for message in normalized if isinstance(message.get("id"), str)]
+    if len(message_ids) != len(set(message_ids)):
+        raise HTTPException(422, "AG-UI message IDs must be unique")
+    tool_call_ids = []
+    for message in normalized:
+        calls = message.get("toolCalls", [])
+        if isinstance(calls, list):
+            tool_call_ids.extend(call.get("id") for call in calls if isinstance(call, dict) and isinstance(call.get("id"), str))
+    if len(tool_call_ids) != len(set(tool_call_ids)):
+        raise HTTPException(422, "AG-UI tool-call IDs must be unique")
     index = 0
     while index < len(normalized):
         message = normalized[index]
@@ -89,9 +127,10 @@ def _validate_issued_intake_history(payload: dict[str, object], issued: list[dic
             or (isinstance(message.get("toolCallId"), str) and message["toolCallId"].startswith("workbench-intake-"))
         )
         if reserved_call or reserved_result:
-            match = next((pair for pair in issued_pairs if normalized[index:index + 2] == pair), None)
-            if match is None:
+            match_index = next((pair_index for pair_index, pair in enumerate(issued_pairs) if normalized[index:index + 2] == pair), None)
+            if match_index is None:
                 raise HTTPException(422, "client-supplied workbench_intake messages are forbidden")
+            issued_pairs.pop(match_index)
             index += 2
         else:
             index += 1
@@ -303,13 +342,6 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             return
         if not is_workbench_run(request):
             room_id = request.path_params.get("room_id")
-            if room_id not in lab_rooms:
-                payload = await _read_request_json(request)
-                props = payload.get("forwardedProps")
-                action = props.get("a2uiAction") if isinstance(props, dict) else None
-                if action is not None:
-                    raise HTTPException(503, "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS")
-                return
             try:
                 legacy_payload = parse_json_no_duplicates(await request.body())
             except DuplicateJSONKey as exc:
@@ -318,7 +350,17 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 return
             if not isinstance(legacy_payload, dict):
                 return
+            _reject_client_workbench_fields(legacy_payload)
             forwarded_props = legacy_payload.get("forwardedProps")
+            action_envelope = forwarded_props.get("a2uiAction") if isinstance(forwarded_props, dict) else None
+            workbench_schemas = {"intake.submit@1", "workbench.program.export_chart@1", "workbench.program.run_result@1"}
+            if action_envelope is not None and (
+                room_id not in lab_rooms
+                or (isinstance(action_envelope, dict) and action_envelope.get("actionSchemaVersion") in workbench_schemas)
+            ):
+                raise HTTPException(503, "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS")
+            if room_id not in lab_rooms:
+                return
             if user_action(forwarded_props) is None:
                 return
             messages = legacy_payload.get("messages")
@@ -387,6 +429,8 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         # Soliplex 0.93's AGUIAdapter.from_request consumes Request.body().
         # Starlette Request caches those bytes after the strict JSON parse.
         request._body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if not repository.mark_action_issued(scope, str(context.get("submissionId", ""))):
+            raise HTTPException(409, "workbench action handoff could not be recorded")
 
     guarded.include_router(upstream_router, dependencies=[Depends(validate_before_dispatch)])
     return guarded

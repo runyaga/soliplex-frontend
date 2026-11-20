@@ -1,6 +1,7 @@
 """Durable workbench snapshot storage tests."""
 
 import json
+import threading
 
 import pytest
 
@@ -137,4 +138,40 @@ def test_default_catalog_validator_rejects_malformed_chart_before_commit(tmp_pat
         repo.publish(scope, "malformed", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity_chart", "surface_chart")})
     assert repo.load_snapshot(scope)["layout"] is None
     assert repo.get_receipt(scope, "malformed") is None
+    repo.close()
+
+
+def test_overlapping_repository_transactions_are_serialized(tmp_path):
+    repo = fixture_repo(tmp_path / "concurrent.sqlite")
+    first = WorkbenchScope("actor", "server", "room", "thread-one")
+    second = WorkbenchScope("actor", "server", "room", "thread-two")
+    entered_first = threading.Event()
+    release_first = threading.Event()
+    second_callback_entered = threading.Event()
+    errors = []
+
+    def publish(scope, key, callback):
+        try:
+            repo.publish(scope, key, 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts(), before_commit=callback)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def pause_first():
+        entered_first.set()
+        if not release_first.wait(3):
+            raise TimeoutError("first transaction was not released")
+
+    one = threading.Thread(target=publish, args=(first, "one", pause_first))
+    two = threading.Thread(target=publish, args=(second, "two", second_callback_entered.set))
+    one.start()
+    assert entered_first.wait(2)
+    two.start()
+    assert not second_callback_entered.wait(0.1)
+    release_first.set()
+    one.join(3)
+    two.join(3)
+    assert not one.is_alive() and not two.is_alive()
+    assert not errors
+    assert second_callback_entered.is_set()
+    assert repo.load(first) is not None and repo.load(second) is not None
     repo.close()

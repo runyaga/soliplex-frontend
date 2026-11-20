@@ -95,13 +95,28 @@ def test_place_form_emits_bound_intake_controls_and_submit_context():
     by_id = {item["id"]: item for item in components}
     assert data == {"title": "Intake", "question": "", "districts": [], "acknowledged": False}
     assert by_id["question"] == {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}}
-    assert by_id["districts"] == {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": ["north", "south"], "value": {"@path": "/districts"}, "displayStyle": "chips"}
+    assert by_id["districts"] == {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"}
     assert by_id["acknowledged"]["value"] == {"@path": "/acknowledged"}
     assert by_id["submit"]["action"]["context"] == {
         "question": {"@path": "/question"},
         "districts": {"@path": "/districts"},
         "acknowledged": {"@path": "/acknowledged"},
     }
+
+
+def test_basic_choice_picker_requires_renderer_option_objects():
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG
+
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    validator = WorkbenchCatalogValidator()
+    options = [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}]
+    valid = {"activityMessageId": "choices", "surfaceId": "choices_surface", "catalogId": BASIC_CATALOG, "component": "ChoicePicker", "properties": {"label": "Districts", "variant": "multipleSelection", "options": options, "value": {"@path": "/districts"}, "displayStyle": "chips"}}
+    built = build_publication([valid], validator, {BASIC_CATALOG: {"ChoicePicker"}}, layout=layout)
+    emitted = built["events"][0]["event"]["content"]["a2ui_operations"][2]["updateComponents"]["components"][0]
+    assert emitted["options"] == options
+    invalid = valid | {"properties": valid["properties"] | {"options": ["north", "south"]}}
+    with pytest.raises(ValueError, match="ChoicePicker"):
+        build_publication([invalid], validator, {BASIC_CATALOG: {"ChoicePicker"}}, layout=layout)
 
 
 @pytest.mark.parametrize("mutate", [

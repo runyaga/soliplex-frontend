@@ -14,7 +14,7 @@ for name in DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMI
   test -n "${!name:-}" || fail "Required variable $name is empty or missing in workbench/stack/workbench.env."
 done
 LOGFIRE_ENV_FILE="${LOGFIRE_ENV_FILE:-$DEV_ROOT/.env}"
-SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-a2ui-lab,a2ui-lab-e4b}"
+SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-}"
 export DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMIN_PASSWORD LOGFIRE_ENV_FILE SOLIPLEX_WORKBENCH_ROOMS STACK_SCRIPT_DIR
 readonly PROJECT=soliplex-a2ui-workbench
 readonly TARGET="$DEV_ROOT/soliplex-a2ui-workbench"

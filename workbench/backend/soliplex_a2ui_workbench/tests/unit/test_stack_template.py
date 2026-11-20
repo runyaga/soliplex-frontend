@@ -10,6 +10,9 @@ def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
     script = helper.parent / "setup-stack.sh"
     assert "from compose_config import configure_workbench_storage" in script.read_text()
     assert "configure_workbench_storage(compose)" in script.read_text()
+    assert 'SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-}"' in script.read_text()
+    env_example = helper.parent / "workbench.env.example"
+    assert 'SOLIPLEX_WORKBENCH_ROOMS=""' in env_example.read_text()
     spec = importlib.util.spec_from_file_location("workbench_stack_compose_config", helper)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -21,7 +24,7 @@ def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
     backend = generated["services"]["backend"]
     assert {"type": "volume", "source": "workbench_data", "target": "/data/workbench"} in backend["volumes"]
     assert backend["environment"]["SOLIPLEX_WORKBENCH_DB"] == "/data/workbench/workbench.sqlite3"
-    assert backend["environment"]["SOLIPLEX_WORKBENCH_ROOMS"] == "${SOLIPLEX_WORKBENCH_ROOMS:-a2ui-lab,a2ui-lab-e4b}"
+    assert backend["environment"]["SOLIPLEX_WORKBENCH_ROOMS"] == "${SOLIPLEX_WORKBENCH_ROOMS:-}"
     assert generated["volumes"]["workbench_data"] == {}
     # Model container recreation by reopening the database file retained at the
     # named-volume mount point; Docker itself is intentionally not required.

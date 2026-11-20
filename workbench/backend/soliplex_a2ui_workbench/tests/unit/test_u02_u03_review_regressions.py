@@ -298,3 +298,31 @@ def test_unconfigured_room_rejects_workbench_envelope_closed(tmp_path, monkeypat
     response = TestClient(app).post("/v1/rooms/agui/agui/thread-1/unconfigured", json=payload)
     assert response.status_code == 503
     assert calls == []
+
+
+def test_dispatched_but_not_handed_off_pair_cannot_seed_continuation(tmp_path):
+    from soliplex_a2ui_workbench.workbench_actions import synthetic_intake_messages
+    repo, scope, _ = _registered_repo(tmp_path)
+    envelope = _envelope(submission="failed-before-handoff")
+    WorkbenchActionService(repo).accept(scope, envelope)
+    assert WorkbenchActionService(repo).consume_dispatch(scope, {"forwardedProps": {"a2uiAction": envelope}}) == envelope
+    client, calls = _guard_app(repo, scope)
+    payload = {"threadId": scope.thread_id, "runId": "continuation", "state": {}, "messages": synthetic_intake_messages(envelope), "tools": [], "context": [], "forwardedProps": {}}
+    response = client.post("/v1/rooms/agui/agui/thread-1/continuation", json=payload)
+    assert response.status_code == 422
+    assert calls == []
+
+
+def test_issued_intake_pair_cannot_be_repeated_in_history(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path)
+    envelope = _envelope(submission="single-use-history")
+    WorkbenchActionService(repo).accept(scope, envelope)
+    client, calls = _guard_app(repo, scope)
+    fresh = {"threadId": scope.thread_id, "runId": "fresh", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    accepted = client.post("/v1/rooms/agui/agui/thread-1/fresh", json=fresh)
+    assert accepted.status_code == 200
+    pair = accepted.json()["messages"]
+    repeated = fresh | {"runId": "repeat", "messages": pair + pair, "forwardedProps": {}}
+    response = client.post("/v1/rooms/agui/agui/thread-1/repeat", json=repeated)
+    assert response.status_code == 422
+    assert calls == ["entered"]

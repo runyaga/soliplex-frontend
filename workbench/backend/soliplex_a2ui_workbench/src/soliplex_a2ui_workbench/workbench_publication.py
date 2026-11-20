@@ -165,7 +165,7 @@ class WorkbenchCatalogValidator:
             if component == "ChoicePicker":
                 options, value = props.get("options"), props.get("value")
                 if (not isinstance(props.get("label"), str) or props.get("variant") != "multipleSelection"
-                    or not isinstance(options, list) or not options or any(not isinstance(option, str) or not option for option in options)
+                    or not isinstance(options, list) or not options or any(not isinstance(option, dict) or set(option) != {"label", "value"} or not isinstance(option.get("label"), str) or not option["label"] or not isinstance(option.get("value"), str) or not option["value"] for option in options)
                     or not isinstance(value, dict) or set(value) != {"@path"} or not isinstance(value["@path"], str)):
                     raise ValueError("invalid basic ChoicePicker properties")
             if component == "Button":
@@ -229,9 +229,9 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
     if component == "ChoicePicker":
         options, value = item["options"], item["value"]
         if (not isinstance(item["label"], str) or item["variant"] != "multipleSelection"
-            or not isinstance(options, list) or not options or any(not isinstance(option, str) or not option for option in options)
+            or not isinstance(options, list) or not options or any(not isinstance(option, dict) or set(option) != {"label", "value"} or not isinstance(option.get("label"), str) or not option["label"] or not isinstance(option.get("value"), str) or not option["value"] for option in options)
             or not isinstance(value, dict) or set(value) != {"@path"} or not isinstance(value["@path"], str)
-            or ("displayStyle" in item and item["displayStyle"] not in {"chips", "list"})
+            or ("displayStyle" in item and item["displayStyle"] not in {"checkbox", "chips"})
             or ("filterable" in item and not isinstance(item["filterable"], bool))):
             raise ValueError("invalid emitted ChoicePicker properties")
     if component == "Slider":
@@ -274,7 +274,7 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
         extra = [
             {"id": "title", "component": "Text", "text": str(record["title"])},
             {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}},
-            {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": ["north", "south"], "value": {"@path": "/districts"}, "displayStyle": "chips"},
+            {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"},
             {"id": "acknowledged", "component": "CheckBox", "label": "Acknowledged", "value": {"@path": "/acknowledged"}},
             {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}},
         ]

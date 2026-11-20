@@ -207,3 +207,19 @@ def test_run_result_persists_client_trace_tags_without_model(tmp_path):
     changed = payload | {"submissionId": "result-submit-3", "userAction": payload["userAction"] | {"output": "forged"}}
     with pytest.raises(PublicationConflict):
         service.accept(scope, changed)
+
+
+def test_restore_does_not_invalidate_pending_intake_reservation(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    scope = WorkbenchScope("alice", "server", "room", "thread")
+    _register(repo, scope)
+    layout = repo.load(scope)
+    layout["nodes"][2]["children"].append("panel-closed")
+    layout["nodes"].append({"id": "panel-closed", "parentId": "r_left", "children": [], "kind": "panel", "title": "Closed", "size": "small", "visibility": "closed", "payload": {}})
+    records = [{key: value for key, value in record.items() if key != "workbenchCommit"} for record in repo.load_content(scope)]
+    repo.publish(scope, "close-panel", 1, layout | {"layoutRevision": 2}, records, registered_program_surfaces=set(), registered_mounts={("activity-1", "surface-1")})
+    service = WorkbenchActionService(repo)
+    envelope = {"v": 1, "submissionId": "pending-before-restore", "activityMessageId": "activity-1", "surfaceRevision": 2, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
+    service.accept(scope, envelope)
+    repo.restore_node(scope, "panel-closed")
+    assert service.consume_dispatch(scope, {"forwardedProps": {"a2uiAction": envelope}}) == envelope

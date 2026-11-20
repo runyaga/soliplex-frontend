@@ -28,6 +28,6 @@ def configure_workbench_storage(compose: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(environment, dict):
         raise ValueError("backend environment must be a mapping or list")
     environment["SOLIPLEX_WORKBENCH_DB"] = WORKBENCH_DB_PATH
-    environment["SOLIPLEX_WORKBENCH_ROOMS"] = "${SOLIPLEX_WORKBENCH_ROOMS:-a2ui-lab,a2ui-lab-e4b}"
+    environment["SOLIPLEX_WORKBENCH_ROOMS"] = "${SOLIPLEX_WORKBENCH_ROOMS:-}"
     compose.setdefault("volumes", {})["workbench_data"] = {}
     return compose

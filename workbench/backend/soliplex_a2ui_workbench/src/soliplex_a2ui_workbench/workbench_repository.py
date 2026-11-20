@@ -5,7 +5,9 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
 
@@ -15,6 +17,15 @@ from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
 
 class PublicationConflict(ValueError):
     """A publication key or expected revision conflicts with stored state."""
+
+
+def _serialized(method):
+    """Serialize every access to the repository's shared SQLite connection."""
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return call
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,7 @@ class SQLiteWorkbenchRepository:
     ):
         self._catalog_validator = catalog_validator or WorkbenchCatalogValidator()
         self._negotiated_manifests = negotiated_manifests or BUILTIN_CATALOG_MANIFESTS
+        self._lock = threading.RLock()
         self._db = sqlite3.connect(str(path), isolation_level=None, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA foreign_keys=ON")
@@ -92,6 +104,7 @@ class SQLiteWorkbenchRepository:
             );
         """)
 
+    @_serialized
     def publish(
         self,
         scope: WorkbenchScope,
@@ -184,10 +197,12 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def load(self, scope: WorkbenchScope) -> dict[str, object] | None:
         row = self._db.execute("SELECT layout_json FROM workbench_snapshot WHERE actor=? AND server=? AND room=? AND thread=?", scope.key()).fetchone()
         return json.loads(row["layout_json"]) if row else None
 
+    @_serialized
     def load_snapshot(self, scope: WorkbenchScope) -> dict[str, object]:
         self._db.execute("BEGIN")
         try:
@@ -212,6 +227,7 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def restore_node(self, scope: WorkbenchScope, node_id: str) -> dict[str, object]:
         """Clear one accepted ancestor close while retaining every descendant."""
         key = scope.key()
@@ -234,6 +250,7 @@ class SQLiteWorkbenchRepository:
             encoded = json.dumps(snapshot.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False)
             sequence = row["sequence"] + 1
             self._db.execute("UPDATE workbench_snapshot SET revision=?, sequence=?, layout_json=? WHERE actor=? AND server=? AND room=? AND thread=?", (layout["layoutRevision"], sequence, encoded, *key))
+            self._db.execute("UPDATE workbench_action SET layout_revision=? WHERE actor=? AND server=? AND room=? AND thread=? AND state='reserved'", (layout["layoutRevision"], *key))
             self._db.execute("COMMIT")
             return {"status": "restored", "nodeId": node_id, "revision": layout["layoutRevision"], "sequence": sequence}
         except BaseException:
@@ -241,6 +258,7 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def existing_action(self, scope: WorkbenchScope, submission_id: str, digest: str) -> dict[str, object] | None:
         row = self._db.execute(
             "SELECT digest, receipt_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=?",
@@ -252,6 +270,7 @@ class SQLiteWorkbenchRepository:
             raise PublicationConflict("submission ID reused with different body")
         return json.loads(row["receipt_json"])
 
+    @_serialized
     def reserve_action(self, scope: WorkbenchScope, submission_id: str, digest: str, envelope: Mapping[str, object], *, expected_revision: int, activity_message_id: str, receipt_details: Mapping[str, object] | None = None) -> dict[str, object]:
         key = (*scope.key(), submission_id)
         encoded = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False)
@@ -291,6 +310,7 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def consume_action(self, scope: WorkbenchScope, submission_id: str, digest: str) -> dict[str, object] | None:
         key = (*scope.key(), submission_id)
         self._db.execute("BEGIN IMMEDIATE")
@@ -315,14 +335,25 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def issued_intake_submissions(self, scope: WorkbenchScope) -> list[dict[str, object]]:
-        """Return intake reservations already consumed for this exact thread."""
+        """Return intake reservations handed to the downstream handler."""
         rows = self._db.execute(
-            "SELECT envelope_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND state='dispatching'",
+            "SELECT envelope_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND state='issued'",
             scope.key(),
         ).fetchall()
         return [json.loads(row["envelope_json"]) for row in rows]
 
+    @_serialized
+    def mark_action_issued(self, scope: WorkbenchScope, submission_id: str) -> bool:
+        """Record the guard's completed handoff after the body is ready."""
+        cursor = self._db.execute(
+            "UPDATE workbench_action SET state='issued' WHERE actor=? AND server=? AND room=? AND thread=? AND submission_id=? AND state='dispatching'",
+            (*scope.key(), submission_id),
+        )
+        return cursor.rowcount == 1
+
+    @_serialized
     def emit_trace_once(self, scope: WorkbenchScope, invocation_id: str, sink) -> bool:
         """Deliver one accepted invocation event and mark it emitted atomically."""
         key = (*scope.key(), invocation_id)
@@ -341,13 +372,16 @@ class SQLiteWorkbenchRepository:
                 self._db.execute("ROLLBACK")
             raise
 
+    @_serialized
     def load_content(self, scope: WorkbenchScope) -> list[dict[str, object]]:
         rows = self._db.execute("SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=? ORDER BY sequence, part_index", scope.key()).fetchall()
         return [json.loads(row["record_json"]) for row in rows]
 
+    @_serialized
     def get_receipt(self, scope: WorkbenchScope, publication_key: str) -> PublicationResult | None:
         row = self._db.execute("SELECT receipt_json FROM workbench_receipt WHERE actor=? AND server=? AND room=? AND thread=? AND publication_key=?", (*scope.key(), publication_key)).fetchone()
         return PublicationResult(**json.loads(row["receipt_json"])) if row else None
 
+    @_serialized
     def close(self) -> None:
         self._db.close()
