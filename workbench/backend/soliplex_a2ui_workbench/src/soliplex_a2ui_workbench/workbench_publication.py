@@ -98,7 +98,7 @@ class WorkbenchCatalogValidator:
                 raise ValueError("surfaceRevision must be a non-negative integer")
         record_shapes = {
             (GRAPHICS_CATALOG, "Chart"): common | {"spec"},
-            (LAB_CATALOG, "PythonRepl"): common | {"source", "title"},
+            (LAB_CATALOG, "PythonRepl"): common | {"source", "title", "output"},
             (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title"},
         }
         allowed_record_keys = record_shapes.get((catalog_id, component), common | {"properties"})
@@ -139,8 +139,11 @@ class WorkbenchCatalogValidator:
                 raise ValueError("Chart series label must be a short string")
         elif catalog_id == LAB_CATALOG and component == "PythonRepl":
             source = record.get("source")
+            output = record.get("output", "")
             if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 12_000:
                 raise ValueError("invalid PythonRepl source")
+            if not isinstance(output, str) or len(output) > 4_000:
+                raise ValueError("invalid PythonRepl output")
         elif catalog_id == WORKBENCH_CATALOG and component == "PlaceForm":
             if record.get("template") != "intake" or not isinstance(record.get("title"), str):
                 raise ValueError("invalid intake template registration")
@@ -281,11 +284,11 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     sid = str(record["surfaceId"])
     catalog_id = str(record["catalogId"])
     component = str(record["component"])
-    data = {key: record[key] for key in ("spec", "source", "title", "template") if key in record}
+    data = {key: record[key] for key in ("spec", "source", "title", "template", "output") if key in record}
     if component == "Chart":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": {"@path": "/spec"}}
     elif component == "PythonRepl":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}}
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "output": {"@path": "/output"}}
     elif component == "PlaceForm":
         catalog_id = BASIC_CATALOG
         data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}
