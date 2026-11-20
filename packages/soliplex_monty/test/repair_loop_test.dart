@@ -210,7 +210,7 @@ void main() {
         expect(resultOf(getRepairs().single)['aiFix'], true);
         expect(
           resultOf(getRepairs().single)['instruction'],
-          contains('runs automatically'),
+          contains('will run now'),
         );
         await replace(tester, fixed, remount: tagged, tagged: tagged);
         expect(tester.widget<Checkbox>(checkbox).value, true);

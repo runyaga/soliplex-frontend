@@ -99,6 +99,8 @@ class RunWorkbenchProjection:
         record = {"activityMessageId": activity, "surfaceId": surface, "component": component}
         if component == "PythonRepl" and role == "program":
             record.update(catalogId=LAB_CATALOG, source=data["source"], title=data["title"], output=data.get("output", ""))
+            if "typeCheck" in root:
+                record["typeCheck"] = root["typeCheck"]
         elif component == "Chart" and role == "content":
             record.update(catalogId=GRAPHICS_CATALOG, spec=data["spec"], selection=root["selection"], description=root["description"])
             if "height" in root:

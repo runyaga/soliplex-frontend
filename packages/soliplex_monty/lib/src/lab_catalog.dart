@@ -17,6 +17,7 @@ import 'package:soliplex_monty/src/chart_module.dart';
 
 import 'package:soliplex_monty/src/lab_chart.dart';
 import 'package:soliplex_monty/src/lab_chart_api.dart';
+import 'package:soliplex_monty/src/program_type_check.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
 import 'package:soliplex_monty/src/repair_chain.dart';
 import 'package:soliplex_monty/src/worker_location.dart';
@@ -169,12 +170,16 @@ CatalogImplementation _pythonBasicCatalog() {
 /// [isLive] says whether the surface around a component arrived from a run
 /// in flight. Only such a surface may run a repaired program on arrival.
 /// Without [isLive] nothing runs on arrival. [chains] defaults to
-/// [RepairChains.shared].
+/// [RepairChains.shared]. [activeRunId] lets a host settle a repair request
+/// when its model turn ends without delivering a replacement.
 CatalogImplementation labCatalog({
   ReplRuntimeStarter? startRuntime,
+  Future<String?> Function(String, ResourceLimits) checkTypes =
+      checkProgramTypes,
   ReplLimits limits = const ReplLimits(),
   bool Function(BuildContext context)? isLive,
   RepairChains? chains,
+  String? Function(BuildContext context)? activeRunId,
 }) => CatalogImplementation(
   id: labCatalogId,
   protocolVersion: A2uiProtocolVersion.v1_0,
@@ -222,6 +227,7 @@ CatalogImplementation labCatalog({
               'additionalProperties': false,
             },
           }),
+          'typeCheck': Schema.boolean(),
         },
         required: ['source'],
       ),
@@ -245,9 +251,11 @@ CatalogImplementation labCatalog({
         return PythonReplView(
           key: ValueKey('python-repl:${node.instanceId}'),
           source: source,
+          typeCheck: props.boolean('typeCheck') ?? false,
           surfaceId: surface.id,
           limits: limits,
           startRuntime: startRuntime ?? _startRuntime,
+          checkTypes: checkTypes,
           writeSource: binding == null
               ? null
               : (text) {
@@ -273,6 +281,7 @@ CatalogImplementation labCatalog({
           showSource: props.boolean('showSource') ?? false,
           mode: props.string('mode') == 'run' ? ReplMode.run : ReplMode.repl,
           live: isLive?.call(context) ?? false,
+          activeRunId: activeRunId?.call(context),
           chains: chains ?? RepairChains.shared,
           files: workspaceFiles(props.list('files')),
           examples: [
@@ -335,6 +344,8 @@ class PythonReplView extends StatefulWidget {
     required this.startRuntime,
     super.key,
     this.surfaceId,
+    this.typeCheck = false,
+    this.checkTypes = checkProgramTypes,
     this.writeSource,
     this.writeResult,
     this.onRun,
@@ -343,6 +354,7 @@ class PythonReplView extends StatefulWidget {
     this.onFailure,
     this.retry,
     this.live = false,
+    this.activeRunId,
     this.chains,
     this.showSource = false,
     this.mode = ReplMode.repl,
@@ -351,6 +363,12 @@ class PythonReplView extends StatefulWidget {
   });
 
   final String source;
+
+  /// Initial preference for this program; local choices take priority.
+  final bool typeCheck;
+
+  /// Runs a preflight check without evaluating the program.
+  final Future<String?> Function(String, ResourceLimits) checkTypes;
 
   /// Stable program identity for local AI Fix preference persistence.
   final String? surfaceId;
@@ -375,6 +393,9 @@ class PythonReplView extends StatefulWidget {
 
   /// Whether the surface arrived from a run in flight, not from history.
   final bool live;
+
+  /// The model turn currently in flight, used to settle declined repairs.
+  final String? activeRunId;
   final RepairChains? chains;
 
   /// Whether each transcript entry shows its code without a click.
@@ -425,8 +446,13 @@ class _PythonReplViewState extends State<PythonReplView> {
   int? _claimed;
   String? _lastError;
   bool _aiFix = false;
+  bool _typeCheck = false;
   bool _failedWithAiFix = false;
   bool _preferencesLoaded = false;
+  late final Future<void> _preferences;
+  String? _repairTurnId;
+  String? _requestedDuringRunId;
+  bool _notRepaired = false;
 
   String? get _preferenceKey => widget.surfaceId == null
       ? null
@@ -435,9 +461,15 @@ class _PythonReplViewState extends State<PythonReplView> {
   Future<void> _loadPreference() async {
     final key = _preferenceKey;
     var enabled = false;
+    var checked = widget.typeCheck;
     if (key != null) {
       try {
-        enabled = (await SharedPreferences.getInstance()).getBool(key) ?? false;
+        // Run awaits this load, so a stalled store must not block it.
+        final prefs = await SharedPreferences.getInstance().timeout(
+          const Duration(seconds: 2),
+        );
+        enabled = prefs.getBool(key) ?? false;
+        checked = prefs.getBool(_typeCheckKey!) ?? widget.typeCheck;
       } on Object {
         // A missing preference store defaults to explicit Run only.
       }
@@ -445,9 +477,20 @@ class _PythonReplViewState extends State<PythonReplView> {
     if (_disposed) return;
     setState(() {
       _aiFix = enabled;
+      _typeCheck = checked;
       _preferencesLoaded = true;
     });
     _claimOnArrival();
+  }
+
+  String? get _typeCheckKey => widget.surfaceId == null
+      ? null
+      : 'soliplex.python.typeCheck.${widget.surfaceId}';
+
+  void _setTypeCheck(bool enabled) {
+    setState(() => _typeCheck = enabled);
+    final key = _typeCheckKey;
+    if (key != null) unawaited(_savePreference(key, enabled));
   }
 
   void _setAiFix(bool enabled) {
@@ -486,7 +529,8 @@ class _PythonReplViewState extends State<PythonReplView> {
   void initState() {
     super.initState();
     _editor = TextEditingController(text: widget.source);
-    unawaited(_loadPreference());
+    _preferences = _loadPreference();
+    unawaited(_preferences);
   }
 
   /// Runs this editor once when it is the repair a live chain waits for.
@@ -507,6 +551,7 @@ class _PythonReplViewState extends State<PythonReplView> {
     if (attempt == null || !chain.claim(attempt)) return;
     _follow(chain);
     _claimed = attempt;
+    _runs = chain.runs;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       (PythonReplView.debugScheduleAutoRun ?? (start) => start())(() {
         if (!_disposed && _aiFix && widget.live && chain.isActive) {
@@ -535,6 +580,21 @@ class _PythonReplViewState extends State<PythonReplView> {
   @override
   void didUpdateWidget(PythonReplView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_pending) {
+      if (widget.activeRunId != null &&
+          widget.activeRunId != _requestedDuringRunId) {
+        _repairTurnId = widget.activeRunId;
+      } else if (_repairTurnId != null) {
+        // Replacement is delivered before the turn closes. Let its arrival
+        // claim first, including an asynchronous preference load.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_disposed && _pending && widget.activeRunId == null) {
+            _chain?.end();
+            setState(() => _notRepaired = true);
+          }
+        });
+      }
+    }
     final bound = widget.writeSource != null;
     if ((bound || widget.source != oldWidget.source) &&
         widget.source != _editor.text) {
@@ -582,19 +642,23 @@ class _PythonReplViewState extends State<PythonReplView> {
   /// Runs the editor after Run or an authorized live repair arrival.
   Future<void> run() async {
     if (_running || _disposed) return;
-    final code = _editor.text;
-    final limits = widget.limits;
-    if (code.length > limits.maxSourceChars) {
-      final message = 'Source exceeds ${limits.maxSourceChars} characters.';
-      _record(code, message, ok: false);
-      _afterRun(code, message, ok: false);
-      return;
-    }
     setState(() {
       _running = true;
       _fixedAfter = null;
+      _notRepaired = false;
     });
     try {
+      // A click while local storage is loading still honors the saved checks.
+      await _preferences;
+      if (_disposed) return;
+      final code = _editor.text;
+      final limits = widget.limits;
+      if (code.length > limits.maxSourceChars) {
+        final message = 'Source exceeds ${limits.maxSourceChars} characters.';
+        _record(code, message, ok: false);
+        _afterRun(code, message, ok: false);
+        return;
+      }
       final runtime = await _runtime(code);
       if (runtime == null || _disposed) return;
       if (_runMode && !await _freshSession(runtime, code)) return;
@@ -743,7 +807,9 @@ class _PythonReplViewState extends State<PythonReplView> {
     final onFailure = widget.onFailure;
     final attempt = chain.request();
     if (onFailure == null || attempt == null) return;
-    chain.awaitingSource = widget.source;
+    chain
+      ..awaitingSource = widget.source
+      ..runs = _runs;
     final limits = widget.limits;
     final text = _lastError ?? '';
     final error = text.substring(
@@ -761,8 +827,8 @@ class _PythonReplViewState extends State<PythonReplView> {
       'aiFix': _aiFix,
       'autoRun': _aiFix && chain.autoRun,
       'instruction': _aiFix && chain.autoRun
-          ? 'Repair this program. AI Fix is on: the repair runs automatically; '
-                'do not say press Run.'
+          ? 'Repair this program. AI Fix is on: the repair will run now; '
+                'do not claim it ran until a successful run result arrives.'
           : 'Repair this program once. The repair waits: '
                 'tell the user to press Run.',
     });
@@ -770,6 +836,9 @@ class _PythonReplViewState extends State<PythonReplView> {
     if (surfaceId != null) _chains.surfaceChains[surfaceId] = chain.id;
     setState(() {
       _requested = attempt;
+      _repairTurnId = null;
+      _requestedDuringRunId = widget.activeRunId;
+      _notRepaired = false;
     });
     unawaited(onFailure().catchError((Object _) {}));
   }
@@ -860,6 +929,7 @@ class _PythonReplViewState extends State<PythonReplView> {
         runtime,
         'handle_event(EVENT["name"], EVENT["context"])',
         widget.limits,
+        checkSource: _editor.text,
         inputs: {
           'CLIENT': _clientViewport(),
           'EVENT': {'name': name, 'context': action['context'] ?? {}},
@@ -938,9 +1008,18 @@ class _PythonReplViewState extends State<PythonReplView> {
     String code,
     ReplLimits limits, {
     Map<String, Object?>? inputs,
+    String? checkSource,
   }) async {
     final ExecutionHandle handle;
     try {
+      if (_typeCheck) {
+        final error = await widget.checkTypes(
+          checkSource ?? code,
+          _resourceLimits,
+        );
+        if (error != null) return (error, false);
+        if (_disposed) return ('Stopped.', false);
+      }
       handle = runtime.execute(code, os: _os, inputs: inputs);
     } on Object catch (error) {
       return ('$error', false);
@@ -1207,12 +1286,30 @@ extension on _PythonReplViewState {
           ),
         ),
       ),
+      Semantics(
+        container: true,
+        child: MergeSemantics(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                key: const ValueKey('python-repl-type-check'),
+                value: _typeCheck,
+                onChanged: _preferencesLoaded && !_running
+                    ? (value) => _setTypeCheck(value ?? false)
+                    : null,
+              ),
+              const Text('Type check'),
+            ],
+          ),
+        ),
+      ),
       if (_repairable && _lastError != null)
         SoliplexButton.outlined(
           key: const ValueKey('python-repl-ai-fix'),
           onPressed: _running || _pending ? null : _fix,
           icon: const Icon(Icons.auto_fix_high),
-          child: const Text('AI Fix'),
+          child: const Text('Fix now'),
         ),
       if (!_runMode)
         Text(
@@ -1228,6 +1325,7 @@ extension on _PythonReplViewState {
       _ when _pending =>
         'Run failed. Asking the model to fix it '
             '(attempt $_requested of ${chain!.max})…',
+      _ when _notRepaired => 'The model did not repair the program.',
       _ when _fixedAfter != null =>
         'Fixed after $_fixedAfter attempt${_fixedAfter == 1 ? '' : 's'}',
       final RepairChain c when _claimed != null && _running =>

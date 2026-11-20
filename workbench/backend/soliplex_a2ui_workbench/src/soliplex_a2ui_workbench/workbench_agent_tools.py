@@ -50,7 +50,17 @@ async def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
                 allowed_rooms=allowed_rooms,
                 installation=deps.the_installation,
             )
-        return deps._workbench_context
+        working = deps._workbench_context
+        action = deps.state.get("workbenchAction") if isinstance(deps.state, dict) else None
+        if isinstance(action, dict):
+            from .workbench_actions import validate_submission
+            submission = validate_submission(action, working.repository)
+            if submission.userAction.name == "workbench.program.repair":
+                working.repair_request = {
+                    "surfaceId": submission.userAction.surfaceId,
+                    **submission.userAction.context,
+                }
+        return working
 
 
 async def start_walkthrough(ctx: RunContext[AgentDependencies]) -> ToolReturn:
@@ -142,10 +152,11 @@ async def show_chart(
 
 
 async def open_demo(ctx: RunContext[AgentDependencies], name: str) -> ToolReturn:
-    """Publish a fixed demo editor. Tell the user to press Run, then click its buttons.
+    """Publish a curated editor. For error examples, say tick AI Fix and press Run.
 
     Args:
-        name: Curated demo name: ``monty_gui``. Never write or alter its source.
+        name: ``monty_gui``, ``syntax_error``, ``name_error`` or ``type_check``.
+            Never write or alter its source.
     """
     return await _call(workbench_tools.open_demo, ctx, name=name)
 

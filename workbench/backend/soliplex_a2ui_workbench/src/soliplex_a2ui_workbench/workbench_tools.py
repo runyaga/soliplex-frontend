@@ -227,10 +227,22 @@ def _content_result(
 
 def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
     """Publish a curated program, without importing or executing its source."""
-    if name != "monty_gui":
-        raise ValueError('unknown demo; use open_demo(name="monty_gui")')
-    source = Path(__file__).with_name("monty_gui_demo.py").read_text()
-    return run_python_client(ctx, "Monty GUI demo", source, "r_canvas")
+    demos = {
+        "monty_gui": ("Monty GUI demo", "monty_gui_demo.py", False),
+        "syntax_error": ("Syntax error example", "syntax_error_demo.py.txt", False),
+        "name_error": ("NameError example", "name_error_demo.py", False),
+        "type_check": ("Type check example", "type_check_demo.py", True),
+    }
+    if name not in demos:
+        raise ValueError('unknown demo; use open_demo with monty_gui, syntax_error, name_error or type_check')
+    title, filename, type_check = demos[name]
+    source = Path(__file__).with_name(filename).read_text()
+    if not type_check:
+        return run_python_client(ctx, title, source, "r_canvas")
+    activity_id, surface_id = _record_ids()
+    record = python_record(activity_id, surface_id, title, source)
+    record["typeCheck"] = True
+    return _content_result(ctx, record, "r_canvas", title=title, program=True)
 
 
 def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, object]:
@@ -527,9 +539,21 @@ def repair_program(
     # Older repair attempts closed the content leaf before replacing it.
     # Reopen that leaf; retain the owning window's visibility and placement.
     node["visibility"] = "open"
+    previous_source = record["source"]
     record["source"] = source
     record["output"] = ""
     result = _publish(ctx, layout, content=[record])
+    request = ctx.repair_request
+    mounted = True
+    ancestor = node
+    while True:
+        mounted &= ancestor["visibility"] == "open"
+        if ancestor["parentId"] is None:
+            break
+        ancestor = _node(layout["nodes"], ancestor["parentId"])
+    auto_run = bool(request and request["surfaceId"] == record["surfaceId"]
+                    and request["result"]["aiFix"] and request["result"]["autoRun"]
+                    and previous_source != source and mounted)
     return {
         "status": "published",
         "layoutRevision": result["layoutRevision"],
@@ -537,7 +561,9 @@ def repair_program(
         "nodeId": node["id"],
         "surfaceId": record["surfaceId"],
         "execution": "client_controlled",
-        "instruction": "Follow the repair request: autoRun=true runs automatically; otherwise say press Run.",
+        "autoRun": auto_run,
+        "instruction": ("The fix will run now. Wait for a successful client run result before claiming it ran."
+                        if auto_run else "Tell the user to press Run. Do not claim the repair ran."),
     }
 
 

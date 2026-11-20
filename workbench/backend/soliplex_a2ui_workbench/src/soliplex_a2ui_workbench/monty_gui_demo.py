@@ -3,14 +3,16 @@
 # The last-event line makes the round trip visible. Nothing runs until you press Run.
 import chart
 import ui
+import ui.workbench
 
 count = 0
 points = [{"id": "p0", "label": "Start", "value": 0}]
 last_event = "run"
 # A second Run replaces the previous log in this retained REPL session.
 try:
-    if log_window:
-        ui.workbench.close_window(log_window)
+    # The first Run has no previous log; later Runs reuse session globals.
+    if log_window:  # ty: ignore[unresolved-reference]
+        ui.workbench.close_window(log_window)  # ty: ignore[unresolved-reference]
 except NameError:
     pass
 log_window = ""

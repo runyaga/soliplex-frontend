@@ -970,7 +970,29 @@
         "kind": "run_program",
         "name": "Run",
         "region": "canvas",
-        "expectRepair": true
+        "expectRepair": true,
+        "window": "Scenario AI Fix",
+        "expectedOutput": "766228",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "766228",
+            "region": "canvas",
+            "window": "Scenario AI Fix"
+          },
+          {
+            "kind": "text",
+            "name": "Run 2",
+            "region": "canvas",
+            "window": "Scenario AI Fix"
+          },
+          {
+            "kind": "text",
+            "name": "ok",
+            "region": "canvas",
+            "window": "Scenario AI Fix"
+          }
+        ]
       }
     ],
     "assertions": [
@@ -988,6 +1010,177 @@
         "kind": "text",
         "name": "ok",
         "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "syntax_error_ai_fix",
+    "prompt": "Open the syntax error example.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "region": "canvas",
+        "window": "Syntax error example"
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "window": "Syntax error example",
+        "expectRepair": true,
+        "expectedOutput": "766228",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "766228",
+            "region": "canvas",
+            "window": "Syntax error example"
+          },
+          {
+            "kind": "text",
+            "name": "Run 2",
+            "region": "canvas",
+            "window": "Syntax error example"
+          },
+          {
+            "kind": "text",
+            "name": "ok",
+            "region": "canvas",
+            "window": "Syntax error example"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "766228",
+        "region": "canvas",
+        "window": "Syntax error example"
+      }
+    ]
+  },
+  {
+    "id": "name_error_ai_fix",
+    "prompt": "Open the NameError example.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "region": "canvas",
+        "window": "NameError example"
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "window": "NameError example",
+        "expectRepair": true,
+        "expectedOutput": "766228",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "766228",
+            "region": "canvas",
+            "window": "NameError example"
+          },
+          {
+            "kind": "text",
+            "name": "Run 2",
+            "region": "canvas",
+            "window": "NameError example"
+          },
+          {
+            "kind": "text",
+            "name": "ok",
+            "region": "canvas",
+            "window": "NameError example"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "766228",
+        "region": "canvas",
+        "window": "NameError example"
+      }
+    ]
+  },
+  {
+    "id": "type_check_ai_fix",
+    "prompt": "Open the type check example.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "region": "canvas",
+        "window": "Type check example"
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "window": "Type check example",
+        "expectRepair": true,
+        "expectedOutput": "766228",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "766228",
+            "region": "canvas",
+            "window": "Type check example"
+          },
+          {
+            "kind": "text",
+            "name": "Run 2",
+            "region": "canvas",
+            "window": "Type check example"
+          },
+          {
+            "kind": "text",
+            "name": "ok",
+            "region": "canvas",
+            "window": "Type check example"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "766228",
+        "region": "canvas",
+        "window": "Type check example"
+      }
+    ]
+  },
+  {
+    "id": "type_check_no_fix",
+    "prompt": "Open the type check example.",
+    "actions": [
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "window": "Type check example",
+        "expectRepair": false
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "unsupported-operator",
+        "region": "canvas",
+        "window": "Type check example"
+      },
+      {
+        "kind": "text",
+        "name": "failed",
+        "region": "canvas",
+        "window": "Type check example"
       }
     ]
   }

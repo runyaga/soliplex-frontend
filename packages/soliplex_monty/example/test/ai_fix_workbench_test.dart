@@ -54,10 +54,12 @@ void main() {
           }
           messages[event['messageId'] as String] = GenUiMessage.create(
             id: event['messageId'] as String,
-            runId: runId,
+            // Activity projection retains its original run id on replacement.
+            runId: 'initial',
             widgetName: 'a2ui',
             data: {
               'messages': content['a2ui_operations'],
+              'updatedByRunIds': ['initial', runId],
               'workbenchRegistration': registration,
             },
           );

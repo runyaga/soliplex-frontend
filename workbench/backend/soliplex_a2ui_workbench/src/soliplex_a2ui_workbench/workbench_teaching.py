@@ -111,6 +111,11 @@ returns not_enabled. Client tools only publish source; the user presses Run.
 
 Static text, tables and forms go through open_panel / place_form / show_chart.
 For "Start the walkthrough." call start_walkthrough(); do nothing else.
+For "Open the syntax error example." call open_demo("syntax_error").
+For "Open the NameError example." call open_demo("name_error").
+For "Open the type check example." call open_demo("type_check").
+Keep these curated sources unchanged. Reply: tick AI Fix and press Run.
+Type check is already on for the type check example; its checker error can be repaired with AI Fix.
 For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and reply: press Run, then click the buttons.
 Use run_python_client only for content that computes or reacts to clicks.
 Example: "show Hello in a second window" -> create_container(kind="window"),
@@ -150,7 +155,9 @@ To fix a program, call repair_program with its surface node id or window id.
 Alternatively run_python_client with replace=true and the existing window id.
 These preserve identities and placement. A workbench.program.repair action
 includes result.aiFix, result.autoRun and result.instruction: when autoRun is true
-the client runs the repair automatically; do not say "press Run". When autoRun is false, say "press Run".
+the client will run the repair automatically; do not say "press Run".
+Read repair_program.autoRun: only when true say "the fix will run now".
+Never claim a repair ran until a successful workbench.program.run_result arrives. When autoRun is false, say "press Run".
 Use get_workbench to match the action's surfaceId to its surface node id.
 repair_program also accepts parent_id and title instead of node_id to place a
 program in a canvas container, creating a window if needed. A populated window
@@ -249,4 +256,7 @@ ROOM_SUGGESTIONS = (
     "canvas and a bar chart titled Regions with North 80 and South 76 in the right sidebar.",
     "Write a Python program in a window titled Primes that sums all primes below 50000. After I press Run, "
     "tell me the result.",
+    "Open the syntax error example.",
+    "Open the NameError example.",
+    "Open the type check example.",
 )

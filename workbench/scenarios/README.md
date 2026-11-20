@@ -3,7 +3,7 @@
 | Suite | Coverage |
 | --- | --- |
 | Deterministic | Ten real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
-| Models | Eighteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including the curated Monty GUI demo, form submissions, credential rejection and REPL result follow-up |
+| Models | Twenty-two cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including the curated Monty GUI demo, form submissions, credential rejection and REPL result follow-up |
 | Motivation | [Workbench lessons](../docs/LESSONS.md) |
 
 | Run from the worktree root | Command |
@@ -59,8 +59,10 @@
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
 | `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values, walrus and scenario-survey.csv in the reply, and matching values in the downloaded CSV |
 | `credential_form` | Request a login form with a password field. Require the companion text panel and no password-like canvas field |
+| `syntax_error_ai_fix`, `name_error_ai_fix`, `type_check_ai_fix` | Open each curated error example, tick AI Fix, and require the computed print output and `Run 2` in its canvas window after repair |
+| `type_check_no_fix` | Open the curated type example with Type check on and AI Fix off. Run must show a checker error and send no action turn for 20 seconds |
 | `ai_fix_off` | Run a deliberately failing program with AI Fix unchecked. Observe 20 seconds, require zero action turns and the visible error |
-| `ai_fix_on` | Check AI Fix and Run the failing program. Require one repair publication, its automatic successful run-result action, and computed print output with `ok` in the window |
+| `ai_fix_on` | Check AI Fix and Run the failing program. Require one repair publication, its automatic successful run-result action, and computed print output, `Run 2` and `ok` in the same window |
 | `repl_result` | Publish Scenario compute with `print(pow(7, 12345, 1000003))`, press Run and await its action turn, then ask what it printed. Require the computed value in the follow-up reply |
 
 | Existing REPL result path | Code trace |
@@ -205,6 +207,21 @@ stored on this device by stable surface ID, so repair replacement and reload
 retain it. It is separate from server-authored code: publishing or replaying a
 surface cannot opt the user in. Repair chains and pending arrival permissions
 stay in memory; reload and history never resume them. Unchecking ends a pending
-chain. The manual AI Fix button requests one repair; with the checkbox off the
+chain. The manual Fix now button requests one repair; with the checkbox off the
 replacement waits for Run. The former Yes/No retry prompt is removed; after the
 retry budget is spent, the manual button remains available.
+
+Each program also has a Type check checkbox. It defaults off, persists per
+program, and checks the whole source before Run or a user-started widget event.
+A fresh worker resolves the workbench module stubs and checks the source, then
+suspends before any user statement. A checker failure appears as a failed run
+and follows the same AI Fix flow as a syntax or runtime error. Reload and
+replay perform no checks or execution.
+
+The syntax, NameError and type check suggestions use curated backend sources
+through `open_demo`. The type example enables Type check on publication; its
+uncalled annotated function fails static checking while unchecked execution
+prints normally. Tick AI Fix and press Run to repair each example. A repair
+turn that ends without replacement displays "The model did not repair the
+program." The repair tool reports whether automatic execution was requested;
+only a successful client run result establishes that the fix ran.

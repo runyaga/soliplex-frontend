@@ -379,6 +379,8 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                     dedup.release(scope, submission.submissionId)
                     raise HTTPException(503, "Form results could not be saved; retry Submit") from None
                 props["workbenchFormReceipt"] = {"filename": saved_file}
+            if submission.userAction.name == "workbench.program.repair":
+                run_input.state["workbenchAction"] = submission.model_dump(mode="json", exclude_none=True)
             run_input.messages.extend(submission_messages(submission, saved_file=saved_file))
             return adapter
 
