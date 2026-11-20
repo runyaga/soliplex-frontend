@@ -1,0 +1,335 @@
+[
+  {
+    "id": "intake_left",
+    "prompt": "Place an intake form in the left sidebar. Use the built-in intake template. Title it Scenario intake.",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      }
+    ]
+  },
+  {
+    "id": "bar_chart",
+    "prompt": "Show a bar chart of north 80, south 76 on the canvas. Use the labels North and South and title Scenario regions.",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "North: 80",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "South: 76",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "tally_counter",
+    "prompt": "Create a tally counter program in a window titled Scenario program window, with +1, -1 and Reset buttons. Use the ui skill and the client Python tool. Show the Python source and Run button. The buttons must appear after I press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run"
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "+1",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "-1",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Reset",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "fix_program",
+    "setup": [
+      "Create a tally counter program in a window titled Scenario program window, with +1, -1 and Reset buttons. Use the ui skill and the client Python tool. Show the Python source and Run button. The buttons must appear after I press Run."
+    ],
+    "prompt": "Fix the program. Replace its source in the same window. Add a heading Tally fixed to the program UI and keep +1, -1 and Reset. Include the literal Tally fixed in the new source. Do not open an extra window.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run"
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "source",
+        "name": "Python source",
+        "includes": "Tally fixed",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Reset",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Tally fixed",
+        "region": "canvas"
+      }
+    ],
+    "setup_assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "second_window",
+    "setup": [
+      "Create a tally counter program in a window titled Scenario program window, with +1, -1 and Reset buttons. Use the ui skill and the client Python tool. Show the Python source and Run button. The buttons must appear after I press Run."
+    ],
+    "prompt": "Open a second window titled Scenario second window. Put the text Second window is populated inside it. Keep the first window and its program.",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario program window",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario second window",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Second window is populated",
+        "region": "canvas"
+      }
+    ],
+    "setup_assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "move_chart_right",
+    "setup": [
+      "Show a bar chart of north 80, south 76 on the canvas. Use the labels North and South and title Scenario regions."
+    ],
+    "prompt": "Move the chart to the right sidebar. Preserve the chart data and remove its old placement.",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "North: 80",
+        "region": "right",
+        "count": 1
+      },
+      {
+        "kind": "text",
+        "name": "South: 76",
+        "region": "right",
+        "count": 1
+      }
+    ],
+    "setup_assertions": [
+      {
+        "kind": "text",
+        "name": "North: 80",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "South: 76",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "close_form",
+    "setup": [
+      "Place an intake form in the left sidebar. Use the built-in intake template. Title it Scenario intake.",
+      "Put the text Retained canvas content in a panel on the canvas. Keep the intake form."
+    ],
+    "prompt": "Close the form in the left sidebar. Keep the Retained canvas content panel.",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "workspace",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "workspace",
+        "absent": true
+      },
+      {
+        "kind": "text",
+        "name": "Retained canvas content",
+        "region": "canvas"
+      }
+    ],
+    "setup_assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Retained canvas content",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "split_canvas",
+    "prompt": "Create a horizontal split on the canvas with two text panels. Title them Split alpha and Split beta. Their content must be Alpha content and Beta content respectively.",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Alpha content",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Beta content",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "tabbed_canvas",
+    "prompt": "Create tabs on the canvas with two panels titled Tab alpha and Tab beta. Put Alpha tab content in the first and Beta tab content in the second.",
+    "actions": [
+      {
+        "role": "tab",
+        "name": "Tab beta"
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "tab",
+        "name": "Tab alpha",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "tab",
+        "name": "Tab beta",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Beta tab content",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "tray_and_sidebar",
+    "prompt": "Put a text panel with Tray content in the bottom tray. Also place a built-in intake form in the left sidebar.",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Tray content",
+        "region": "tray"
+      }
+    ]
+  }
+]
