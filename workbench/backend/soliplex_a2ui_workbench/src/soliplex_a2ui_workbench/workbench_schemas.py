@@ -632,6 +632,10 @@ class ShowChart(Closed):
         return value
 
 
+class OpenDemo(Closed):
+    name: Title
+
+
 class RunPythonClient(Closed):
     title: Title
     source: Source
@@ -703,6 +707,7 @@ MINIMUM_ROOM_TOOL_MANIFEST = MappingProxyType(
         "open_panel": OpenPanel,
         "place_form": PlaceForm,
         "show_chart": ShowChart,
+        "open_demo": OpenDemo,
         "run_python_client": RunPythonClient,
         "run_python_server": RunPythonServer,
         "create_container": CreateContainer,

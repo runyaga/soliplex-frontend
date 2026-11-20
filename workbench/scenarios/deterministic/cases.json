@@ -218,5 +218,239 @@
         "region": "left"
       }
     ]
+  },
+  {
+    "id": "monty_demo",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "region": "canvas",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Python drives the GUI",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "text",
+            "name": "Count: 0",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "text",
+            "name": "last event: run, count 0",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Bar Start: 0",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "+1",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "-1",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Reset",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Add point",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Open log window",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Close log window",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "role",
+            "name": "Workbench window Monty event log",
+            "region": "canvas",
+            "role": "group"
+          },
+          {
+            "kind": "text",
+            "name": "Counter samples",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      },
+      {
+        "role": "button",
+        "name": "Close log window",
+        "region": "canvas",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "role",
+            "name": "Workbench window Monty event log",
+            "region": "canvas",
+            "absent": true,
+            "role": "group"
+          },
+          {
+            "kind": "text",
+            "name": "Count: 0",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      },
+      {
+        "role": "button",
+        "name": "+1",
+        "region": "canvas",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Count: 1",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "text",
+            "name": "last event: plus, count 1",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      },
+      {
+        "role": "button",
+        "name": "+1",
+        "region": "canvas",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Count: 2",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          },
+          {
+            "kind": "text",
+            "name": "last event: plus, count 2",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      },
+      {
+        "role": "button",
+        "name": "Open log window",
+        "region": "canvas",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "role",
+            "name": "Workbench window Monty event log",
+            "region": "canvas",
+            "role": "group"
+          },
+          {
+            "kind": "text",
+            "name": "last event: open_log, count 2",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      },
+      {
+        "role": "button",
+        "name": "Close log window",
+        "region": "canvas",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "role",
+            "name": "Workbench window Monty event log",
+            "region": "canvas",
+            "absent": true,
+            "role": "group"
+          },
+          {
+            "kind": "text",
+            "name": "last event: close_log, count 2",
+            "region": "canvas",
+            "window": "Monty GUI demo"
+          }
+        ],
+        "window": "Monty GUI demo"
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Monty GUI demo",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas",
+        "window": "Monty GUI demo"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas",
+        "window": "Monty GUI demo"
+      },
+      {
+        "kind": "text",
+        "name": "Count: 0",
+        "region": "canvas",
+        "window": "Monty GUI demo",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "name": "Workbench window Monty event log",
+        "region": "canvas",
+        "absent": true,
+        "role": "group"
+      }
+    ],
+    "reload": true
   }
 ]

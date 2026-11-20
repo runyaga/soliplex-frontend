@@ -129,5 +129,5 @@ def test_step3_registers_manifest_tools_for_preview_rooms_only():
     assert set(MINIMUM_ROOM_TOOL_MANIFEST) == {
         "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
-        "move_panel", "close_panel", "repair_program", "read_form_results",
+        "move_panel", "close_panel", "repair_program", "read_form_results", "open_demo",
     }

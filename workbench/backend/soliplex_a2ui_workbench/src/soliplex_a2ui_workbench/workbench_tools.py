@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import uuid
+from pathlib import Path
 from typing import Any
 
 from .workbench_context import WorkbenchToolContext
@@ -222,6 +223,14 @@ def _content_result(
         "surfaceId": record["surfaceId"],
         **({"side": "client", "execution": "awaiting_user"} if program else {}),
     }
+
+
+def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
+    """Publish a curated program, without importing or executing its source."""
+    if name != "monty_gui":
+        raise ValueError('unknown demo; use open_demo(name="monty_gui")')
+    source = Path(__file__).with_name("monty_gui_demo.py").read_text()
+    return run_python_client(ctx, "Monty GUI demo", source, "r_canvas")
 
 
 def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, object]:

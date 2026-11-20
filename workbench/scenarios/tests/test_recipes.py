@@ -12,6 +12,15 @@ SPEC.loader.exec_module(seed)
 
 
 class RecipesTest(unittest.IsolatedAsyncioTestCase):
+    async def test_demo_publishes_only_the_curated_name(self):
+        calls = []
+
+        async def call(tool, **arguments):
+            calls.append((tool, arguments))
+
+        await seed.scripted_tools("monty_demo", call)
+        self.assertEqual(calls, [("open_demo", {"name": "monty_gui"})])
+
     async def test_replacement_uses_repair_on_the_original_program(self):
         calls = []
         async def call(tool, **arguments):

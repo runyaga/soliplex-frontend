@@ -1,7 +1,7 @@
-import { assertCanvas, openThread, semantics, screenshot, visibleErrors, waitForComposer } from '../lib/browser.mjs';
+import { assertCanvas, openThread, performActions, semantics, screenshot, visibleErrors, waitForComposer } from '../lib/browser.mjs';
 import { failedAssertions } from '../lib/core.mjs';
 
-export async function checkDeterministic({ page, base, alias, seeds, cases, directory, credentials, record }) {
+export async function checkDeterministic({ page, base, alias, seeds, cases, directory, credentials, timeoutMs = 240000, record }) {
   for (const item of cases) {
     const seed = seeds.find(s => s.scenario === item.id);
     const result = { id: item.id, model: 'No model', threadId: seed?.thread_id, assertions: [], runErrors: [] };
@@ -16,7 +16,15 @@ export async function checkDeterministic({ page, base, alias, seeds, cases, dire
         const replay = await assertCanvas(page, item.assertions);
         result.assertions.push(...replay.map(a => ({ ...a, label: `After reload: ${a.label}` })));
       }
-      result.runErrors = await visibleErrors(page);
+      await performActions(page, item.actions, { room: 'workbench', threadId: result.threadId, timeoutMs }, turn => {
+        result.runErrors.push(...turn.runErrors);
+        if (!turn.completed || turn.runErrors.length) throw new Error('Program layout turn failed');
+      }, undefined, async assertions => {
+        const checked = await assertCanvas(page, assertions);
+        result.assertions.push(...checked.map(a => ({ ...a, label: `After action: ${a.label}` })));
+        return checked;
+      });
+      result.runErrors.push(...await visibleErrors(page));
     } catch (error) {
       result.error = error.message;
       if (!result.assertions.length) result.assertions = failedAssertions(item.assertions, 'Not evaluated because scenario setup failed');

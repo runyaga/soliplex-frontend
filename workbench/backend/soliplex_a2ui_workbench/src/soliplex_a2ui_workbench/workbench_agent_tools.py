@@ -136,6 +136,15 @@ async def show_chart(
     )
 
 
+async def open_demo(ctx: RunContext[AgentDependencies], name: str) -> ToolReturn:
+    """Publish a fixed demo editor. Tell the user to press Run, then click its buttons.
+
+    Args:
+        name: Curated demo name: ``monty_gui``. Never write or alter its source.
+    """
+    return await _call(workbench_tools.open_demo, ctx, name=name)
+
+
 async def run_python_client(
     ctx: RunContext[AgentDependencies],
     title: str,

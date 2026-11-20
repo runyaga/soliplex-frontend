@@ -15,7 +15,9 @@ function locatorFor(page, a) {
 }
 
 export async function workspaceMatches(page, a) {
-  const container = page.locator(regionSelector(a.region));
+  const selector = regionSelector(a.region).split(', ').map(region =>
+    a.window ? `${region} [aria-label=${JSON.stringify(`Workbench window ${a.window}`)}]` : region).join(', ');
+  const container = page.locator(selector);
   const locator = locatorFor(container, a);
   const matches = [];
   for (let i = 0; i < await locator.count(); i++) {

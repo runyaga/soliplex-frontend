@@ -9,6 +9,7 @@ from .workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 
 TOOL_EXAMPLES = {
     "get_workbench": {},
+    "open_demo": {"name": "monty_gui"},
     "read_form_results": {"title": "Survey"},
     "open_panel": {"title": "Note", "text": "Hello", "parent_id": "r_left"},
     "place_form": {"template": "intake", "title": "Intake", "parent_id": "r_left"},
@@ -108,6 +109,7 @@ The user's placements win. run_python_server is declared but disabled and
 returns not_enabled. Client tools only publish source; the user presses Run.
 
 Static text, tables and forms go through open_panel / place_form / show_chart.
+For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and reply: press Run, then click the buttons.
 Use run_python_client only for content that computes or reacts to clicks.
 Example: "show Hello in a second window" -> create_container(kind="window"),
 then open_panel(text="Hello") inside it; "compute a sum" -> run_python_client.
@@ -228,8 +230,9 @@ WELCOME_MESSAGE = (
 )
 
 # One click sends each suggestion as the user's message. Each is self-contained
-# and matches a flow checked live on the deployed workbench.
+# and matches a reproducible harness flow.
 ROOM_SUGGESTIONS = (
+    "Open the Monty GUI demo.",
     "Show a bar chart titled Regions with North 80 and South 76 on the canvas.",
     "Show a line chart titled Weekly visits with Mon 12, Tue 18, Wed 9, Thu 22, Fri 30 in the right sidebar.",
     "Show a pie chart titled Budget with Rent 50, Food 30 and Fun 20 on the canvas.",

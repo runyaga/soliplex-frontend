@@ -15,7 +15,7 @@ async function check(target, wait) {
   throw new Error('Checkbox did not become checked');
 }
 
-export async function performActions(page, actions = [], turnOptions, onTurn = () => {}, wait = pause) {
+export async function performActions(page, actions = [], turnOptions, onTurn = () => {}, wait = pause, onAssertions) {
   for (const action of actions) {
     const kind = action.kind ?? 'click';
     const role = action.role ?? ({ fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
@@ -54,5 +54,10 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
       await onTurn(await captureTurn(page, turnOptions, trigger));
     } else await trigger();
     await wait(600);
+    if (action.assertions) {
+      if (!onAssertions) throw new Error('Action assertions require an inspector');
+      const results = await onAssertions(action.assertions);
+      if (!results.length || results.some(a => !a.pass)) throw new Error(`Action assertions failed after ${action.name}`);
+    }
   }
 }

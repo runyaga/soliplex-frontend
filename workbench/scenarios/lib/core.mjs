@@ -48,6 +48,7 @@ export function cleanEvidence(value, redact) {
 }
 
 const regions = new Set(['workspace', 'left', 'canvas', 'right', 'tray']);
+const validWindow = value => value === undefined || (typeof value === 'string' && value.trim().length > 0 && value.length <= 80);
 export function replyExpectation(includes) {
   if (typeof includes === 'string' && includes.trim()) return includes;
   const args = includes?.pow;
@@ -93,7 +94,8 @@ export function validateCases(data, { prompts = false } = {}) {
         continue;
       }
       if (!a || !['text', 'role', 'source'].includes(a.kind) || typeof a.name !== 'string' || !a.name.trim() || !regions.has(a.region ?? 'workspace')) throw new Error('Invalid assertion');
-      if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'radio', 'img'].includes(a.role)) throw new Error('Invalid accessible role');
+      if (!validWindow(a.window)) throw new Error('Invalid assertion window');
+      if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'radio', 'img', 'group'].includes(a.role)) throw new Error('Invalid accessible role');
       if (a.kind === 'source' && (typeof a.includes !== 'string' || !a.includes)) throw new Error('Missing source expectation');
       if (a.absent !== undefined && typeof a.absent !== 'boolean') throw new Error('Invalid absence assertion');
       if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.absent)) throw new Error('Invalid count');
@@ -103,9 +105,11 @@ export function validateCases(data, { prompts = false } = {}) {
       const kind = action?.kind ?? 'click';
       const role = action?.role ?? ({ fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
       if (!['click', 'fill', 'select', 'choose', 'check'].includes(kind) || typeof action.name !== 'string' || !action.name.trim() || !regions.has(action.region ?? 'workspace')) throw new Error('Invalid action');
+      if (!validWindow(action.window)) throw new Error('Invalid action window');
       if ((kind === 'click' && !['button', 'tab'].includes(role)) || (kind === 'fill' && role !== 'textbox') || (kind === 'check' && role !== 'checkbox') || (['select', 'choose'].includes(kind) && !['button', 'checkbox', 'radio', 'option'].includes(role))) throw new Error('Invalid action role');
       if (kind === 'fill' && typeof action.value !== 'string') throw new Error('Missing fill value');
-      if (action.awaitTurn !== undefined && (!prompts || typeof action.awaitTurn !== 'boolean' || kind !== 'click')) throw new Error('Invalid awaitTurn flag');
+      if (action.awaitTurn !== undefined && (typeof action.awaitTurn !== 'boolean' || kind !== 'click')) throw new Error('Invalid awaitTurn flag');
+      if (action.assertions !== undefined) validateCases([{ id: 'action', assertions: action.assertions }]);
     }
     if (item.setup_assertions) validateCases([{ id: 'setup', assertions: item.setup_assertions }]);
   }
@@ -158,7 +162,7 @@ export function assertionLabel(a) {
   if (a.kind === 'reply') return `Latest assistant reply containing ${replyExpectation(a.includes)}`;
   if (a.kind === 'csv') return `Public workdir CSV ${a.filename} contains submitted values`;
   if (a.kind === 'submission') return `Run input contains ${a.name} submission`;
-  return `${a.absent ? 'Absent ' : ''}${a.kind === 'role' ? a.role : a.kind} ${a.name} in ${a.region ?? 'workspace'}${a.includes ? ` containing ${a.includes}` : ''}${a.count ? ` count ${a.count}` : ''}`;
+  return `${a.absent ? 'Absent ' : ''}${a.kind === 'role' ? a.role : a.kind} ${a.name} in ${a.region ?? 'workspace'}${a.window ? ` window ${a.window}` : ''}${a.includes ? ` containing ${a.includes}` : ''}${a.count ? ` count ${a.count}` : ''}`;
 }
 
 export function assertTurn(a, turn) {

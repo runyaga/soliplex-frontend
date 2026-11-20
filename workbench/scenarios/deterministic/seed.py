@@ -17,6 +17,7 @@ import warnings
 from pathlib import Path
 
 SCENARIOS = (
+    "monty_demo",
     "form_in_left_sidebar",
     "custom_form",
     "chart_on_canvas",
@@ -37,7 +38,9 @@ POINTS = [
 
 async def scripted_tools(name, call):
     """Only public wrappers are invoked. Ids come from their actual results."""
-    if name in {"form_in_left_sidebar", "reload_replay"}:
+    if name == "monty_demo":
+        await call("open_demo", name="monty_gui")
+    elif name in {"form_in_left_sidebar", "reload_replay"}:
         await call(
             "place_form", template="intake", title="Scenario intake", parent_id="r_left"
         )

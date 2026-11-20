@@ -17,6 +17,51 @@ const storedInput = {
   ],
 };
 
+test('demo corpus checks Run, each counter click, window open and close in order', async () => {
+  const model = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  const deterministic = await loadCases(new URL('../deterministic/cases.json', import.meta.url));
+  const demo = model.find(c => c.id === 'monty_demo');
+  assert.equal(demo.prompt, 'Open the Monty GUI demo.');
+  assert.deepEqual(demo.actions, deterministic.find(c => c.id === 'monty_demo').actions);
+  assert.deepEqual(demo.actions.map(a => a.name), ['Run', 'Close log window', '+1', '+1', 'Open log window', 'Close log window']);
+  assert.ok(demo.actions[0].assertions.some(a => a.role === 'button' && a.name === 'Bar Start: 0'));
+  for (const count of [1, 2]) {
+    assert.ok(demo.actions[count + 1].assertions.some(a => a.name === `Count: ${count}`));
+    assert.ok(demo.actions[count + 1].assertions.some(a => a.name === `last event: plus, count ${count}`));
+  }
+  assert.ok(demo.actions[4].assertions.some(a => a.role === 'group' && a.name === 'Workbench window Monty event log' && !a.absent));
+  assert.ok(demo.actions[5].assertions.some(a => a.role === 'group' && a.name === 'Workbench window Monty event log' && a.absent));
+  assert.ok(demo.actions.filter(a => ['Run', 'Open log window', 'Close log window'].includes(a.name)).every(a => a.awaitTurn));
+});
+
+test('action assertions are inspected before the next click and stop on failure', async () => {
+  const { page, operations } = fixture();
+  const actions = [
+    { role: 'button', name: 'North', region: 'left', assertions: [{ kind: 'text', name: 'Count: 1' }] },
+    { role: 'button', name: 'South', region: 'left' },
+  ];
+  await performActions(page, actions, options, undefined, noWait, async assertions => {
+    assert.deepEqual(operations, ['click:North']);
+    assert.equal(assertions[0].name, 'Count: 1');
+    operations.push('inspect');
+    return [{ pass: true }];
+  });
+  assert.deepEqual(operations, ['click:North', 'inspect', 'click:South']);
+  for (const inspector of [async () => [{ pass: false }], async () => [], undefined]) {
+    operations.length = 0;
+    await assert.rejects(performActions(page, actions, options, undefined, noWait, inspector), /assertions/);
+    assert.deepEqual(operations, ['click:North']);
+  }
+});
+
+test('action assertion schema rejects empty, turn-only and malformed checks', () => {
+  const item = assertions => [{ id: 'demo', assertions: [{ kind: 'text', name: 'Demo' }], actions: [{ role: 'button', name: 'Run', assertions }] }];
+  assert.doesNotThrow(() => validateCases(item([{ kind: 'text', name: 'Count: 0' }])));
+  for (const assertions of [[], null, [{ kind: 'reply', includes: 'No inference' }], [{ kind: 'role', name: 'Chart', role: 'unknown' }]]) {
+    assert.throws(() => validateCases(item(assertions)));
+  }
+});
+
 function fixture({ events, actionName = 'submit_intake', httpOk = true, csvStatus = 200, missingFile = false } = {}) {
   const operations = [];
   const nodes = [

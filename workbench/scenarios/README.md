@@ -2,8 +2,8 @@
 
 | Suite | Coverage |
 | --- | --- |
-| Deterministic | Nine real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
-| Models | Fourteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including intake and custom form submissions, credential rejection and REPL result follow-up |
+| Deterministic | Ten real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
+| Models | Fifteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including the curated Monty GUI demo, form submissions, credential rejection and REPL result follow-up |
 | Motivation | [Workbench lessons](../docs/LESSONS.md) |
 
 | Run from the worktree root | Command |
@@ -43,6 +43,8 @@
 | `kind: choose` or `select` | `name` is the visible option label, such as North. Defaults to a chip button, with optional checkbox, radio or option role |
 | `kind: check` | `name` is the checkbox label, such as Acknowledged. Sets it checked |
 | `awaitTurn: true` | A click starts an action-only turn. Capture is installed before the click and awaited before subsequent actions or follow-ups |
+| Action `assertions` | Canvas checks evaluated immediately after that action. Failures stop later clicks and are retained in evidence |
+| `window` | Optional exact workbench window title for an action or canvas assertion, inside its selected region |
 | `followup` | Nonempty list of prompts sent after all actions, in the same thread |
 | Assertion `kind: reply` | `includes` is matched case-insensitively against the final assistant text of the most recent captured turn, which must finish successfully |
 | Computed reply expectation | `includes: {"pow": [7, 12345, 1000003]}` computes the modular power with BigInt in the harness. The result is never supplied in the prompt |
@@ -52,6 +54,7 @@
 
 | Added model case | Sequence |
 | --- | --- |
+| `monty_demo` | Send Open the Monty GUI demo. Press Run and require its heading, zero counter, chart, six buttons and initial log window. Close the initial log, click +1 twice and check each counter and last-event line. Open the log, require it, close it and require its absence. Layout gestures must finish their captured streams. The deterministic seeder publishes the same demo with open_demo and verifies inert reload before the same clicks |
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
 | `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values, walrus and scenario-survey.csv in the reply, and matching values in the downloaded CSV |
 | `credential_form` | Request a login form with a password field. Require the companion text panel and no password-like canvas field |
@@ -72,12 +75,37 @@
 | Failure | Reports update per case. Setup errors produce failed assertions. Any failed case or missing screenshot exits nonzero |
 | Secrets | Credentials stay in memory and stdin. No shell sourcing, credential argv, traces, storage state or raw child logs. Evidence is redacted before serialization. Authentication screenshots are prohibited and account text is masked |
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
-| Scope limits | Region semantics replace geometry classification. Chart assertions require image semantics with title and series plus a PNG ink check. Selectors require live verification |
-| Execution | Deterministic programs and replay remain inert. Model counter cases deliberately press Run. The follow-up fix case checks replacement, not the host AI Fix repair chain |
-| Offline tests | Twenty-six JavaScript tests cover corpus validation, actions, turn capture, stored intake and custom form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Seven Python tests cover recipes, public-storage cleanup and persistence, including all nine seeded recipes |
+| Scope limits | Region and window semantics replace geometry classification. Graphics charts require image semantics with title and series; the embedded lab chart exposes named bar buttons. Every visible assertion also checks PNG ink. Selectors require live verification |
+| Execution | Replay remains inert. The Monty demo and model counter cases deliberately press Run. Other deterministic programs remain inert. The follow-up fix case checks replacement, not the host AI Fix repair chain |
+| Offline tests | JavaScript tests cover corpus validation, action checkpoints, window scopes, turn capture, stored form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Eight Python tests cover recipes, public-storage cleanup and persistence, including all ten seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |
 | Unverified | Claude must run the live suites. Docker, deployed PostgreSQL, browser semantics, screenshots and both models were unavailable here |
 | Flutter checks | Host widget tests cover region and window semantics, Python source and Run mounting, and a hittable form Submit. The socket-restricted sandbox uses direct `flutter_tester` execution |
+
+## Curated Monty GUI demo
+
+`open_demo(name="monty_gui")` publishes the backend package's
+`monty_gui_demo.py` unchanged in a new **Monty GUI demo** canvas window. The
+suggestion **Open the Monty GUI demo.** teaches the model to call that tool and
+tell the user to press Run and click the buttons. Publication never executes
+Python. Run builds the controls and opens a **Monty event log** result window.
+Each button calls the real `handle_event(name, context)` in the same session.
+
+The counter stays at or above zero. Add point appends a counter sample;
+`chart.bar` builds the spec and the existing embeddable `ui.BarChart` displays
+the latest 32 samples beside the controls. `ui.graphics.Chart` requires a
+standalone surface, so the demo uses the existing lab chart for this composition.
+Opening the log replaces its previous window, then moves the replacement to
+canvas position 1. Each gesture stages at most three layout actions, below the
+eight-action limit, and leaves at most two windows open.
+
+Backend tests check publication, corrective unknown-name errors, the frozen
+publication operations and log layout transactions. The fixture stores a source
+placeholder; the Flutter test reads the canonical backend source directly.
+Native Monty widget tests execute that source and every handler, including
+chart redraws, log replacement, repeated close and reopen, and more than eight
+cumulative actions across separate gestures. Live Chrome and Glimmer checks
+still require the host deployment.
 
 ## Custom form contract
 

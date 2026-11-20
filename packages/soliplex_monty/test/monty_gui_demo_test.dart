@@ -1,0 +1,207 @@
+// Reads the curated demo source from the repository with dart:io.
+@TestOn('vm')
+library;
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_design/soliplex_design.dart';
+
+import 'python_repl_test.dart' as repl;
+import 'support/lab_surface.dart';
+import 'support/monty.dart';
+
+Directory get _root {
+  var directory = Directory.current.absolute;
+  while (!Directory('${directory.path}/workbench/backend').existsSync()) {
+    final parent = directory.parent;
+    if (parent.path == directory.path) throw StateError('Missing demo source');
+    directory = parent;
+  }
+  return directory;
+}
+
+String get _source => File(
+  '${_root.path}/workbench/backend/soliplex_a2ui_workbench/'
+  'src/soliplex_a2ui_workbench/monty_gui_demo.py',
+).readAsStringSync();
+
+// The backend test compares this fixture with the actual open_demo ToolReturn.
+// Read the source directly so there is only one copy of the curated program.
+List<Map<String, Object?>> _publication() {
+  final fixture = File(
+    '${_root.path}/packages/soliplex_monty/test/fixtures/monty_demo.json',
+  ).readAsStringSync();
+  final operations = (jsonDecode(fixture) as List)
+      .map((op) => Map<String, Object?>.from(op as Map))
+      .toList();
+  for (final op in operations) {
+    final update = op['updateDataModel'];
+    if (update is Map) (update['value'] as Map)['source'] = _source;
+  }
+  return operations;
+}
+
+Future<void> _mount(
+  WidgetTester tester,
+  LabSurfaceController controller,
+) async {
+  tester.view.physicalSize = const Size(1200, 4000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  controller.apply(_publication());
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: soliplexLightTheme(),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: LabSurfaceView(controller: controller),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('published demo shows its source and Run without execution', (
+    tester,
+  ) async {
+    var starts = 0;
+    final actions = <Map<String, Object?>>[];
+    final controller = LabSurfaceController(
+      startRuntime: (_, _) {
+        starts++;
+        throw StateError('Publication must stay inert');
+      },
+      onActionPayload: actions.add,
+    );
+    addTearDown(controller.dispose);
+    await _mount(tester, controller);
+    expect(controller.error, isNull);
+    expect(controller.surfaces.single.dataModel.get('/source'), _source);
+    expect(tester.widget<TextField>(repl.editor).controller!.text, _source);
+    expect(find.text('Run'), findsOneWidget);
+    expect(find.text('Count: 0'), findsNothing);
+    expect(starts, 0);
+    expect(actions, isEmpty);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'real curated source and every event drive counter, chart and windows',
+    (tester) async {
+      final starter = MontyStarter();
+      final actions = <Map<String, Object?>>[];
+      final controller = LabSurfaceController(
+        startRuntime: starter.call,
+        onActionPayload: actions.add,
+      );
+      final semantics = tester.ensureSemantics();
+      await _mount(tester, controller);
+      expect(starter.starts, 0);
+      await repl.tapRun(tester);
+      await repl.waitFor(tester, () => actions.isNotEmpty && repl.idle(tester));
+      expect(
+        actions.single['name'],
+        'workbench.program.layout',
+        reason: '${controller.surfaces.single.dataModel.get('/output')}',
+      );
+      expect(find.text('Python drives the GUI'), findsOneWidget);
+      expect(find.text('Count: 0'), findsOneWidget);
+      expect(find.text('last event: run, count 0'), findsOneWidget);
+      for (final label in [
+        '+1',
+        '-1',
+        'Reset',
+        'Add point',
+        'Open log window',
+        'Close log window',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(
+        find.bySemanticsLabel(RegExp('Bar Start: 0')),
+        findsOneWidget,
+      );
+
+      List<Map<String, Object?>> batch(int index) =>
+          (((actions[index]['context']! as Map)['actions']) as List)
+              .map((value) => Map<String, Object?>.from(value as Map))
+              .toList();
+      expect(batch(0).map((a) => a['op']), ['open', 'move']);
+      final firstWindow = batch(0).first['window_id'];
+      expect(batch(0).first['title'], 'Monty event log');
+      expect(batch(0).first['kind'], 'text');
+      expect(batch(0).first['content'], 'last event: run, count 0');
+      expect(batch(0).last['window_id'], firstWindow);
+      expect(batch(0).last['order'], 1);
+
+      Future<void> click(String label, String event, int count) async {
+        await tester.runAsync(() => tester.tap(find.text(label)));
+        await tester.pump();
+        await repl.waitFor(
+          tester,
+          () =>
+              repl.idle(tester) &&
+              find
+                  .text('last event: $event, count $count')
+                  .evaluate()
+                  .isNotEmpty,
+        );
+        expect(find.text('Count: $count'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      }
+
+      await click('+1', 'plus', 1);
+      await click('+1', 'plus', 2);
+      expect(actions, hasLength(1));
+      await click('Add point', 'add_point', 2);
+      expect(
+        find.bySemanticsLabel(RegExp('Bar Sample 1: 2')),
+        findsOneWidget,
+      );
+      await click('-1', 'minus', 1);
+      await click('Add point', 'add_point', 1);
+      expect(
+        find.bySemanticsLabel(RegExp('Bar Sample 2: 1')),
+        findsOneWidget,
+      );
+      await click('Reset', 'reset', 0);
+      await click('-1', 'minus', 0);
+      await click('Open log window', 'open_log', 0);
+      expect(batch(1).map((a) => a['op']), ['close', 'open', 'move']);
+      expect(batch(1).first['window_id'], firstWindow);
+      final secondWindow = batch(1)[1]['window_id'];
+      expect(secondWindow, isNot(firstWindow));
+      expect(batch(1)[1]['content'], 'last event: open_log, count 0');
+      expect(batch(1).last['window_id'], secondWindow);
+      await click('Close log window', 'close_log', 0);
+      expect(batch(2).single['op'], 'close');
+      expect(batch(2).single['window_id'], secondWindow);
+      await click('Close log window', 'close_log', 0);
+      expect(actions, hasLength(3));
+      await click('Open log window', 'open_log', 0);
+      expect(batch(3).map((a) => a['op']), ['open', 'move']);
+      // More than eight cumulative requests proves each click gets a new arena.
+      for (var i = 0; i < 3; i++) {
+        await click('Open log window', 'open_log', 0);
+        expect(batch(4 + i).map((a) => a['op']), ['close', 'open', 'move']);
+      }
+      expect(actions, hasLength(7));
+      expect(
+        actions.every((a) => a['name'] == 'workbench.program.layout'),
+        isTrue,
+      );
+      expect(starter.starts, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+      await tester.runAsync(starter.close);
+      semantics.dispose();
+    },
+    skip: skipWithoutMonty != false,
+  );
+}

@@ -11,14 +11,14 @@ const valid = () => [{ id: 'intake', prompt: 'Make a form', assertions: [{ kind:
 
 const AT = '@';
 
-test('prompt corpus has fourteen independent cases and checked follow-up prerequisites', async () => {
+test('prompt corpus has fifteen independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
-  assert.equal(prompts.length, 14);
+  assert.equal(prompts.length, 15);
   assert.ok(prompts.find(p => p.id === 'fix_program').setup.length);
   for (const prompt of prompts.filter(p => p.setup)) assert.ok(prompt.setup_assertions.length);
   assert.ok(prompts.some(p => p.actions?.some(a => a.name === 'Run')));
   const deterministic = await loadCases(new URL('deterministic/cases.json', root));
-  assert.equal(deterministic.length, 9);
+  assert.equal(deterministic.length, 10);
   assert.equal(deterministic.find(c => c.id === 'reload_replay').reload, true);
 });
 
@@ -178,6 +178,26 @@ test('canvas matches use container ancestry even when composer geometry overlaps
   assert.deepEqual((await workspaceMatches(page, assertion)).map(item => item.target), [canvas]);
   assert.deepEqual((await workspaceMatches(page, { ...assertion, region: 'workspace' })).map(item => item.target), [canvas]);
   assert.deepEqual((await workspaceMatches(page, { ...assertion, name: 'Submit', region: 'left' })).map(item => item.target), [left]);
+});
+
+test('window scope distinguishes identical controls in neighbouring windows', async () => {
+  const target = { boundingBox: async () => ({ x: 1, y: 1, width: 80, height: 30 }), isVisible: async () => true };
+  const page = { locator(selector) {
+    assert.equal(selector, '[aria-label="Workbench region canvas"] [aria-label="Workbench window Monty GUI demo"]');
+    return { getByRole(role, { name }) {
+      assert.equal(role, 'button');
+      assert.ok(name.test('Run'));
+      return { count: async () => 1, nth: () => target };
+    } };
+  } };
+  assert.equal((await workspaceMatches(page, { kind: 'role', role: 'button', name: 'Run', region: 'canvas', window: 'Monty GUI demo' })).length, 1);
+  for (const window of ['', 42, 'x'.repeat(81)]) {
+    const data = valid(); data[0].assertions[0].window = window;
+    assert.throws(() => validateCases(data, { prompts: true }));
+    delete data[0].assertions[0].window;
+    data[0].actions = [{ role: 'button', name: 'Run', window }];
+    assert.throws(() => validateCases(data, { prompts: true }));
+  }
 });
 
 test('chart scenarios require image semantics with title and series', async () => {
