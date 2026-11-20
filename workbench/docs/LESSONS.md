@@ -6,6 +6,8 @@ Newest first. Each entry: what happened, the evidence, what changed.
 
 | Lesson | Evidence | What changed |
 | --- | --- | --- |
+| A prohibition in a test prompt outlives its turn | repl_result told Glimmer "do not mention the result". When the follow-up asked for the number, Glimmer refused although Logfire showed 766228 in its context. 1 of 4 runs | Test prompts say what to do now, not what to avoid later. Read the model's context in Logfire before calling a miss a platform bug |
+| Credential guards work on a live model | Asked for a login form, Glimmer tried a Password field, got the corrective error and built the form without it | Keep the guard server side with corrective text, not in teaching alone |
 | A deploy-time patch hides the bug class | The stack script rewrote one `nextInt(1 << 32)` while staging. Two more stayed in source. Under dart2js the shift wraps to 0 and `nextInt(0)` throws, so every canvas Run and Submit died before its request. VM widget tests passed | Fixed in source. The deploy now refuses any shift by 32 in the staged tree. A Chrome test fails without the fix |
 | A widget can work and send nothing | Run showed "Run 1 · ok" and the form ticked its boxes, while the page made zero API requests. Only a network log after the click showed the break | Harness cases assert the action turn's stream and the stored run input, not the widget state |
 | Probe the deployed app before writing the fix brief | A 60-line Playwright probe found both the checkbox roles and the silent Run in one pass. The brief then named the exact evidence | Keep probes in the scratchpad and hand their output to the fixing round |
