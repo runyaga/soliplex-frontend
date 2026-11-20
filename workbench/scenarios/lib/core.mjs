@@ -261,3 +261,11 @@ export async function writeReport(directory, results, timestamp, redact) {
 export async function cleanupCreatedThreads(threads, remove, keep = process.env.WB_KEEP_THREADS === '1') {
   if (!keep && threads.length) await remove(threads);
 }
+
+// A Python traceback inside a workbench window is the program's own output.
+// App-level failures count wherever they appear.
+const appErrorPattern = /Workbench is unavailable|Run failed|Run error|Failed to (?:load|send)|Server error|VALIDATION_FAILED/i;
+const pythonErrorPattern = /Traceback|\b(?:TypeError|ValueError|RuntimeError|NameError|SyntaxError):/;
+export function isProgramOutputError(text, inProgramWindow) {
+  return Boolean(inProgramWindow) && pythonErrorPattern.test(text) && !appErrorPattern.test(text);
+}

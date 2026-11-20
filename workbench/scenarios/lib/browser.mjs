@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { assertionLabel, regionSelector } from './core.mjs';
+import { assertionLabel, regionSelector, isProgramOutputError } from './core.mjs';
 import { captureTurn } from './turns.mjs';
 export { performActions } from './actions.mjs';
 import { hasVisibleInk } from './png.mjs';
@@ -160,7 +160,11 @@ export async function visibleErrors(page) {
   const matches = page.getByText(pattern);
   const errors = [];
   for (let i = 0; i < await matches.count(); i++) {
-    if (await matches.nth(i).isVisible()) errors.push((await matches.nth(i).innerText()).slice(0, 2000));
+    const match = matches.nth(i);
+    if (!await match.isVisible()) continue;
+    const text = await match.innerText();
+    const inProgramWindow = await match.evaluate(element => Boolean(element.closest('[aria-label^="Workbench window "]')));
+    if (!isProgramOutputError(text, inProgramWindow)) errors.push(text.slice(0, 2000));
   }
   const banner = page.getByRole('button', { name: 'Copy error', exact: true });
   for (let i = 0; i < await banner.count(); i++) {

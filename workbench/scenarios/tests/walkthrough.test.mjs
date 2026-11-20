@@ -16,7 +16,7 @@ test('walkthrough corpus clicks Start and has ordered narrated surface checkpoin
   assert(checkpoints.at(-1).assertions.some(a => a.absent));
 });
 
-function fakePage({ skip = -1, model = false } = {}) {
+function fakePage({ skip = -1, model = false, concurrent = false } = {}) {
   let handler;
   let removed = false;
   let clicked;
@@ -28,6 +28,7 @@ function fakePage({ skip = -1, model = false } = {}) {
       assert.equal(options.name, 'Start the walkthrough.');
       return { async click() {
         clicked = true;
+        const delivered = [];
         for (let i = 0; i < checkpoints.length; i++) {
           if (i === skip) continue;
           const events = [
@@ -38,12 +39,14 @@ function fakePage({ skip = -1, model = false } = {}) {
             { type: 'TEXT_MESSAGE_END', messageId: `message${i}` },
             { type: 'RUN_FINISHED', threadId: 'thread', runId: `run${i}` },
           ];
-          await handler({
+          const delivery = handler({
             request: () => ({ method: () => 'POST', url: () => `https://example.test/api/v1/rooms/room/agui/thread/run${i}`, postDataJSON: () => i ? { forwardedProps: { a2uiAction: { userAction: { name: 'workbench.walkthrough.next' } } } } : {} }),
             fetch: async () => ({ ok: () => true, text: async () => events.map(e => `data: ${JSON.stringify(e)}\n\n`).join('') }),
             fulfill: async () => {}, abort: async () => {},
           });
+          if (concurrent) delivered.push(delivery); else await delivery;
         }
+        await Promise.all(delivered);
       } };
     },
   };
@@ -75,5 +78,18 @@ test('watcher rejects missing steps and model tools, and always detaches', async
 test('watcher rejects a failed visible surface checkpoint and detaches', async () => {
   const fake = fakePage();
   await assert.rejects(watchWalkthrough(fake.page, { room: 'room', threadId: 'thread', timeoutMs: 100 }, checkpoints, async () => [{ pass: false }]), /surface missing/);
+  assert(fake.removed());
+});
+
+test('a slow failing checkpoint reports itself even when the next step arrives first', async () => {
+  const fake = fakePage({ concurrent: true });
+  await assert.rejects(
+    watchWalkthrough(fake.page, { room: 'room', threadId: 'thread', timeoutMs: 100 }, checkpoints, async (page, checks) => {
+      if (!checks[0].name.includes('Step 2 of')) return [{ pass: true }];
+      await new Promise(resolve => setTimeout(resolve, 50));
+      return [{ pass: false }];
+    }),
+    /surface missing at step 2/,
+  );
   assert(fake.removed());
 });
