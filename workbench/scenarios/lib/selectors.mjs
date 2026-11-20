@@ -27,6 +27,8 @@ export async function workspaceMatches(page, a) {
     if (a.kind === 'source') {
       // Flutter web writes a text field's value into the DOM only on focus.
       await target.focus();
+      // The value arrives a frame or more after focus.
+      await new Promise(resolve => setTimeout(resolve, 300));
       const value = await target.inputValue();
       await target.blur();
       if (!value.includes(a.includes)) continue;
