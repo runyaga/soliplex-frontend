@@ -1,5 +1,17 @@
 [
   {
+    "id": "walkthrough",
+    "prompt": "Start the walkthrough.",
+    "walkthrough": true,
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "The tour is complete",
+        "region": "tray"
+      }
+    ]
+  },
+  {
     "id": "intake_left",
     "prompt": "Place an intake form in the left sidebar. Use the built-in intake template. Title it Scenario intake.",
     "assertions": [

@@ -527,6 +527,10 @@ class ActionEnvelope(Closed):
         return self
 
 
+class StartWalkthrough(Closed):
+    pass
+
+
 class GetWorkbench(Closed):
     pass
 
@@ -732,6 +736,7 @@ class RepairProgram(Closed):
 # Both minimum room registrations use this immutable callable-name/schema map.
 MINIMUM_ROOM_TOOL_MANIFEST = MappingProxyType(
     {
+        "start_walkthrough": StartWalkthrough,
         "get_workbench": GetWorkbench,
         "read_form_results": ReadFormResults,
         "open_panel": OpenPanel,

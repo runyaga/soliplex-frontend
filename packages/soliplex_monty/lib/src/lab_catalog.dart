@@ -404,6 +404,12 @@ class _PythonReplViewState extends State<PythonReplView> {
   bool _loading = false;
   bool _historyOpen = false;
   ProgramApps? _apps;
+  ProgramApps? _controlApps;
+  late final _programControls = ProgramControls(
+    source: () => _editor.text,
+    run: run,
+    event: (name) => _dispatch({'name': name, 'context': <String, Object?>{}}),
+  );
   Widget? _appView;
   bool _appRequested = false;
 
@@ -1011,6 +1017,9 @@ class _PythonReplViewState extends State<PythonReplView> {
   @override
   void dispose() {
     _disposed = true;
+    if (widget.surfaceId case final id?) {
+      _controlApps?.unbind(id, _programControls);
+    }
     _chain?.removeListener(_onChain);
     final active = _active;
     if (active != null) unawaited(active.cancel());
@@ -1031,6 +1040,14 @@ class _PythonReplViewState extends State<PythonReplView> {
 
   @override
   Widget build(BuildContext context) {
+    final controls = ProgramAppScope.maybeOf(context);
+    if (widget.surfaceId case final id?) {
+      if (!identical(controls, _controlApps)) {
+        _controlApps?.unbind(id, _programControls);
+      }
+      _controlApps = controls;
+      controls?.bind(id, _programControls);
+    }
     final theme = Theme.of(context);
     final mono = context.monospaceOn(theme.textTheme.bodyMedium);
     // Keep static text and output out of the editor's accessible name.

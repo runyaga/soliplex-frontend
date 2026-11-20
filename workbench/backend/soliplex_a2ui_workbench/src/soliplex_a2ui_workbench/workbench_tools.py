@@ -539,3 +539,9 @@ def repair_program(
         "execution": "client_controlled",
         "instruction": "Follow the repair request: autoRun=true runs automatically; otherwise say press Run.",
     }
+
+
+def start_walkthrough(ctx):
+    """Start only the server-curated walkthrough, without running Python."""
+    from .workbench_walkthrough import start_walkthrough as start
+    return start(ctx)

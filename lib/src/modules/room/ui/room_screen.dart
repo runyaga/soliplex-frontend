@@ -64,6 +64,7 @@ import '../../../stores/run_registry.dart';
 import '../thread_list_state.dart';
 import '../thread_view_state.dart';
 import '../lay_out_timeline.dart';
+import '../workbench/walkthrough_player.dart';
 import '../workdir_controller.dart';
 import 'approval_handler.dart';
 import '../workdir_files_status.dart';
@@ -263,6 +264,16 @@ class RoomScreen extends StatefulWidget {
 
 class _RoomScreenState extends State<RoomScreen> {
   final Map<String, ChatSurfaceStore> _workbenchSurfaceStores = {};
+  final _walkthrough = WalkthroughPlayer();
+
+  void _walkthroughPrompt(String? text) {
+    if (widget.workbenchPresentation == null) return;
+    if (text == WalkthroughPlayer.suggestion) {
+      _walkthrough.authorize();
+    } else {
+      _walkthrough.stop();
+    }
+  }
 
   ChatSurfaceStore _surfaceStoreForThread(String threadId) =>
       _workbenchSurfaceStores.putIfAbsent(
@@ -296,16 +307,20 @@ class _RoomScreenState extends State<RoomScreen> {
       store.ingest(messages.whereType<GenUiMessage>(),
           activeRunId: activeRunId);
     }
-    return widget.workbenchPresentation!.buildHost(
-      roomId: widget.roomId,
-      threadId: threadId,
-      chat: chat,
-      surfaceBuilder: (activityMessageId, surfaceId) {
-        final controller = _surfaceStoreForThread(threadId)[activityMessageId];
-        return controller == null
-            ? const SizedBox.shrink()
-            : ChatSurfaceView(controller: controller, surfaceId: surfaceId);
-      },
+    return WalkthroughScope(
+      player: _walkthrough,
+      child: widget.workbenchPresentation!.buildHost(
+        roomId: widget.roomId,
+        threadId: threadId,
+        chat: chat,
+        surfaceBuilder: (activityMessageId, surfaceId) {
+          final controller =
+              _surfaceStoreForThread(threadId)[activityMessageId];
+          return controller == null
+              ? const SizedBox.shrink()
+              : ChatSurfaceView(controller: controller, surfaceId: surfaceId);
+        },
+      ),
     );
   }
 
@@ -1131,6 +1146,9 @@ class _RoomScreenState extends State<RoomScreen> {
 
   @override
   void didUpdateWidget(RoomScreen oldWidget) {
+    if (oldWidget.threadId != null && oldWidget.threadId != widget.threadId) {
+      _walkthrough.stop();
+    }
     super.didUpdateWidget(oldWidget);
     final serverChanged =
         widget.serverEntry.serverId != oldWidget.serverEntry.serverId;
@@ -1412,6 +1430,7 @@ class _RoomScreenState extends State<RoomScreen> {
     _workdirs.dispose();
     unawaited(_anchorTracker.dispose());
     unawaited(_threadReadTracker.dispose());
+    _walkthrough.dispose();
     _chatController.removeListener(_onDraftChanged);
     _chatController.dispose();
     _chatFocusNode.dispose();
@@ -2733,9 +2752,11 @@ class _RoomScreenState extends State<RoomScreen> {
             room: room,
             onSuggestionTapped: sessionState != null
                 ? null
-                : (suggestion) => _state.sendToNewThread([
-                      TextPart(suggestion),
-                    ], stateOverlay: _buildStateOverlay()),
+                : (suggestion) {
+                    _walkthroughPrompt(suggestion);
+                    _state.sendToNewThread([TextPart(suggestion)],
+                        stateOverlay: _buildStateOverlay());
+                  },
             onQuizTapped: _onQuizTapped,
             fallback: const Center(child: Text('Select a thread')),
           ),
@@ -2819,12 +2840,14 @@ class _RoomScreenState extends State<RoomScreen> {
                       ).tiles.isEmpty
                           ? RoomWelcome(
                               room: room,
-                              onSuggestionTapped: (suggestion) =>
-                                  threadView.sendMessage(
-                                [TextPart(suggestion)],
-                                _state.runtime,
-                                stateOverlay: _buildStateOverlay(),
-                              ),
+                              onSuggestionTapped: (suggestion) {
+                                _walkthroughPrompt(suggestion);
+                                threadView.sendMessage(
+                                  [TextPart(suggestion)],
+                                  _state.runtime,
+                                  stateOverlay: _buildStateOverlay(),
+                                );
+                              },
                               onQuizTapped: _onQuizTapped,
                               fallback: _threadEmptyFallback(context),
                             )
@@ -2939,6 +2962,7 @@ class _RoomScreenState extends State<RoomScreen> {
   /// route change arrives, so it starts at no draft and the clear that
   /// follows keeps it there.
   void _onDraftChanged() {
+    _walkthrough.draftChanged(_chatController.text);
     _state.activeThreadView?.contextUsage.draftChanged(
       _chatController.text,
       images: _chatController.draftImageCount,
@@ -3003,6 +3027,9 @@ class _RoomScreenState extends State<RoomScreen> {
       // [ChatInput.composerScope] for what that would cost.
       composerScope: (_serverId, widget.roomId, threadView?.threadId),
       onSend: (parts) {
+        _walkthroughPrompt(parts.length == 1 && parts.first is TextPart
+            ? (parts.first as TextPart).text
+            : null);
         if (threadView != null) {
           threadView.sendMessage(
             parts,

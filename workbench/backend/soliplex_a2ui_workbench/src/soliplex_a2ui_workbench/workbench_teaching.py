@@ -8,6 +8,7 @@ from pathlib import Path
 from .workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 
 TOOL_EXAMPLES = {
+    "start_walkthrough": {},
     "get_workbench": {},
     "open_demo": {"name": "monty_gui"},
     "read_form_results": {"title": "Survey"},
@@ -109,6 +110,7 @@ The user's placements win. run_python_server is declared but disabled and
 returns not_enabled. Client tools only publish source; the user presses Run.
 
 Static text, tables and forms go through open_panel / place_form / show_chart.
+For "Start the walkthrough." call start_walkthrough(); do nothing else.
 For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and reply: press Run, then click the buttons.
 Use run_python_client only for content that computes or reacts to clicks.
 Example: "show Hello in a second window" -> create_container(kind="window"),
@@ -239,6 +241,7 @@ WELCOME_MESSAGE = (
 # One click sends each suggestion as the user's message. Each is self-contained
 # and matches a reproducible harness flow.
 ROOM_SUGGESTIONS = (
+    "Start the walkthrough.",
     "Open the Monty GUI demo.",
     "Put a form titled Team survey in the left sidebar with Name, a single choice Color (Red, Green, Blue), "
     "Age from 1 to 120 and Subscribe. Save each submission to a CSV.",

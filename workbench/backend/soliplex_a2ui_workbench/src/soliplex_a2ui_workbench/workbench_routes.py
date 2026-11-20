@@ -247,6 +247,13 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 yield RunStartedEvent(thread_id=self.run_input.thread_id, run_id=self.run_input.run_id)
                 for event in events:
                     yield ActivitySnapshotEvent.model_validate(event)
+                story = getattr(self, "_walkthrough_narration", None)
+                if story:
+                    from ag_ui.core import TextMessageStartEvent, TextMessageContentEvent, TextMessageEndEvent
+                    message_id = f"walkthrough-{self.run_input.run_id}"
+                    yield TextMessageStartEvent(message_id=message_id, role="assistant")
+                    yield TextMessageContentEvent(message_id=message_id, delta=story)
+                    yield TextMessageEndEvent(message_id=message_id)
                 yield RunFinishedEvent(thread_id=self.run_input.thread_id, run_id=self.run_input.run_id)
             return stream()
 
@@ -297,10 +304,31 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             props = run_input.forwarded_props
             if isinstance(props, dict) and "workbenchFormReceipt" in props:
                 raise HTTPException(422, "workbenchFormReceipt is server-owned")
+            from .workbench_walkthrough import SUGGESTION, _context, handle_step, start_walkthrough
+            is_start = (run_input.messages and run_input.messages[-1].role == "user"
+                        and getattr(run_input.messages[-1], "content", None) == SUGGESTION)
+            if (not isinstance(props, dict) or "a2uiAction" not in props) and is_start:
+                try:
+                    result = start_walkthrough(_context(projection, scope, run_input.run_id,
+                                                       getattr(request.state, "workbench_installation", None)))
+                except ValueError as exc:
+                    raise HTTPException(409, str(exc)) from None
+                adapter._program_events = [part["event"] for part in result["events"]]
+                adapter._walkthrough_narration = result["narration"]
+                return adapter
             if not isinstance(props, dict) or "a2uiAction" not in props:
                 return adapter
             raw_action = props["a2uiAction"]
             action = raw_action.get("userAction", {}) if isinstance(raw_action, dict) else {}
+            if isinstance(action, dict) and str(action.get("name", "")).startswith("workbench.walkthrough."):
+                try:
+                    result = handle_step(projection, scope, run_input.run_id, raw_action,
+                                         getattr(request.state, "workbench_installation", None))
+                except (ValueError, TypeError, KeyError, OSError):
+                    raise HTTPException(422, "invalid walkthrough action: check source and step order") from None
+                adapter._program_events = [part["event"] for part in result["events"]]
+                adapter._walkthrough_narration = result["narration"]
+                return adapter
             if isinstance(action, dict) and action.get("name") == "workbench.program.layout":
                 from .program_actions import apply_program_actions
                 from .workbench_schemas import ActionEnvelope, Id
