@@ -213,3 +213,61 @@ test('chart scenarios require image semantics with title and series', async () =
   }
 
 });
+
+test('initial viewport checks reject clipped, offscreen and scrolled controls without scrolling', async () => {
+  let scrolls = 0;
+  let rect = { left: 110, top: 110, right: 190, bottom: 140 };
+  const parent = {
+    parentElement: null, scrollTop: 0, scrollLeft: 0,
+    getBoundingClientRect: () => ({ left: 100, top: 100, right: 300, bottom: 300 }),
+  };
+  const element = { parentElement: parent, getBoundingClientRect: () => rect };
+  const target = {
+    scrollIntoViewIfNeeded: async () => { scrolls++; },
+    boundingBox: async () => ({ x: rect.left, y: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top }),
+    isVisible: async () => true,
+    evaluate: async callback => callback(element),
+  };
+  const page = { locator: () => ({ getByRole: () => ({ count: async () => 1, nth: () => target }) }) };
+  const a = { kind: 'role', role: 'button', name: '+1', region: 'canvas', window: 'Counter app', initialViewport: true };
+  const old = { width: globalThis.innerWidth, height: globalThis.innerHeight, style: globalThis.getComputedStyle };
+  globalThis.innerWidth = 1000;
+  globalThis.innerHeight = 800;
+  globalThis.getComputedStyle = () => ({ overflowX: 'hidden', overflowY: 'auto' });
+  try {
+    assert.equal((await workspaceMatches(page, a)).length, 1);
+    rect = { ...rect, top: 290, bottom: 320 };
+    assert.equal((await workspaceMatches(page, a)).length, 0);
+    rect = { left: 110, top: 110, right: 190, bottom: 140 };
+    parent.scrollTop = 10;
+    assert.equal((await workspaceMatches(page, a)).length, 0);
+    parent.scrollTop = 0;
+    rect = { ...rect, right: 1100 };
+    assert.equal((await workspaceMatches(page, a)).length, 0);
+    assert.equal(scrolls, 0);
+    await workspaceMatches(page, { ...a, initialViewport: false });
+    assert.equal(scrolls, 1);
+    const data = valid(); data[0].assertions[0].initialViewport = 'yes';
+    assert.throws(() => validateCases(data, { prompts: true }));
+  } finally {
+    globalThis.innerWidth = old.width;
+    globalThis.innerHeight = old.height;
+    globalThis.getComputedStyle = old.style;
+  }
+});
+
+test('counter and demo corpus scope live controls to the app at its initial viewport', async () => {
+  const model = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  const tally = model.find(c => c.id === 'tally_counter');
+  for (const a of tally.assertions.filter(a => ['+1', '-1', 'Reset'].includes(a.name))) {
+    assert.equal(a.window, 'Scenario program window app');
+    assert.equal(a.initialViewport, true);
+  }
+  const demo = model.find(c => c.id === 'monty_demo');
+  for (const a of demo.actions[0].assertions.filter(a => a.window)) {
+    assert.equal(a.window, 'Monty GUI demo app');
+    assert.equal(a.initialViewport, true);
+  }
+  assert.equal(demo.actions[0].window, 'Monty GUI demo');
+  assert.equal(demo.assertions.find(a => a.name === 'Python source').window, 'Monty GUI demo');
+});

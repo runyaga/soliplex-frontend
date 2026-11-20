@@ -134,7 +134,11 @@ nested windows. Splits and tabs can also be moved or closed by their own ids.
 Use the ids, kinds, and alternative in a validation error to correct the call;
 call get_workbench when an id is unknown. For a full split choose another parent
 or tabs; for depth overflow use a shallower region. Close an existing panel to
-free an open content mount, or a window to free the two-window limit. Closing
+free an open content mount, or a window to free the limit of two ordinary windows
+and three windows total including the automatic program app. ui.show opens that
+program's app beside its source window on Run. Do not create an extra window for
+ui.show. Closing an app keeps the program; Run reopens it. Closing the program
+also closes its app. Reload shows an inert press-Run placeholder. Closing
 does not free the total limit of 64 nodes; move existing nodes or repair existing
 programs without allocating nodes, or start a new thread for new content.
 Never move or close wb_root or reserved regions. r_chat cannot contain content;

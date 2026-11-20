@@ -90,20 +90,35 @@
 `monty_gui_demo.py` unchanged in a new **Monty GUI demo** canvas window. The
 suggestion **Open the Monty GUI demo.** teaches the model to call that tool and
 tell the user to press Run and click the buttons. Publication never executes
-Python. Run builds the controls and opens a **Monty event log** result window.
+Python. Run builds the controls in **Monty GUI demo app** beside the source
+window and opens a separate **Monty event log** result window. The app controls
+and counter assertions use `initialViewport: true`: no scrolling is allowed,
+and both viewport and ancestor clipping bounds must contain each target.
 Each button calls the real `handle_event(name, context)` in the same session.
 
+A second Run closes the prior log before replacing it in the retained session.
 The counter stays at or above zero. Add point appends a counter sample;
 `chart.bar` builds the spec and the existing embeddable `ui.BarChart` displays
 the latest 32 samples beside the controls. `ui.graphics.Chart` requires a
 standalone surface, so the demo uses the existing lab chart for this composition.
 Opening the log replaces its previous window, then moves the replacement to
 canvas position 1. Each gesture stages at most three layout actions, below the
-eight-action limit, and leaves at most two windows open.
+eight-action limit (including the automatic app opening), and leaves at most
+three windows open: program, app and log. Ordinary windows retain their limit
+of two; the app counts toward the new total limit of three.
 
 Backend tests check publication, corrective unknown-name errors, the frozen
 publication operations and log layout transactions. The fixture stores a source
 placeholder; the Flutter test reads the canonical backend source directly.
+The app uses a server-authored `shared.programApps` binding from its stable
+window ID to the registered program surface. Its live surface stays in memory
+in the program's session. Reload renders a press-Run placeholder because the
+interpreter globals do not survive reload. A new Run reuses or reopens that
+window; closing the program cascades to its app. The program transcript shows
+only its latest entry by default, with a control above it to expand history.
+Canvas widths below the tablet breakpoint stack the app before its program;
+wider canvases put them beside each other.
+
 Native Monty widget tests execute that source and every handler, including
 chart redraws, log replacement, repeated close and reopen, and more than eight
 cumulative actions across separate gestures. Live Chrome and Glimmer checks

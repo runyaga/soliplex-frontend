@@ -111,16 +111,23 @@ void main() {
     await finish(tester);
   }, skip: skipWithoutMonty != false);
 
-  testWidgets('repl mode keeps globals and every run in the transcript', (
+  testWidgets('repl mode keeps globals and expands earlier runs on request', (
     tester,
   ) async {
     await mount(tester, surface(counter));
     expect(editor, findsOneWidget);
     await run(tester);
     await run(tester);
+    expect(find.text('count 1'), findsNothing);
+    expect(find.text('count 2'), findsOneWidget);
+    expect(find.text('Latest run'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('python-repl-history')));
+    await tester.pumpAndSettle();
     expect(find.text('count 1'), findsOneWidget);
     expect(find.text('count 2'), findsOneWidget);
-    expect(find.text('2 runs shown'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('python-repl-history')));
+    await tester.pumpAndSettle();
+    expect(find.text('count 1'), findsNothing);
     await finish(tester);
   }, skip: skipWithoutMonty != false);
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import '../../../interfaces/workbench_presentation.dart';
@@ -37,42 +38,51 @@ class _ActivityHost extends StatefulWidget {
 
 class _ActivityHostState extends State<_ActivityHost> {
   final _mounts = SurfaceMountRegistry();
+  final _apps = ProgramApps();
+
+  @override
+  void dispose() {
+    _apps.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = ChatSurfaceScope.maybeOf(context)!;
     final scope = ChatSurfaceScope.scopeOf(context)!;
-    return ChatSurfaceScope(
-        store: store,
-        activeRunId: scope.activeRunId,
-        hostsWorkbench: true,
-        child: ListenableBuilder(
-          listenable: store,
-          builder: (context, _) {
-            final tree = store.layout;
-            if (tree == null) {
-              return Column(children: [
-                if (store.layoutError case final error?) Text(error),
-                Expanded(child: widget.chat),
-              ]);
-            }
-            _mounts.retain([
-              for (final node in tree.nodes.values)
-                if (node.kind == 'surface')
-                  '${node.payload['activityMessageId']}\u0000${node.payload['surfaceId']}',
-            ]);
-            return Column(children: [
-              if (store.layoutError case final error?) Text(error),
-              Expanded(
-                  child: WorkbenchHost(
-                tree: tree,
-                chat: widget.chat,
-                surfaceBuilder: widget.surfaceBuilder,
-                mounts: _mounts,
-              )),
-            ]);
-          },
-        ));
+    return ProgramAppScope(
+        apps: _apps,
+        child: ChatSurfaceScope(
+            store: store,
+            activeRunId: scope.activeRunId,
+            hostsWorkbench: true,
+            child: ListenableBuilder(
+              listenable: store,
+              builder: (context, _) {
+                final tree = store.layout;
+                if (tree == null) {
+                  return Column(children: [
+                    if (store.layoutError case final error?) Text(error),
+                    Expanded(child: widget.chat),
+                  ]);
+                }
+                _mounts.retain([
+                  for (final node in tree.nodes.values)
+                    if (node.kind == 'surface')
+                      '${node.payload['activityMessageId']}\u0000${node.payload['surfaceId']}',
+                ]);
+                return Column(children: [
+                  if (store.layoutError case final error?) Text(error),
+                  Expanded(
+                      child: WorkbenchHost(
+                    tree: tree,
+                    chat: widget.chat,
+                    surfaceBuilder: widget.surfaceBuilder,
+                    mounts: _mounts,
+                  )),
+                ]);
+              },
+            )));
   }
 }
 
@@ -232,6 +242,64 @@ class WorkbenchHost extends StatelessWidget {
     }
     final children =
         node.children.map(tree.node).whereType<LayoutNode>().toList();
+    if (node.id == 'r_canvas') {
+      final appOwners = (tree.layout['shared'] as Map)['programApps'];
+      final paired = <String>{};
+      final rows = <Widget>[];
+      for (final child in children) {
+        if (paired.contains(child.id)) continue;
+        final programIds = <String>{};
+        void collect(LayoutNode n) {
+          if (n.kind == 'surface') {
+            programIds.add(n.payload['surfaceId']! as String);
+          }
+          for (final id in n.children) {
+            collect(tree.nodes[id]!);
+          }
+        }
+
+        collect(child);
+        final appNodes = appOwners is Map
+            ? children
+                .where((n) =>
+                    n.visibility == 'open' &&
+                    programIds.contains(appOwners[n.id]))
+                .toList()
+            : <LayoutNode>[];
+        // An app can precede its owner after a server move.
+        if (appOwners is Map && appOwners.containsKey(child.id)) continue;
+        if (appNodes.isNotEmpty && child.visibility == 'open') {
+          paired.addAll(appNodes.map((app) => app.id));
+          Widget appViews(BuildContext context) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final app in appNodes) _render(context, app)],
+              );
+          rows.add(LayoutBuilder(builder: (context, constraints) {
+            if (constraints.maxWidth < SoliplexBreakpoints.tablet) {
+              // Keep the live controls first when two readable columns do not fit.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [appViews(context), _render(context, child)],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _render(context, child)),
+                Expanded(child: appViews(context)),
+              ],
+            );
+          }));
+        } else {
+          rows.add(_render(context, child));
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      );
+    }
+
     if (node.kind == 'split' && children.isNotEmpty) {
       final horizontal = node.payload['axis'] == 'horizontal';
       return LayoutBuilder(
@@ -300,12 +368,20 @@ class WorkbenchHost extends StatelessWidget {
       );
     }
     if (node.kind == 'panel' || node.kind == 'window') {
-      final content = children.isEmpty || children.first.visibility != 'open'
-          ? const Padding(
-              padding: EdgeInsets.all(SoliplexSpacing.s3),
-              child: Text('No open content.'),
+      final appOwner = (tree.layout['shared'] as Map)['programApps'];
+      final owner = appOwner is Map ? appOwner[node.id] : null;
+      final apps = ProgramAppScope.maybeOf(context);
+      final content = owner is String && apps != null
+          ? Padding(
+              padding: const EdgeInsets.all(SoliplexSpacing.s3),
+              child: ProgramAppView(program: owner, apps: apps),
             )
-          : _render(context, children.first);
+          : children.isEmpty || children.first.visibility != 'open'
+              ? const Padding(
+                  padding: EdgeInsets.all(SoliplexSpacing.s3),
+                  child: Text('No open content.'),
+                )
+              : _render(context, children.first);
       final chrome = PanelChrome(
         key: ValueKey(node.id),
         node: node,

@@ -17,7 +17,7 @@ void validateWorkbenchLayout(
   _validateReachability(rootId, nodes);
   _validateReserved(rootId, nodes);
   _validateAncestry(nodes, registrations);
-  _validateCapacities(layout, nodes);
+  _validateCapacities(layout, nodes, registrations);
 }
 
 void _validateEnvelope(Map<String, dynamic> layout) {
@@ -312,6 +312,7 @@ void _requireWindowAncestor(
 void _validateCapacities(
   Map<String, dynamic> layout,
   Map<String, Map<String, dynamic>> nodes,
+  List<WorkbenchRegistration> registrations,
 ) {
   final openSurfaces = nodes.values.where(
     (node) => node['kind'] == 'surface' && _effectivelyOpen(node, nodes),
@@ -320,7 +321,33 @@ void _validateCapacities(
   final openWindows = nodes.values.where(
     (node) => node['kind'] == 'window' && _effectivelyOpen(node, nodes),
   );
-  _need(openWindows.length > 2, 'expanded window capacity exceeded');
+  final apps = (layout['shared'] as Map)['programApps'] ?? <String, dynamic>{};
+  _need(apps is! Map<String, dynamic>, 'invalid program app bindings');
+  final bindings = apps as Map<String, dynamic>;
+  final programs = {
+    for (final entry in registrations)
+      if (entry.role == WorkbenchRole.program) entry.surfaceId,
+  };
+  _need(
+    bindings.values.toSet().length != bindings.length,
+    'duplicate program app binding',
+  );
+  for (final entry in bindings.entries) {
+    final app = nodes[entry.key];
+    _need(
+      !programs.contains(entry.value) ||
+          app == null ||
+          app['kind'] != 'window' ||
+          app['parentId'] != 'r_canvas' ||
+          (app['children'] as List).isNotEmpty,
+      'invalid program app binding',
+    );
+  }
+  _need(
+    openWindows.length > 3 ||
+        openWindows.where((n) => !bindings.containsKey(n['id'])).length > 2,
+    'expanded window capacity exceeded',
+  );
   _need(_utf8Length(layout) > 65536, 'layout exceeds 64 KiB');
 }
 

@@ -7,6 +7,12 @@ import ui
 count = 0
 points = [{"id": "p0", "label": "Start", "value": 0}]
 last_event = "run"
+# A second Run replaces the previous log in this retained REPL session.
+try:
+    if log_window:
+        ui.workbench.close_window(log_window)
+except NameError:
+    pass
 log_window = ""
 
 
@@ -53,7 +59,7 @@ def draw():
 
 def open_log():
     global log_window
-    # Replace the old log before opening another: at most two windows stay open.
+    # Replace the old log before opening another: two ordinary windows plus the app stay open.
     if log_window:
         ui.workbench.close_window(log_window)
     log_window = ui.workbench.open_window(

@@ -23,9 +23,27 @@ export async function workspaceMatches(page, a) {
   for (let i = 0; i < await locator.count(); i++) {
     const target = locator.nth(i);
     // A user scrolls a window to reach its content. Absence checks never scroll.
-    if (!a.absent) await target.scrollIntoViewIfNeeded?.({ timeout: 2000 }).catch(() => {});
+    if (!a.absent && !a.initialViewport) await target.scrollIntoViewIfNeeded?.({ timeout: 2000 }).catch(() => {});
     const box = await target.boundingBox();
     if (!await target.isVisible() || !box || box.width <= 0 || box.height <= 0) continue;
+    if (a.initialViewport) {
+      const visible = await target.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        if (rect.left < 0 || rect.top < 0 || rect.right > innerWidth || rect.bottom > innerHeight) return false;
+        // Flutter can expose semantics for content clipped by a scroll view.
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          const style = getComputedStyle(parent);
+          const clipX = /hidden|clip|scroll|auto/.test(style.overflowX);
+          const clipY = /hidden|clip|scroll|auto/.test(style.overflowY);
+          const bounds = parent.getBoundingClientRect();
+          if ((clipX && (rect.left < bounds.left || rect.right > bounds.right)) ||
+              (clipY && (rect.top < bounds.top || rect.bottom > bounds.bottom))) return false;
+          if (parent.scrollTop !== 0 || parent.scrollLeft !== 0) return false;
+        }
+        return true;
+      });
+      if (!visible) continue;
+    }
     if (a.kind === 'source') {
       // Flutter web writes a text field's value into the DOM only on focus.
       await target.focus();

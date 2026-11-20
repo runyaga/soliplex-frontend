@@ -2,6 +2,8 @@
 /// Includes bar, line, gauge, scatter, pie, radar and candlestick charts.
 library;
 
+export 'src/program_app.dart';
+
 export 'src/demo_components.dart' show demoComponents;
 export 'src/static_chart.dart'
     show chartGraphicsCatalog, chartGraphicsCatalogId, validateStaticChartSpec;

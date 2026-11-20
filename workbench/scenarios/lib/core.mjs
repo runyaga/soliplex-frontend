@@ -94,6 +94,7 @@ export function validateCases(data, { prompts = false } = {}) {
         continue;
       }
       if (!a || !['text', 'role', 'source'].includes(a.kind) || typeof a.name !== 'string' || !a.name.trim() || !regions.has(a.region ?? 'workspace')) throw new Error('Invalid assertion');
+      if (a.initialViewport !== undefined && typeof a.initialViewport !== 'boolean') throw new Error('Invalid initial viewport assertion');
       if (!validWindow(a.window)) throw new Error('Invalid assertion window');
       if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'radio', 'img', 'group'].includes(a.role)) throw new Error('Invalid accessible role');
       if (a.kind === 'source' && (typeof a.includes !== 'string' || !a.includes)) throw new Error('Missing source expectation');

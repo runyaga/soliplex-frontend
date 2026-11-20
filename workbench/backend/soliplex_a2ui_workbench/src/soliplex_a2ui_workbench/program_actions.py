@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 from typing import Annotated, Literal
 
 from pydantic import Field, TypeAdapter
@@ -21,6 +22,10 @@ class OpenWindow(Closed):
     content: Source
 
 
+class ShowApp(Closed):
+    op: Literal["show_app"]
+
+
 class MoveWindow(Closed):
     op: Literal["move"]
     window_id: Id
@@ -32,7 +37,7 @@ class CloseWindow(Closed):
     window_id: Id
 
 
-ProgramActions = Annotated[list[Annotated[OpenWindow | MoveWindow | CloseWindow, Field(discriminator="op")]],
+ProgramActions = Annotated[list[Annotated[OpenWindow | MoveWindow | CloseWindow | ShowApp, Field(discriminator="op")]],
                            Field(min_length=1, max_length=MAX_LAYOUT_ACTIONS)]
 _actions = TypeAdapter(ProgramActions)
 
@@ -53,6 +58,10 @@ def apply_program_actions(projection, scope, run_id, record, raw_actions, submis
     if leaf is None:
         raise ValueError("program has no mounted window")
     parent = tools._node(working.layout["nodes"], leaf["parentId"])
+    while parent["kind"] != "window" and parent["parentId"]:
+        if parent["visibility"] != "open":
+            raise ValueError("program is hidden by an ancestor")
+        parent = tools._node(working.layout["nodes"], parent["parentId"])
     if parent["kind"] != "window" or parent["visibility"] != "open" or leaf["visibility"] != "open":
         raise ValueError("program is not in an open window")
     ancestor = parent
@@ -63,7 +72,29 @@ def apply_program_actions(projection, scope, run_id, record, raw_actions, submis
     owners.setdefault(parent["id"], owner)
     events = []
     for action in actions:
-        if isinstance(action, OpenWindow):
+        if isinstance(action, ShowApp):
+            layout = copy.deepcopy(working.layout)
+            app_id = "app_" + hashlib.sha256(owner.encode()).hexdigest()[:32]
+            apps = layout["shared"].setdefault("programApps", {})
+            if app_id in apps and apps[app_id] != owner:
+                raise ValueError("app window belongs to another program")
+            app = next((n for n in layout["nodes"] if n["id"] == app_id), None)
+            if app is None:
+                app = {"id": app_id, "parentId": "r_canvas", "children": [],
+                       "kind": "window", "title": str(record["title"])[:76] + " app",
+                       "size": "medium", "visibility": "open", "payload": {}}
+                layout["nodes"].append(app)
+                canvas = tools._node(layout["nodes"], "r_canvas")
+                # For direct canvas programs, keep the accepted sibling order.
+                position = canvas["children"].index(parent["id"]) + 1 if parent["id"] in canvas["children"] else len(canvas["children"])
+                canvas["children"].insert(position, app_id)
+            elif apps.get(app_id) != owner:
+                raise ValueError("app window id already exists")
+            apps[app_id] = owner
+            app["visibility"] = "open"
+            owners[app_id] = owner
+            result = tools._publish(ctx, layout)
+        elif isinstance(action, OpenWindow):
             if any(n["id"] == action.window_id for n in working.layout["nodes"]):
                 raise ValueError("program window id already exists")
             created = tools.create_container(ctx, "r_canvas", "window", action.title, _node_id_override=action.window_id)

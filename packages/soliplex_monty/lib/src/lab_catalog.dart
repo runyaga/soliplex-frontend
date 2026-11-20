@@ -395,6 +395,10 @@ class _PythonReplViewState extends State<PythonReplView> {
   PythonUiArena _arena = PythonUiArena();
   MessageProcessor<ComponentImplementation>? _ui;
   bool _loading = false;
+  bool _historyOpen = false;
+  ProgramApps? _apps;
+  Widget? _appView;
+  bool _appRequested = false;
 
   /// Whether the editor is open in [ReplMode.run].
   bool _editorOpen = false;
@@ -593,6 +597,13 @@ class _PythonReplViewState extends State<PythonReplView> {
         output = _join(output, 'Workbench layout action limit (8) exceeded.');
       }
       if (ok) {
+        final error = _stageApp();
+        if (error != null) {
+          output = _join(output, error);
+          ok = false;
+        }
+      }
+      if (ok) {
         final rejected = _commit(_arena.staged);
         if (rejected != null) {
           output = _join(output, 'Surface rejected: $rejected');
@@ -664,6 +675,10 @@ class _PythonReplViewState extends State<PythonReplView> {
   /// [ReplMode.run]. False when the interpreter could not be reset.
   Future<bool> _freshSession(MontyRuntime runtime, String code) async {
     final old = _ui;
+    final view = _appView;
+    final program = widget.surfaceId;
+    if (view != null && program != null) _apps?.remove(program, view);
+    _appView = null;
     if (old != null) {
       setState(() => _ui = null);
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
@@ -800,6 +815,15 @@ class _PythonReplViewState extends State<PythonReplView> {
     });
     final old = _ui;
     setState(() => _ui = next);
+    final apps = ProgramAppScope.maybeOf(context);
+    final program = widget.surfaceId;
+    if (apps != null && program != null && widget.onWorkbench != null) {
+      _apps = apps;
+      final surface = next.model.allSurfaces.first;
+      final view = A2uiSurface(key: ObjectKey(surface), surface: surface);
+      _appView = view;
+      apps.publish(program, view);
+    }
     if (old != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
@@ -833,6 +857,13 @@ class _PythonReplViewState extends State<PythonReplView> {
         ok = false;
         output = _join(output, 'Workbench layout action limit (8) exceeded.');
       }
+      if (ok && !_appRequested) {
+        final error = _stageApp();
+        if (error != null) {
+          output = _join(output, error);
+          ok = false;
+        }
+      }
       if (ok) {
         final rejected = _commit(_arena.staged);
         if (rejected != null) {
@@ -842,6 +873,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       } else if (output.contains("'handle_event' is not defined")) {
         output = 'Define handle_event(name, context) to react to clicks.';
       }
+      // Redraws update the existing view; only Run opens/reopens its window.
       if (ok && _arena.workbench.actions.isNotEmpty) await _publishWorkbench();
       if (_disposed) return;
       _record(label, output, ok: ok, header: 'Click: $name');
@@ -859,6 +891,22 @@ class _PythonReplViewState extends State<PythonReplView> {
     return {'width': size.width.floor(), 'height': size.height.floor()};
   }
 
+  /// One automatic layout action, in the same bounded transaction as Python's.
+  String? _stageApp() {
+    if (_arena.staged == null ||
+        ProgramAppScope.maybeOf(context) == null ||
+        widget.surfaceId == null ||
+        widget.onWorkbench == null) {
+      return null;
+    }
+    if (_arena.workbench.actions.length >= 8) {
+      return 'Workbench layout action limit (8) exceeded '
+          '(including app window).';
+    }
+    _arena.workbench.actions.insert(0, {'op': 'show_app'});
+    return null;
+  }
+
   Future<void> _publishWorkbench() async {
     if (_disposed) return;
     widget.writeResult?.call({
@@ -866,6 +914,9 @@ class _PythonReplViewState extends State<PythonReplView> {
       'actions': _arena.workbench.actions,
     });
     await widget.onWorkbench?.call();
+    if (_arena.workbench.actions.any((a) => a['op'] == 'show_app')) {
+      _appRequested = true;
+    }
   }
 
   Future<(String, bool)> _execute(
@@ -929,7 +980,7 @@ class _PythonReplViewState extends State<PythonReplView> {
     String? header,
   }) {
     final limits = widget.limits;
-    final keep = _runMode ? 1 : limits.maxEntries;
+    final keep = limits.maxEntries;
     setState(() {
       _entries.add(
         ReplEntry(
@@ -961,6 +1012,9 @@ class _PythonReplViewState extends State<PythonReplView> {
         starting.then(_disposeRuntime, onError: (Object _) {}),
       );
     }
+    final view = _appView;
+    final program = widget.surfaceId;
+    if (view != null && program != null) _apps?.remove(program, view);
     _ui?.dispose();
     _editor.dispose();
     _scroll.dispose();
@@ -1028,6 +1082,19 @@ class _PythonReplViewState extends State<PythonReplView> {
           _controls(),
           ..._repairStatus(),
           const SizedBox(height: SoliplexSpacing.s3),
+          if (_entries.length > 1)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SoliplexButton.text(
+                key: const ValueKey('python-repl-history'),
+                onPressed: () => setState(() => _historyOpen = !_historyOpen),
+                child: Text(
+                  _historyOpen
+                      ? 'Show latest run'
+                      : 'Show run history (${_entries.length})',
+                ),
+              ),
+            ),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 420),
             child: DecoratedBox(
@@ -1042,7 +1109,10 @@ class _PythonReplViewState extends State<PythonReplView> {
                 children: [
                   if (_entries.isEmpty)
                     const Text('Press Run to execute the code.'),
-                  for (final entry in _entries)
+                  for (final entry
+                      in _historyOpen || _entries.isEmpty
+                          ? _entries
+                          : [_entries.last])
                     _EntryView(
                       key: ObjectKey(entry),
                       entry: entry,
@@ -1052,7 +1122,8 @@ class _PythonReplViewState extends State<PythonReplView> {
               ),
             ),
           ),
-          if (_ui?.model.allSurfaces.firstOrNull case final surface?) ...[
+          if (_apps == null && _ui?.model.allSurfaces.firstOrNull != null) ...[
+            // Standalone consumers without a workbench retain inline UI.
             const SizedBox(height: SoliplexSpacing.s3),
             Text('Surface built by Python', style: theme.textTheme.labelMedium),
             const SizedBox(height: SoliplexSpacing.s2),
@@ -1063,7 +1134,10 @@ class _PythonReplViewState extends State<PythonReplView> {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(SoliplexSpacing.s3),
-                child: A2uiSurface(key: ObjectKey(surface), surface: surface),
+                child: A2uiSurface(
+                  key: ObjectKey(_ui!.model.allSurfaces.first),
+                  surface: _ui!.model.allSurfaces.first,
+                ),
               ),
             ),
           ],
@@ -1117,9 +1191,7 @@ extension on _PythonReplViewState {
         ),
       if (!_runMode)
         Text(
-          _entries.length == 1
-              ? '1 run shown'
-              : '${_entries.length} runs shown',
+          _historyOpen ? '${_entries.length} entries shown' : 'Latest run',
         ),
     ],
   );

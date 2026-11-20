@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'python_repl_test.dart' as repl;
@@ -51,13 +52,31 @@ Future<void> _mount(
   tester.view.physicalSize = const Size(1200, 4000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  final apps = ProgramApps();
+  addTearDown(apps.dispose);
   controller.apply(_publication());
   await tester.pumpWidget(
     MaterialApp(
       theme: soliplexLightTheme(),
       home: Scaffold(
-        body: SingleChildScrollView(
-          child: LabSurfaceView(controller: controller),
+        body: ProgramAppScope(
+          apps: apps,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: LabSurfaceView(controller: controller),
+                ),
+              ),
+              Expanded(
+                child: ProgramAppView(
+                  program: controller.surfaces.single.id,
+                  apps: apps,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -132,11 +151,11 @@ void main() {
           (((actions[index]['context']! as Map)['actions']) as List)
               .map((value) => Map<String, Object?>.from(value as Map))
               .toList();
-      expect(batch(0).map((a) => a['op']), ['open', 'move']);
-      final firstWindow = batch(0).first['window_id'];
-      expect(batch(0).first['title'], 'Monty event log');
-      expect(batch(0).first['kind'], 'text');
-      expect(batch(0).first['content'], 'last event: run, count 0');
+      expect(batch(0).map((a) => a['op']), ['show_app', 'open', 'move']);
+      final firstWindow = batch(0)[1]['window_id'];
+      expect(batch(0)[1]['title'], 'Monty event log');
+      expect(batch(0)[1]['kind'], 'text');
+      expect(batch(0)[1]['content'], 'last event: run, count 0');
       expect(batch(0).last['window_id'], firstWindow);
       expect(batch(0).last['order'], 1);
 
@@ -196,6 +215,18 @@ void main() {
         actions.every((a) => a['name'] == 'workbench.program.layout'),
         isTrue,
       );
+      await repl.tapRun(tester);
+      await repl.waitFor(
+        tester,
+        () => actions.length == 8 && repl.idle(tester),
+      );
+      expect(batch(7).map((a) => a['op']), [
+        'show_app',
+        'close',
+        'open',
+        'move',
+      ]);
+      expect(find.text('Count: 0'), findsOneWidget);
       expect(starter.starts, 1);
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();

@@ -463,6 +463,14 @@ def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
             "close an authored panel/window or its content node instead; call get_workbench for ids"
         )
     node["visibility"] = "closed"
+    closed_ids = {node_id} | _descendant_ids(layout["nodes"], node)
+    programs = {
+        n["payload"].get("surfaceId") for n in layout["nodes"]
+        if n["id"] in closed_ids and n["kind"] == "surface"
+    }
+    for app_id, owner in layout["shared"].get("programApps", {}).items():
+        if owner in programs:
+            _node(layout["nodes"], app_id)["visibility"] = "closed"
     result = _publish(ctx, layout)
     return {
         "status": "published",

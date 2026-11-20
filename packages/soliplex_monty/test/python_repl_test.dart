@@ -190,7 +190,7 @@ void main() {
       for (final label in [
         'Try Python locally',
         'Python (Monty sandbox)',
-        '0 runs shown',
+        'Latest run',
         'Press Run to execute the code.',
       ]) {
         expect(tester.getSemantics(find.text(label)).label, label);
@@ -221,7 +221,7 @@ void main() {
     final nodes = [
       for (final label in [
         'Python (Monty sandbox)',
-        '1 run shown',
+        'Latest run',
         'Run 1 · ok',
       ])
         tester.getSemantics(find.text(label)),
@@ -229,7 +229,7 @@ void main() {
     ];
     expect(nodes.take(3).map((node) => node.label), [
       'Python (Monty sandbox)',
-      '1 run shown',
+      'Latest run',
       'Run 1 · ok',
     ]);
     expect(nodes.last.value, '45\n90');

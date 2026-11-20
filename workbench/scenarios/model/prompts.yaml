@@ -31,11 +31,62 @@
   },
   {
     "id": "tally_counter",
-    "prompt": "Create a tally counter program in a window titled Scenario program window, with +1, -1 and Reset buttons. Use the ui skill and the client Python tool. Show the Python source and Run button. The buttons must appear after I press Run.",
+    "prompt": "Create a tally counter program in a window titled Scenario program window, with +1, -1 and Reset buttons. Use the ui skill and the client Python tool. Show the Python source and Run button. The buttons must appear after I press Run. Show Count: 0 initially.",
     "actions": [
       {
         "role": "button",
-        "name": "Run"
+        "name": "Run",
+        "awaitTurn": true,
+        "window": "Scenario program window",
+        "assertions": [
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "+1",
+            "region": "canvas",
+            "window": "Scenario program window app",
+            "initialViewport": true
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "-1",
+            "region": "canvas",
+            "window": "Scenario program window app",
+            "initialViewport": true
+          },
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Reset",
+            "region": "canvas",
+            "window": "Scenario program window app",
+            "initialViewport": true
+          },
+          {
+            "kind": "text",
+            "name": "Count: 0",
+            "region": "canvas",
+            "window": "Scenario program window app",
+            "initialViewport": true
+          }
+        ]
+      },
+      {
+        "role": "button",
+        "name": "+1",
+        "region": "canvas",
+        "window": "Scenario program window app",
+        "initialViewport": true,
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Count: 1",
+            "region": "canvas",
+            "window": "Scenario program window app",
+            "initialViewport": true
+          }
+        ]
       }
     ],
     "assertions": [
@@ -55,19 +106,32 @@
         "kind": "role",
         "role": "button",
         "name": "+1",
-        "region": "canvas"
+        "region": "canvas",
+        "window": "Scenario program window app",
+        "initialViewport": true
       },
       {
         "kind": "role",
         "role": "button",
         "name": "-1",
-        "region": "canvas"
+        "region": "canvas",
+        "window": "Scenario program window app",
+        "initialViewport": true
       },
       {
         "kind": "role",
         "role": "button",
         "name": "Reset",
-        "region": "canvas"
+        "region": "canvas",
+        "window": "Scenario program window app",
+        "initialViewport": true
+      },
+      {
+        "kind": "text",
+        "name": "Count: 1",
+        "region": "canvas",
+        "window": "Scenario program window app",
+        "initialViewport": true
       }
     ]
   },
@@ -593,68 +657,78 @@
             "kind": "text",
             "name": "Python drives the GUI",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "text",
             "name": "Count: 0",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "text",
             "name": "last event: run, count 0",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "Bar Start: 0",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "+1",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "-1",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "Reset",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "Add point",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "Open log window",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
             "name": "Close log window",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "role",
@@ -666,7 +740,8 @@
             "kind": "text",
             "name": "Counter samples",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
         "window": "Monty GUI demo"
@@ -688,10 +763,12 @@
             "kind": "text",
             "name": "Count: 0",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "role": "button",
@@ -702,16 +779,19 @@
             "kind": "text",
             "name": "Count: 1",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "text",
             "name": "last event: plus, count 1",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "role": "button",
@@ -722,16 +802,19 @@
             "kind": "text",
             "name": "Count: 2",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           },
           {
             "kind": "text",
             "name": "last event: plus, count 2",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "role": "button",
@@ -749,10 +832,12 @@
             "kind": "text",
             "name": "last event: open_log, count 2",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "role": "button",
@@ -771,10 +856,12 @@
             "kind": "text",
             "name": "last event: close_log, count 2",
             "region": "canvas",
-            "window": "Monty GUI demo"
+            "window": "Monty GUI demo app",
+            "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       }
     ],
     "assertions": [
@@ -801,20 +888,23 @@
         "kind": "text",
         "name": "Count: 2",
         "region": "canvas",
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "kind": "text",
         "name": "last event: close_log, count 2",
         "region": "canvas",
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "kind": "role",
         "role": "button",
         "name": "Bar Start: 0",
         "region": "canvas",
-        "window": "Monty GUI demo"
+        "window": "Monty GUI demo app",
+        "initialViewport": true
       },
       {
         "kind": "role",

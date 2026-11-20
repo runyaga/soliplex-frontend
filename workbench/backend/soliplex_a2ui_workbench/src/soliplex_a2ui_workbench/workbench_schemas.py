@@ -252,18 +252,31 @@ class LayoutSnapshot(Closed):
                 "call close_panel with an existing content node or its panel/window "
                 "to free an open mount, then retry"
             )
+        apps = self.shared.get("programApps", {})
+        if (not isinstance(apps, dict) or not all(isinstance(v, str) for v in apps.values())
+                or len(set(apps.values())) != len(apps)):
+            raise ValueError("invalid program app bindings")
+        for app_id, owner in apps.items():
+            app = by_id.get(app_id)
+            if (owner not in program_surfaces or app is None or app.kind != "window"
+                    or app.children or app.parentId != "r_canvas"):
+                raise ValueError("invalid program app binding")
         expanded_windows = sum(
             node.kind == "window" and self._effectively_open(node, by_id)
             for node in self.nodes
         )
-        if expanded_windows > 2:
+        ordinary_windows = sum(
+            node.kind == "window" and node.id not in apps and self._effectively_open(node, by_id)
+            for node in self.nodes
+        )
+        if ordinary_windows > 2 or expanded_windows > 3:
             opened = ", ".join(
                 f"{node.id} (window)"
                 for node in self.nodes
                 if node.kind == "window" and self._effectively_open(node, by_id)
             )
             raise ValueError(
-                f"expanded window capacity exceeded: {opened}; maximum 2; "
+                f"expanded window capacity exceeded: {opened}; maximum 2 ordinary windows and 3 total including apps; "
                 "call close_panel with an existing window id or reuse its program "
                 "with repair_program, then retry"
             )

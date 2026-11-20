@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 
@@ -27,6 +28,65 @@ draw()
 ''';
 
 void main() {
+  for (final count in [7, 8]) {
+    testWidgets(
+      'automatic app opening counts with $count Python layout actions',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 2400);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final starter = MontyStarter();
+        final apps = ProgramApps();
+        var result = <String, Object?>{};
+        var publishes = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: soliplexLightTheme(),
+            home: Scaffold(
+              body: ProgramAppScope(
+                apps: apps,
+                child: SingleChildScrollView(
+                  child: PythonReplView(
+                    source:
+                        'import ui\nui.show(ui.Text("App"))\n'
+                        'for i in range($count):\n'
+                        '    ui.workbench.open_window("Result", "text", "10")',
+                    surfaceId: 'program',
+                    limits: const ReplLimits(),
+                    startRuntime: starter.call,
+                    writeResult: (value) => result = value,
+                    onWorkbench: () async {
+                      publishes++;
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await repl.tapRun(tester);
+        await repl.waitFor(
+          tester,
+          () => repl.idle(tester) && result.isNotEmpty,
+        );
+        expect(publishes, count == 7 ? 1 : 0);
+        if (count == 7) {
+          expect(result['actions'], hasLength(8));
+          expect((result['actions']! as List).first, {'op': 'show_app'});
+          expect(apps.view('program'), isNotNull);
+        } else {
+          expect(result['ok'], false);
+          expect(apps.view('program'), isNull);
+          expect(find.textContaining('including app window'), findsOneWidget);
+        }
+        await tester.pumpWidget(const SizedBox());
+        apps.dispose();
+        await tester.runAsync(starter.close);
+      },
+      skip: skipWithoutMonty != false,
+    );
+  }
+
   testWidgets(
     'Run and a user-started handle_event stage open and close requests',
     (tester) async {
@@ -60,7 +120,9 @@ void main() {
       await repl.tapRun(tester);
       await repl.waitFor(
         tester,
-        () => find.text('1 run shown').evaluate().isNotEmpty,
+        () =>
+            repl.idle(tester) &&
+            find.textContaining('Run 1 ·').evaluate().isNotEmpty,
       );
       expect(batches, isEmpty);
       await tester.runAsync(() => tester.tap(find.text('Open result')));
@@ -112,7 +174,9 @@ void main() {
       await repl.tapRun(tester);
       await repl.waitFor(
         tester,
-        () => find.text('1 run shown').evaluate().isNotEmpty,
+        () =>
+            repl.idle(tester) &&
+            find.textContaining('Run 1 ·').evaluate().isNotEmpty,
       );
       expect(calls, 0);
       expect(find.textContaining('layout action limit'), findsWidgets);
