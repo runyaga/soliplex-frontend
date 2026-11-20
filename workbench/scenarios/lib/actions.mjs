@@ -3,6 +3,18 @@ import { captureTurn } from './turns.mjs';
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// Flutter updates aria-checked after the click returns, so setChecked's
+// immediate state check fails. Click once, then poll for the checked state.
+async function check(target, wait) {
+  if ((await target.getAttribute('aria-checked')) === 'true') return;
+  await target.click();
+  for (let i = 0; i < 20; i++) {
+    if ((await target.getAttribute('aria-checked')) === 'true') return;
+    await wait(100);
+  }
+  throw new Error('Checkbox did not become checked');
+}
+
 export async function performActions(page, actions = [], turnOptions, onTurn = () => {}, wait = pause) {
   for (const action of actions) {
     const kind = action.kind ?? 'click';
@@ -27,11 +39,11 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
         await page.keyboard.type(action.value);
         await page.keyboard.press('Tab');
       } else if (kind === 'check') {
-        await target.setChecked(true);
+        await check(target, wait);
       } else if (kind === 'select' || kind === 'choose') {
         // Intake Districts uses FilterChip, exposed as a labelled button.
         // Checkbox/radio variants are selected idempotently as well.
-        if (role === 'checkbox' || role === 'radio') await target.setChecked(true);
+        if (role === 'checkbox' || role === 'radio') await check(target, wait);
         else if ((await target.getAttribute('aria-pressed')) !== 'true' && (await target.getAttribute('aria-selected')) !== 'true') await target.click();
       } else {
         await target.click();

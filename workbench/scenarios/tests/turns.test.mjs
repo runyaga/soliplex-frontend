@@ -24,9 +24,13 @@ function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
     role, name,
     isVisible: async () => true,
     boundingBox: async () => ({ x: 1, y: 1, width: 100, height: 30 }),
-    click: async () => { operations.push(`click:${name}`); if (name === 'Submit') await page.trigger(); },
-    setChecked: async value => operations.push(`check:${name}:${value}`),
-    getAttribute: async () => null,
+    checked: false,
+    async click() {
+      operations.push(`click:${name}`);
+      if (role === 'checkbox') this.checked = !this.checked;
+      if (name === 'Submit') await page.trigger();
+    },
+    async getAttribute(attribute) { return attribute === 'aria-checked' && role === 'checkbox' ? String(this.checked) : null; },
   }));
   let handler;
   const page = {
@@ -76,7 +80,10 @@ test('choose/select use visible option labels and check sets the named checkbox'
     { kind: 'choose', name: 'North', region: 'left' },
     { kind: 'check', name: 'Acknowledged', region: 'left' },
   ], undefined, undefined, noWait);
-  assert.deepEqual(operations, ['click:North', 'check:Acknowledged:true']);
+  assert.deepEqual(operations, ['click:North', 'click:Acknowledged']);
+  // A checked box is not clicked again, so check never toggles it off.
+  await performActions(page, [{ kind: 'check', name: 'Acknowledged', region: 'left' }], undefined, undefined, noWait);
+  assert.equal(operations.length, 2);
   nodes.find(n => n.name === 'North').getAttribute = async name => name === 'aria-pressed' ? 'true' : null;
   await performActions(page, [{ kind: 'select', name: 'North', region: 'left' }], undefined, undefined, noWait);
   assert.equal(operations.length, 2, 'a selected chip is not toggled off');
