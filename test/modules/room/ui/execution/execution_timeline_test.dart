@@ -250,6 +250,29 @@ void main() {
     expect(find.byIcon(Icons.chevron_right), findsNothing);
   });
 
+  for (final suffix in ['', '\n\nFix the errors and try again.']) {
+    testWidgets('failed tool result shows error icon (suffix: $suffix)',
+        (tester) async {
+      tracker.observe(bridgeBaseEvent(const ToolCallStartEvent(
+        toolCallId: 'failed',
+        toolCallName: 'run_python_client',
+      )));
+      tracker.observe(bridgeBaseEvent(ToolCallResultEvent(
+        messageId: 'result',
+        toolCallId: 'failed',
+        content: '{"error":"Programs need a window; pass r_canvas"}$suffix',
+      )));
+      tracker.observe(const RunCompleted());
+      expect(tracker.steps.value.single.status, StepStatus.failed);
+      await tester.pumpWidget(wrap(build()));
+      await tester.pump();
+      await tester.tap(find.text('1 event'));
+      await tester.pump();
+      expect(find.byIcon(Icons.error), findsOneWidget);
+      expect(find.byIcon(Icons.check_circle), findsNothing);
+    });
+  }
+
   testWidgets('completed step shows check_circle icon', (tester) async {
     tracker.observe(const ServerToolCallStarted(
       toolName: 'search',

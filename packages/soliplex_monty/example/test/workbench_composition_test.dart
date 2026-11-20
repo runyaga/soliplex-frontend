@@ -18,6 +18,31 @@ import '../../test/support/monty.dart';
 import '../tool/generate_workbench_teaching.dart' as teaching;
 
 void main() {
+  test(
+    'example discovers an available worker without skipping the real run',
+    () {
+      // The local path dependency is declared relative to soliplex_monty.
+      // Catch a resolver that silently reports an existing worker as missing.
+      final declaredWorker = File(
+        '../../../../../dart_monty2/packages/dart_monty/lib/src/bin/'
+        'macos-arm64/dart_monty_worker',
+      );
+      final packageWorker = defaultMontyWorker();
+      if (declaredWorker.existsSync()) {
+        expect(
+          File(packageWorker).resolveSymbolicLinksSync(),
+          declaredWorker.resolveSymbolicLinksSync(),
+        );
+      }
+      expect(File(packageWorker).isAbsolute, isTrue);
+      if (File(packageWorker).existsSync() &&
+          !Platform.environment.containsKey('MONTY_WORKER')) {
+        expect(montyWorker, packageWorker);
+        expect(skipWithoutMonty, isFalse);
+      }
+    },
+  );
+
   test('catalog teaching matches the registered implementations', () {
     final file = File(
       '../../../workbench/backend/soliplex_a2ui_workbench/src/'

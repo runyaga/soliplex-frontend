@@ -111,6 +111,19 @@ void main() {
     expect(tracker.steps.value.every((s) => s.timestamp != null), isTrue);
   });
 
+  test('late failed result corrects a provisionally completed call', () {
+    tracker.observe(const ServerToolCallStarted(
+        toolCallId: 'first', toolName: 'run_python_client'));
+    tracker.observe(const ServerToolCallStarted(
+        toolCallId: 'second', toolName: 'get_workbench'));
+    tracker.observe(const ServerToolCallCompleted(
+        toolCallId: 'first', result: '{"error":"Invalid parent"}'));
+    tracker.observe(
+        const ServerToolCallCompleted(toolCallId: 'second', result: '{}'));
+    expect(tracker.steps.value.map((step) => step.status),
+        [StepStatus.failed, StepStatus.completed]);
+  });
+
   test('ServerToolCallCompleted marks step completed', () {
     tracker.observe(const ServerToolCallStarted(
       toolName: 'search',

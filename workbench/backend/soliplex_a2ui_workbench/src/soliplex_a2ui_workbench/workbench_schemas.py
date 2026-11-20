@@ -16,7 +16,9 @@ from pydantic import (
     model_validator,
 )
 
-Id = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")]
+Id = Annotated[
+    str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
+]
 Title = Annotated[str, Field(min_length=1, max_length=80)]
 Source = Annotated[str, Field(min_length=1, max_length=12_000)]
 Engine = Annotated[
@@ -125,7 +127,14 @@ class LayoutSnapshot(Closed):
                 raise ValueError("tabs capacity exceeded")
             if node.kind in {"panel", "window"} and len(node.children) > 1:
                 raise ValueError("panel capacity exceeded")
-            if node.kind in {"workspace", "region"} and node.id in {"wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"}:
+            if node.kind in {"workspace", "region"} and node.id in {
+                "wb_root",
+                "r_chat",
+                "r_left",
+                "r_right",
+                "r_canvas",
+                "r_tray",
+            }:
                 if node.id != "wb_root" and node.kind != "region":
                     raise ValueError("reserved node kind changed")
         seen: set[str] = set()
@@ -224,10 +233,21 @@ class LayoutSnapshot(Closed):
 
     @staticmethod
     def _validate_reserved(nodes: dict[str, LayoutNode]) -> None:
-        roles = {"r_chat": "chat", "r_left": "left", "r_right": "right", "r_canvas": "canvas", "r_tray": "tray"}
+        roles = {
+            "r_chat": "chat",
+            "r_left": "left",
+            "r_right": "right",
+            "r_canvas": "canvas",
+            "r_tray": "tray",
+        }
         for node_id, role in roles.items():
             region = nodes.get(node_id)
-            if region is None or region.kind != "region" or region.parentId != "wb_root" or region.payload != {"role": role}:
+            if (
+                region is None
+                or region.kind != "region"
+                or region.parentId != "wb_root"
+                or region.payload != {"role": role}
+            ):
                 raise ValueError("reserved region contract mismatch")
         if nodes["wb_root"].visibility != "open" or any(
             nodes[node_id].visibility != "open" for node_id in roles
@@ -239,7 +259,9 @@ class LayoutSnapshot(Closed):
 
 class IntakeSubmit(Closed):
     question: Annotated[str, Field(min_length=1, max_length=240)]
-    districts: Annotated[list[Literal["north", "south"]], Field(min_length=1, max_length=2)]
+    districts: Annotated[
+        list[Literal["north", "south"]], Field(min_length=1, max_length=2)
+    ]
     acknowledged: Literal[True]
 
     @field_validator("districts")
@@ -302,7 +324,9 @@ class ServerPythonNotEnabled(Closed):
 class InterpreterStatePointer(Closed):
     side: Literal["client", "server"]
     engine: Engine
-    dump: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")]
+    dump: Annotated[
+        str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    ]
     sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     owner: Annotated[str, Field(min_length=1, max_length=128)]
     hop: Annotated[int, Field(ge=0, le=4)]
@@ -313,9 +337,7 @@ class InterpreterStatePointer(Closed):
         return _validate_pinned_engine(value, info.context)
 
 
-def _validate_pinned_engine(
-    value: str, context: dict[str, object] | None
-) -> str:
+def _validate_pinned_engine(value: str, context: dict[str, object] | None) -> str:
     manifest = PINNED_ENGINE_MANIFEST
     if context is not None and "pinned_engine_manifest" in context:
         manifest = context["pinned_engine_manifest"]
@@ -370,6 +392,7 @@ class A2UIUserAction(Closed):
 
 class ActionEnvelope(Closed):
     """The action-only turn's sole workbench submission envelope."""
+
     submissionId: Annotated[str, Field(min_length=1, max_length=64)]
     activityMessageId: Id
     userAction: A2UIUserAction
@@ -458,8 +481,16 @@ class ClosePanel(Closed):
 
 
 class RepairProgram(Closed):
-    node_id: Id
+    node_id: Id | None = None
     source: Source
+    parent_id: Id | None = None
+    title: Title = "Python"
+
+    @model_validator(mode="after")
+    def one_target(self) -> RepairProgram:
+        if (self.node_id is None) == (self.parent_id is None):
+            raise ValueError("pass exactly one of node_id or parent_id")
+        return self
 
     @field_validator("source")
     @classmethod

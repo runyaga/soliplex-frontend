@@ -19,6 +19,35 @@ const _defaultUser = ChatUser.assistant;
 const _ownTimestamp = 0;
 
 void main() {
+  for (final suffix in ['', '\n\nFix the errors and try again.']) {
+    test('failed tool result retains failure (suffix: $suffix)', () {
+      var conversation = Conversation.empty(threadId: 'thread-1');
+      const streaming = app_streaming.AwaitingText();
+      const error = '{"error":"Programs need a window; pass r_canvas"}';
+      for (final event in [
+        const ToolCallStartEvent(
+          toolCallId: 'failed',
+          toolCallName: 'run_python_client',
+        ),
+        const ToolCallEndEvent(toolCallId: 'failed'),
+        ToolCallResultEvent(
+          messageId: 'result',
+          toolCallId: 'failed',
+          content: '$error$suffix',
+        ),
+      ]) {
+        conversation =
+            processEvent(conversation, streaming, event, createdAt: null)
+                .conversation;
+      }
+      expect(conversation.toolCalls.single.status, ToolCallStatus.failed);
+      expect(conversation.toolCalls.single.result, '$error$suffix');
+      final result =
+          conversation.transcript.messages.whereType<ToolMessage>().single;
+      expect(result.error, 'Programs need a window; pass r_canvas');
+    });
+  }
+
   group('processEvent', () {
     late Conversation conversation;
     late app_streaming.StreamingState streaming;

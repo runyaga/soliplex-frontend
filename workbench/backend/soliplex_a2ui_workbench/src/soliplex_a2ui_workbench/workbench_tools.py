@@ -1,4 +1,5 @@
 """Small deterministic tools that publish closed workbench snapshots."""
+
 from __future__ import annotations
 
 import copy
@@ -6,12 +7,7 @@ import uuid
 from typing import Any
 
 from .workbench_context import WorkbenchToolContext
-from .workbench_publication import build_publication
 from .workbench_repository import PublicationConflict
-from .workbench_schemas import (
-    ClosePanel, CreateContainer, GetWorkbench, MovePanel, OpenPanel, PlaceForm,
-    RepairProgram, RunPythonClient, RunPythonServer, ShowChart,
-)
 from .workbench_templates import chart_record, form_record, python_record, text_record
 
 
@@ -34,8 +30,13 @@ def _node(nodes: list[dict[str, Any]], node_id: str) -> dict[str, Any]:
     return found
 
 
-def _publish(ctx: WorkbenchToolContext, snapshot: dict[str, Any], *, content: list[dict[str, Any]] | None = None,
-             new_program_surface: str | None = None) -> dict[str, Any]:
+def _publish(
+    ctx: WorkbenchToolContext,
+    snapshot: dict[str, Any],
+    *,
+    content: list[dict[str, Any]] | None = None,
+    new_program_surface: str | None = None,
+) -> dict[str, Any]:
     ctx.require_room()
     current = ctx.snapshot()
     expected = ctx.expected_revision
@@ -43,24 +44,50 @@ def _publish(ctx: WorkbenchToolContext, snapshot: dict[str, Any], *, content: li
         raise PublicationConflict("workbench has no registered layout")
     layout = snapshot
     layout["layoutRevision"] = expected + 1
-    all_content = [{key: value for key, value in item.items() if key != "workbenchCommit"} for item in current["content"]]
+    all_content = [
+        {key: value for key, value in item.items() if key != "workbenchCommit"}
+        for item in current["content"]
+    ]
     for incoming in content or []:
-        all_content = [item for item in all_content if item.get("activityMessageId") != incoming.get("activityMessageId")]
-        all_content.append({key: value for key, value in incoming.items() if key != "workbenchCommit"})
+        all_content = [
+            item
+            for item in all_content
+            if item.get("activityMessageId") != incoming.get("activityMessageId")
+        ]
+        all_content.append(
+            {key: value for key, value in incoming.items() if key != "workbenchCommit"}
+        )
     program_surfaces = {
-        str(item["surfaceId"]) for item in all_content if item.get("component") == "PythonRepl"
+        str(item["surfaceId"])
+        for item in all_content
+        if item.get("component") == "PythonRepl"
     }
     if new_program_surface:
         program_surfaces.add(new_program_surface)
-    mounts = {(str(item["activityMessageId"]), str(item["surfaceId"])) for item in all_content}
+    mounts = {
+        (str(item["activityMessageId"]), str(item["surfaceId"])) for item in all_content
+    }
     result = ctx.repository.publish(
-        ctx.scope, ctx.publication_key(), expected, layout, all_content,
-        registered_program_surfaces=program_surfaces, registered_mounts=mounts,
+        ctx.scope,
+        ctx.publication_key(),
+        expected,
+        layout,
+        all_content,
+        registered_program_surfaces=program_surfaces,
+        registered_mounts=mounts,
     )
     ctx.expected_revision = result.snapshot["layoutRevision"]
     changed = {item["activityMessageId"] for item in content or []}
-    events = [part for part in result.events if part["kind"] == "layout" or part["event"]["messageId"] in changed]
-    return {"status": "published", "layoutRevision": ctx.expected_revision, "events": events}
+    events = [
+        part
+        for part in result.events
+        if part["kind"] == "layout" or part["event"]["messageId"] in changed
+    ]
+    return {
+        "status": "published",
+        "layoutRevision": ctx.expected_revision,
+        "events": events,
+    }
 
 
 def _current(ctx: WorkbenchToolContext) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -71,29 +98,98 @@ def _current(ctx: WorkbenchToolContext) -> tuple[dict[str, Any], dict[str, Any]]
     return state, copy.deepcopy(layout)
 
 
-def _content_result(ctx: WorkbenchToolContext, record: dict[str, Any], parent_id: str, *, title: str, program: bool = False) -> dict[str, Any]:
-    state, layout = _current(ctx)
+def _content_result(
+    ctx: WorkbenchToolContext,
+    record: dict[str, Any],
+    parent_id: str,
+    *,
+    title: str,
+    program: bool = False,
+) -> dict[str, Any]:
+    _, layout = _current(ctx)
     parent = _node(layout["nodes"], parent_id)
     if parent["kind"] not in {"region", "split", "tabs", "panel", "window"}:
         raise ValueError("content parent is not a container")
     if parent["kind"] in {"panel", "window"} and parent["children"]:
         raise ValueError("content parent must be empty")
     content_parent_id = parent_id
-    if parent["kind"] in {"region", "split", "tabs"}:
+    ancestors = []
+    current = parent
+    while current is not None:
+        ancestors.append(current)
+        current = (
+            _node(layout["nodes"], current["parentId"]) if current["parentId"] else None
+        )
+    needs_window = program and not any(node["kind"] == "window" for node in ancestors)
+    if needs_window:
+        if not any(node["id"] == "r_canvas" for node in ancestors):
+            raise ValueError(
+                "program windows require canvas ancestry; pass 'r_canvas' or a container inside it"
+            )
+        # A panel can contain a split, which can in turn contain a window.
+        # Keep the caller's container identity and publish the entire change once.
+        if parent["kind"] == "panel":
+            split_id = _node_id()
+            parent["children"].append(split_id)
+            parent = {
+                "id": split_id,
+                "parentId": parent_id,
+                "children": [],
+                "kind": "split",
+                "title": title,
+                "size": "medium",
+                "visibility": "open",
+                "payload": {"axis": "horizontal"},
+            }
+            layout["nodes"].append(parent)
+            parent_id = split_id
+    if needs_window or parent["kind"] in {"region", "split", "tabs"}:
         content_parent_id = _node_id()
         parent["children"].append(content_parent_id)
-        layout["nodes"].append({"id": content_parent_id, "parentId": parent_id, "children": [], "kind": "panel",
-                                "title": title, "size": "medium", "visibility": "open", "payload": {}})
+        layout["nodes"].append(
+            {
+                "id": content_parent_id,
+                "parentId": parent_id,
+                "children": [],
+                "kind": "window" if needs_window else "panel",
+                "title": title,
+                "size": "medium",
+                "visibility": "open",
+                "payload": {},
+            }
+        )
     node_id = _node_id()
     content_parent = _node(layout["nodes"], content_parent_id)
     content_parent["children"].append(node_id)
-    node = {"id": node_id, "parentId": content_parent_id, "children": [], "kind": "surface", "title": title,
-            "size": "medium", "visibility": "open", "payload": {"activityMessageId": record["activityMessageId"], "surfaceId": record["surfaceId"]}}
+    node = {
+        "id": node_id,
+        "parentId": content_parent_id,
+        "children": [],
+        "kind": "surface",
+        "title": title,
+        "size": "medium",
+        "visibility": "open",
+        "payload": {
+            "activityMessageId": record["activityMessageId"],
+            "surfaceId": record["surfaceId"],
+        },
+    }
     layout["nodes"].append(node)
-    published = _publish(ctx, layout, content=[record], new_program_surface=record["surfaceId"] if program else None)
-    return {"status": "published", "layoutRevision": published["layoutRevision"], "events": published["events"], "nodeId": node_id,
-            "activityMessageId": record["activityMessageId"], "surfaceId": record["surfaceId"],
-            **({"side": "client", "execution": "awaiting_user"} if program else {})}
+    published = _publish(
+        ctx,
+        layout,
+        content=[record],
+        new_program_surface=record["surfaceId"] if program else None,
+    )
+    return {
+        "status": "published",
+        "layoutRevision": published["layoutRevision"],
+        "events": published["events"],
+        "nodeId": node_id,
+        "activityMessageId": record["activityMessageId"],
+        "surfaceId": record["surfaceId"],
+        **({"side": "client", "execution": "awaiting_user"} if program else {}),
+    }
 
 
 def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, object]:
@@ -103,15 +199,32 @@ def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, o
     if not isinstance(layout, dict):
         raise PublicationConflict("workbench has no registered layout")
     protected = {"wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"}
-    return {"layoutRevision": state["revision"], "rootId": layout["rootId"],
-            "nodes": [{"id": node["id"], "kind": node["kind"], "parentId": node["parentId"],
-                       "children": list(node["children"]), "protected": node["id"] in protected}
-                      for node in layout["nodes"]],
-            "catalogs": ["basic", "graphics:2", "lab:1"],
-            "templates": ["intake"]}
+    return {
+        "layoutRevision": state["revision"],
+        "rootId": layout["rootId"],
+        "nodes": [
+            {
+                "id": node["id"],
+                "kind": node["kind"],
+                "parentId": node["parentId"],
+                "children": list(node["children"]),
+                "protected": node["id"] in protected,
+            }
+            for node in layout["nodes"]
+        ],
+        "catalogs": ["basic", "graphics:2", "lab:1"],
+        "templates": ["intake"],
+    }
 
 
-def create_container(ctx: WorkbenchToolContext, parent_id: str, kind: str, title: str, *, _node_id_override: str | None = None) -> dict[str, object]:
+def create_container(
+    ctx: WorkbenchToolContext,
+    parent_id: str,
+    kind: str,
+    title: str,
+    *,
+    _node_id_override: str | None = None,
+) -> dict[str, object]:
     """Create one empty split, tabs, panel or window under a valid parent."""
     _, layout = _current(ctx)
     parent = _node(layout["nodes"], parent_id)
@@ -120,50 +233,107 @@ def create_container(ctx: WorkbenchToolContext, parent_id: str, kind: str, title
     node_id = _node_id_override or _node_id()
     parent["children"].append(node_id)
     payload = {"axis": "horizontal"} if kind == "split" else {}
-    layout["nodes"].append({"id": node_id, "parentId": parent_id, "children": [], "kind": kind,
-                            "title": title, "size": "medium", "visibility": "open", "payload": payload})
+    layout["nodes"].append(
+        {
+            "id": node_id,
+            "parentId": parent_id,
+            "children": [],
+            "kind": kind,
+            "title": title,
+            "size": "medium",
+            "visibility": "open",
+            "payload": payload,
+        }
+    )
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
+    return {
+        "status": "published",
+        "layoutRevision": result["layoutRevision"],
+        "events": result["events"],
+        "nodeId": node_id,
+    }
 
 
-def place_form(ctx: WorkbenchToolContext, title: str, template: str, parent_id: str) -> dict[str, object]:
+def place_form(
+    ctx: WorkbenchToolContext, title: str, template: str, parent_id: str
+) -> dict[str, object]:
     """Place the fixed bound intake form under an allowed container."""
     activity_id, surface_id = _record_ids()
-    return _content_result(ctx, form_record(activity_id, surface_id, title), parent_id, title=title)
+    return _content_result(
+        ctx, form_record(activity_id, surface_id, title), parent_id, title=title
+    )
 
 
-def show_chart(ctx: WorkbenchToolContext, title: str, kind: str, points: list[dict[str, object]], parent_id: str) -> dict[str, object]:
+def show_chart(
+    ctx: WorkbenchToolContext,
+    title: str,
+    kind: str,
+    points: list[dict[str, object]],
+    parent_id: str,
+) -> dict[str, object]:
     """Publish one categorical graphics:2 Chart without running a renderer."""
     activity_id, surface_id = _record_ids()
-    return _content_result(ctx, chart_record(activity_id, surface_id, title, kind, points), parent_id, title=title)
+    return _content_result(
+        ctx,
+        chart_record(activity_id, surface_id, title, kind, points),
+        parent_id,
+        title=title,
+    )
 
 
-def open_panel(ctx: WorkbenchToolContext, title: str, text: str, parent_id: str) -> dict[str, object]:
+def open_panel(
+    ctx: WorkbenchToolContext, title: str, text: str, parent_id: str
+) -> dict[str, object]:
     """Open a basic text surface under an allowed container."""
     activity_id, surface_id = _record_ids()
-    return _content_result(ctx, text_record(activity_id, surface_id, title, text), parent_id, title=title)
+    return _content_result(
+        ctx, text_record(activity_id, surface_id, title, text), parent_id, title=title
+    )
 
 
-def run_python_client(ctx: WorkbenchToolContext, title: str, source: str, parent_id: str, replace: bool = False) -> dict[str, object]:
+def run_python_client(
+    ctx: WorkbenchToolContext,
+    title: str,
+    source: str,
+    parent_id: str,
+    replace: bool = False,
+) -> dict[str, object]:
     """Place an inert browser PythonRepl surface; execution waits for user Run."""
     if replace:
-        return repair_program(ctx, parent_id, source)
+        return repair_program(ctx, source=source, parent_id=parent_id, title=title)
     activity_id, surface_id = _record_ids()
-    return _content_result(ctx, python_record(activity_id, surface_id, title, source), parent_id, title=title, program=True)
+    return _content_result(
+        ctx,
+        python_record(activity_id, surface_id, title, source),
+        parent_id,
+        title=title,
+        program=True,
+    )
 
 
-def run_python_server(ctx: WorkbenchToolContext, surface_id: str, source: str) -> dict[str, str]:
+def run_python_server(
+    ctx: WorkbenchToolContext, surface_id: str, source: str
+) -> dict[str, str]:
     """Validate registered client program scope, then return the fixed disabled result."""
     ctx.require_room()
     state = ctx.snapshot()
-    record = next((item for item in state["content"] if item.get("surfaceId") == surface_id), None)
+    record = next(
+        (item for item in state["content"] if item.get("surfaceId") == surface_id), None
+    )
     if record is None or record.get("component") != "PythonRepl":
         raise ValueError("server Python surface is not registered in this thread")
-    return {"status": "not_enabled", "code": "server_runner_deferred", "tool": "run_python_server",
-            "side": "server", "execution": "disabled"}
+    return {
+        "status": "not_enabled",
+        "code": "server_runner_deferred",
+        "tool": "run_python_server",
+        "side": "server",
+        "execution": "disabled",
+    }
 
 
-def move_panel(ctx: WorkbenchToolContext, node_id: str, parent_id: str, order: int, size: str) -> dict[str, object]:
+def move_panel(
+    ctx: WorkbenchToolContext, node_id: str, parent_id: str, order: int, size: str
+) -> dict[str, object]:
     """Move a stable subtree and validate all grammar, scope and capacity rules."""
     _, layout = _current(ctx)
     nodes = layout["nodes"]
@@ -184,10 +354,17 @@ def move_panel(ctx: WorkbenchToolContext, node_id: str, parent_id: str, order: i
     moving["size"] = size
     parent["children"].insert(order, node_id)
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
+    return {
+        "status": "published",
+        "layoutRevision": result["layoutRevision"],
+        "events": result["events"],
+        "nodeId": node_id,
+    }
 
 
-def _is_descendant(nodes: list[dict[str, Any]], parent_id: str, candidate_id: str) -> bool:
+def _is_descendant(
+    nodes: list[dict[str, Any]], parent_id: str, candidate_id: str
+) -> bool:
     parent = _node(nodes, parent_id)
     return candidate_id in _descendant_ids(nodes, parent)
 
@@ -208,19 +385,50 @@ def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
     node = _node(layout["nodes"], node_id)
     node["visibility"] = "closed"
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
+    return {
+        "status": "published",
+        "layoutRevision": result["layoutRevision"],
+        "events": result["events"],
+        "nodeId": node_id,
+    }
 
 
-def repair_program(ctx: WorkbenchToolContext, node_id: str, source: str) -> dict[str, object]:
+def repair_program(
+    ctx: WorkbenchToolContext,
+    node_id: str | None = None,
+    source: str = "",
+    parent_id: str | None = None,
+    title: str = "Python",
+) -> dict[str, object]:
     """Revise a registered program inertly; the user must press Run again."""
     ctx.require_room()
     state, layout = _current(ctx)
-    node = _node(layout["nodes"], node_id)
+    if (node_id is None) == (parent_id is None):
+        raise ValueError(
+            "pass exactly one of node_id (existing program) or parent_id (container)"
+        )
+    node = _node(layout["nodes"], node_id or parent_id)
+    if (
+        parent_id is not None
+        and node["kind"] in {"region", "split", "tabs", "panel", "window"}
+        and not (node["kind"] == "window" and node["children"])
+    ):
+        return run_python_client(ctx, title, source, parent_id)
     if node["kind"] == "window" and len(node["children"]) == 1:
         node = _node(layout["nodes"], node["children"][0])
     if node["kind"] != "surface":
-        raise ValueError("repair target must be a registered program surface or its window")
-    record = next((item for item in state["content"] if item.get("surfaceId") == node["payload"].get("surfaceId") and item.get("component") == "PythonRepl"), None)
+        raise ValueError(
+            "repair target must be a registered program surface or its window"
+        )
+    record = next(
+        (
+            item
+            for item in state["content"]
+            if item.get("surfaceId") == node["payload"].get("surfaceId")
+            and item.get("component") == "PythonRepl"
+        ),
+        None,
+    )
     if record is None:
         raise ValueError("repair target is not a registered program")
     # Older repair attempts closed the content leaf before replacing it.
@@ -229,4 +437,11 @@ def repair_program(ctx: WorkbenchToolContext, node_id: str, source: str) -> dict
     record["source"] = source
     record["output"] = ""
     result = _publish(ctx, layout, content=[record])
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node["id"], "surfaceId": record["surfaceId"], "execution": "awaiting_user"}
+    return {
+        "status": "published",
+        "layoutRevision": result["layoutRevision"],
+        "events": result["events"],
+        "nodeId": node["id"],
+        "surfaceId": record["surfaceId"],
+        "execution": "awaiting_user",
+    }

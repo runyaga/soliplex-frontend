@@ -1,20 +1,41 @@
 """Behavior of the deterministic minimum workbench tool table."""
+
 import json
 from pathlib import Path
 import pytest
 from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
-from soliplex_a2ui_workbench.workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope
-from soliplex_a2ui_workbench.workbench_templates import MINIMUM_ROOM_REGISTRATIONS, MINIMUM_ROOM_TOOLS, validate_room_registrations
+from soliplex_a2ui_workbench.workbench_repository import (
+    SQLiteWorkbenchRepository,
+    WorkbenchScope,
+)
+from soliplex_a2ui_workbench.workbench_templates import (
+    MINIMUM_ROOM_REGISTRATIONS,
+    MINIMUM_ROOM_TOOLS,
+    validate_room_registrations,
+)
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
+
 FIXTURES = Path(__file__).parents[1] / "fixtures/workbench"
+
+
 @pytest.fixture
 def ctx(tmp_path):
     scope = WorkbenchScope("actor", "server", "room", "thread")
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.db")
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
-    repo.publish(scope, "seed", 0, layout, [], registered_program_surfaces=set(), registered_mounts=set())
+    repo.publish(
+        scope,
+        "seed",
+        0,
+        layout,
+        [],
+        registered_program_surfaces=set(),
+        registered_mounts=set(),
+    )
     yield WorkbenchToolContext(scope, repo, "run-1", allowed_rooms=frozenset({"room"}))
     repo.close()
+
+
 def test_tool_table_names_and_schemas_match_manifest():
     validate_room_registrations()
     assert len(MINIMUM_ROOM_REGISTRATIONS) == 2
@@ -23,111 +44,328 @@ def test_tool_table_names_and_schemas_match_manifest():
         assert "show_table" not in room_tools
         for name, schema in MINIMUM_ROOM_TOOL_MANIFEST.items():
             assert room_tools[name].input_model is schema
+
+
 def test_form_chart_and_get_workbench_publish_successive_revisions(ctx):
-    form = MINIMUM_ROOM_TOOLS["place_form"].function(ctx, title="Intake", template="intake", parent_id="r_left")
-    chart = MINIMUM_ROOM_TOOLS["show_chart"].function(ctx, title="Counts", kind="bar", points=[{"id":"north","label":"North","value":80}], parent_id="r_canvas")
+    form = MINIMUM_ROOM_TOOLS["place_form"].function(
+        ctx, title="Intake", template="intake", parent_id="r_left"
+    )
+    chart = MINIMUM_ROOM_TOOLS["show_chart"].function(
+        ctx,
+        title="Counts",
+        kind="bar",
+        points=[{"id": "north", "label": "North", "value": 80}],
+        parent_id="r_canvas",
+    )
     state = MINIMUM_ROOM_TOOLS["get_workbench"].function(ctx)
-    assert form["layoutRevision"] == 2 and chart["layoutRevision"] == 3 and state["layoutRevision"] == 3
-    chart_record = next(row for row in ctx.repository.load_snapshot(ctx.scope)["content"] if row["component"] == "Chart")
-    assert chart_record["spec"] == {"kind":"bar", "series":[{"id":"values","label":"Counts","points":[{"id":"north","label":"North","value":80}]}]}
+    assert (
+        form["layoutRevision"] == 2
+        and chart["layoutRevision"] == 3
+        and state["layoutRevision"] == 3
+    )
+    chart_record = next(
+        row
+        for row in ctx.repository.load_snapshot(ctx.scope)["content"]
+        if row["component"] == "Chart"
+    )
+    assert chart_record["spec"] == {
+        "kind": "bar",
+        "series": [
+            {
+                "id": "values",
+                "label": "Counts",
+                "points": [{"id": "north", "label": "North", "value": 80}],
+            }
+        ],
+    }
+
+
 def test_python_client_is_inert_and_server_returns_disabled_without_mutation(ctx):
     tools = MINIMUM_ROOM_TOOLS
-    window = tools["create_container"].function(ctx, parent_id="r_canvas", kind="window", title="Program")
-    result = tools["run_python_client"].function(ctx, title="Demo", source="print(1)", parent_id=window["nodeId"])
+    window = tools["create_container"].function(
+        ctx, parent_id="r_canvas", kind="window", title="Program"
+    )
+    result = tools["run_python_client"].function(
+        ctx, title="Demo", source="print(1)", parent_id=window["nodeId"]
+    )
     assert result["side"] == "client" and result["execution"] == "awaiting_user"
-    from soliplex_a2ui_workbench.workbench_publication import BUILTIN_CATALOG_MANIFESTS, WorkbenchCatalogValidator, build_publication
+    from soliplex_a2ui_workbench.workbench_publication import (
+        BUILTIN_CATALOG_MANIFESTS,
+        WorkbenchCatalogValidator,
+        build_publication,
+    )
+
     state = ctx.repository.load_snapshot(ctx.scope)
-    record = {key: value for key, value in next(item for item in state["content"] if item["surfaceId"] == result["surfaceId"]).items() if key != "workbenchCommit"}
-    emitted_plan = build_publication([record], WorkbenchCatalogValidator(), BUILTIN_CATALOG_MANIFESTS,
-                                     layout=state["layout"], registered_program_surfaces={result["surfaceId"]})
-    event = next(event for event in emitted_plan["events"] if event["kind"] == "content")
+    record = {
+        key: value
+        for key, value in next(
+            item
+            for item in state["content"]
+            if item["surfaceId"] == result["surfaceId"]
+        ).items()
+        if key != "workbenchCommit"
+    }
+    emitted_plan = build_publication(
+        [record],
+        WorkbenchCatalogValidator(),
+        BUILTIN_CATALOG_MANIFESTS,
+        layout=state["layout"],
+        registered_program_surfaces={result["surfaceId"]},
+    )
+    event = next(
+        event for event in emitted_plan["events"] if event["kind"] == "content"
+    )
     emitted = event["event"]["content"]["a2ui_operations"]
     assert emitted[1]["updateDataModel"]["value"]["output"] == ""
     component = emitted[2]["updateComponents"]["components"][0]
     assert component["@catalogId"] == "urn:soliplex:catalog:lab:1"
-    assert component["source"] == {"@path":"/source"} and component["outputPath"] == "/output"
+    assert (
+        component["source"] == {"@path": "/source"}
+        and component["outputPath"] == "/output"
+    )
     before = ctx.repository.load_snapshot(ctx.scope)
-    disabled = tools["run_python_server"].function(ctx, surface_id=result["surfaceId"], source="print(2)")
-    assert disabled == {"status":"not_enabled","code":"server_runner_deferred","tool":"run_python_server","side":"server","execution":"disabled"}
+    disabled = tools["run_python_server"].function(
+        ctx, surface_id=result["surfaceId"], source="print(2)"
+    )
+    assert disabled == {
+        "status": "not_enabled",
+        "code": "server_runner_deferred",
+        "tool": "run_python_server",
+        "side": "server",
+        "execution": "disabled",
+    }
     assert ctx.repository.load_snapshot(ctx.scope) == before
+
+
 def test_closed_and_move_preserve_subtree_identity(ctx):
     tools = MINIMUM_ROOM_TOOLS
-    created = tools["create_container"].function(ctx, parent_id="r_left", kind="panel", title="Panel")
-    moved = tools["move_panel"].function(ctx, node_id=created["nodeId"], parent_id="r_right", order=0, size="large")
+    created = tools["create_container"].function(
+        ctx, parent_id="r_left", kind="panel", title="Panel"
+    )
+    moved = tools["move_panel"].function(
+        ctx, node_id=created["nodeId"], parent_id="r_right", order=0, size="large"
+    )
     assert moved["layoutRevision"] == created["layoutRevision"] + 1
     closed = tools["close_panel"].function(ctx, node_id=created["nodeId"])
     assert closed["layoutRevision"] == moved["layoutRevision"] + 1
     snapshot = ctx.repository.load_snapshot(ctx.scope)["layout"]
-    assert next(node for node in snapshot["nodes"] if node["id"] == created["nodeId"])["visibility"] == "closed"
+    assert (
+        next(node for node in snapshot["nodes"] if node["id"] == created["nodeId"])[
+            "visibility"
+        ]
+        == "closed"
+    )
+
+
 def test_unknown_room_fails_closed_before_repository_access():
     class NeverRepository:
-        def load_snapshot(self, _scope): pytest.fail("repository touched for an unconfigured room")
-    ctx = WorkbenchToolContext(WorkbenchScope("a", "s", "foreign", "t"), NeverRepository(), "run", allowed_rooms=frozenset({"room"}))
-    with pytest.raises(PermissionError, match="SOLIPLEX_WORKBENCH_ROOMS"): MINIMUM_ROOM_TOOLS["get_workbench"].function(ctx)
+        def load_snapshot(self, _scope):
+            pytest.fail("repository touched for an unconfigured room")
+
+    ctx = WorkbenchToolContext(
+        WorkbenchScope("a", "s", "foreign", "t"),
+        NeverRepository(),
+        "run",
+        allowed_rooms=frozenset({"room"}),
+    )
+    with pytest.raises(PermissionError, match="SOLIPLEX_WORKBENCH_ROOMS"):
+        MINIMUM_ROOM_TOOLS["get_workbench"].function(ctx)
+
 
 def test_invalid_mutation_is_atomic_and_move_preserves_descendants(ctx):
     tools = MINIMUM_ROOM_TOOLS
-    parent = tools["create_container"].function(ctx, parent_id="r_left", kind="tabs", title="Tabs")
-    child = tools["create_container"].function(ctx, parent_id=parent["nodeId"], kind="panel", title="Panel")
+    parent = tools["create_container"].function(
+        ctx, parent_id="r_left", kind="tabs", title="Tabs"
+    )
+    child = tools["create_container"].function(
+        ctx, parent_id=parent["nodeId"], kind="panel", title="Panel"
+    )
     before = ctx.repository.load_snapshot(ctx.scope)
     with pytest.raises(ValueError):
-        tools["move_panel"].function(ctx, node_id=parent["nodeId"], parent_id=child["nodeId"], order=0, size="large")
+        tools["move_panel"].function(
+            ctx,
+            node_id=parent["nodeId"],
+            parent_id=child["nodeId"],
+            order=0,
+            size="large",
+        )
     assert ctx.repository.load_snapshot(ctx.scope) == before
-    moved = tools["move_panel"].function(ctx, node_id=parent["nodeId"], parent_id="r_right", order=0, size="large")
+    moved = tools["move_panel"].function(
+        ctx, node_id=parent["nodeId"], parent_id="r_right", order=0, size="large"
+    )
     tree = ctx.repository.load_snapshot(ctx.scope)["layout"]
     preserved = next(node for node in tree["nodes"] if node["id"] == child["nodeId"])
     assert moved["layoutRevision"] == before["revision"] + 1
-    assert preserved["id"] == child["nodeId"] and preserved["parentId"] == parent["nodeId"]
+    assert (
+        preserved["id"] == child["nodeId"] and preserved["parentId"] == parent["nodeId"]
+    )
 
 
 def test_stale_turn_cannot_overwrite_a_successful_tool_mutation(tmp_path):
     scope = WorkbenchScope("actor", "server", "room", "thread")
     repo = SQLiteWorkbenchRepository(tmp_path / "stale.db")
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
-    repo.publish(scope, "seed", 0, layout, [], registered_program_surfaces=set(), registered_mounts=set())
-    first = WorkbenchToolContext(scope, repo, "first", allowed_rooms=frozenset({"room"}))
-    second = WorkbenchToolContext(scope, repo, "second", allowed_rooms=frozenset({"room"}))
-    MINIMUM_ROOM_TOOLS["create_container"].function(first, parent_id="r_left", kind="panel", title="One")
+    repo.publish(
+        scope,
+        "seed",
+        0,
+        layout,
+        [],
+        registered_program_surfaces=set(),
+        registered_mounts=set(),
+    )
+    first = WorkbenchToolContext(
+        scope, repo, "first", allowed_rooms=frozenset({"room"})
+    )
+    second = WorkbenchToolContext(
+        scope, repo, "second", allowed_rooms=frozenset({"room"})
+    )
+    MINIMUM_ROOM_TOOLS["create_container"].function(
+        first, parent_id="r_left", kind="panel", title="One"
+    )
     with pytest.raises(Exception, match="stale"):
-        MINIMUM_ROOM_TOOLS["create_container"].function(second, parent_id="r_right", kind="panel", title="Two")
+        MINIMUM_ROOM_TOOLS["create_container"].function(
+            second, parent_id="r_right", kind="panel", title="Two"
+        )
     repo.close()
 
 
 def test_tray_accepts_published_content(ctx):
-    result = MINIMUM_ROOM_TOOLS["open_panel"].function(ctx, title="Tray note", text="Visible below the workspace", parent_id="r_tray")
+    result = MINIMUM_ROOM_TOOLS["open_panel"].function(
+        ctx, title="Tray note", text="Visible below the workspace", parent_id="r_tray"
+    )
     layout = ctx.repository.load_snapshot(ctx.scope)["layout"]
     assert next(node for node in layout["nodes"] if node["id"] == "r_tray")["children"]
     assert result["events"][-1]["kind"] == "layout"
 
-@pytest.mark.parametrize('target', ['window', 'surface', 'replace'])
-def test_program_revision_preserves_mount_window_and_position_without_execution(ctx, target):
+
+@pytest.mark.parametrize("target", ["window", "surface", "replace"])
+def test_program_revision_preserves_mount_window_and_position_without_execution(
+    ctx, target
+):
     from soliplex_a2ui_workbench import workbench_tools as tools
-    window = tools.create_container(ctx, 'r_canvas', 'window', 'Tally')
-    program = tools.run_python_client(ctx, 'Tally', 'import ui\nui.Label("bad")', window['nodeId'])
+
+    window = tools.create_container(ctx, "r_canvas", "window", "Tally")
+    program = tools.run_python_client(
+        ctx, "Tally", 'import ui\nui.Label("bad")', window["nodeId"]
+    )
     before = ctx.snapshot()
-    if target == 'replace':
-        result = tools.run_python_client(ctx, 'Tally', 'import ui\nui.show(ui.Text("fixed"))', window['nodeId'], replace=True)
+    if target == "replace":
+        result = tools.run_python_client(
+            ctx,
+            "Tally",
+            'import ui\nui.show(ui.Text("fixed"))',
+            window["nodeId"],
+            replace=True,
+        )
     else:
-        result = tools.repair_program(ctx, window['nodeId'] if target == 'window' else program['nodeId'], 'import ui\nui.show(ui.Text("fixed"))')
+        result = tools.repair_program(
+            ctx,
+            window["nodeId"] if target == "window" else program["nodeId"],
+            'import ui\nui.show(ui.Text("fixed"))',
+        )
     after = ctx.snapshot()
-    assert after['layout']['nodes'] == before['layout']['nodes']
-    assert result['surfaceId'] == program['surfaceId']
-    assert result['nodeId'] == program['nodeId']
-    assert result['execution'] == 'awaiting_user'
-    content = next(r for r in after['content'] if r['surfaceId'] == result['surfaceId'])
-    assert content['source'].endswith('ui.show(ui.Text("fixed"))')
-    assert content['activityMessageId'] == program['activityMessageId']
-    emitted = next(e['event'] for e in result['events'] if e['kind']=='content')
-    assert 'retry' not in emitted['content']['a2ui_operations'][-1]['updateComponents']['components'][0]
+    assert after["layout"]["nodes"] == before["layout"]["nodes"]
+    assert result["surfaceId"] == program["surfaceId"]
+    assert result["nodeId"] == program["nodeId"]
+    assert result["execution"] == "awaiting_user"
+    content = next(r for r in after["content"] if r["surfaceId"] == result["surfaceId"])
+    assert content["source"].endswith('ui.show(ui.Text("fixed"))')
+    assert content["activityMessageId"] == program["activityMessageId"]
+    emitted = next(e["event"] for e in result["events"] if e["kind"] == "content")
+    assert (
+        "retry"
+        not in emitted["content"]["a2ui_operations"][-1]["updateComponents"][
+            "components"
+        ][0]
+    )
 
 
 def test_repair_reopens_a_previously_closed_program_leaf(ctx):
     from soliplex_a2ui_workbench import workbench_tools as tools
-    window = tools.create_container(ctx, 'r_canvas', 'window', 'Tally')
-    program = tools.run_python_client(ctx, 'Tally', 'print("old")', window['nodeId'])
-    tools.close_panel(ctx, program['nodeId'])
-    result = tools.repair_program(ctx, window['nodeId'], 'print("fixed")')
-    layout = ctx.snapshot()['layout']
-    assert next(n for n in layout['nodes'] if n['id'] == program['nodeId'])['visibility'] == 'open'
-    assert next(n for n in layout['nodes'] if n['id'] == window['nodeId'])['visibility'] == 'open'
-    assert result['execution'] == 'awaiting_user'
+
+    window = tools.create_container(ctx, "r_canvas", "window", "Tally")
+    program = tools.run_python_client(ctx, "Tally", 'print("old")', window["nodeId"])
+    tools.close_panel(ctx, program["nodeId"])
+    result = tools.repair_program(ctx, window["nodeId"], 'print("fixed")')
+    layout = ctx.snapshot()["layout"]
+    assert (
+        next(n for n in layout["nodes"] if n["id"] == program["nodeId"])["visibility"]
+        == "open"
+    )
+    assert (
+        next(n for n in layout["nodes"] if n["id"] == window["nodeId"])["visibility"]
+        == "open"
+    )
+    assert result["execution"] == "awaiting_user"
+
+
+@pytest.mark.parametrize("tool_name", ["run_python_client", "repair_program"])
+@pytest.mark.parametrize("parent_kind", ["region", "split", "tabs", "panel", "window"])
+def test_program_container_parent_creates_only_the_needed_window_atomically(
+    ctx, tool_name, parent_kind
+):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    parent_id = "r_canvas"
+    if parent_kind != "region":
+        parent_id = tools.create_container(ctx, parent_id, parent_kind, "Parent")[
+            "nodeId"
+        ]
+    before = ctx.snapshot()
+    result = getattr(tools, tool_name)(
+        ctx, title="Tally", source="print(1)", parent_id=parent_id
+    )
+    after = ctx.snapshot()
+    assert after["revision"] == before["revision"] + 1
+    windows = [n for n in after["layout"]["nodes"] if n["kind"] == "window"]
+    assert len(windows) == 1
+    window = windows[0]
+    if parent_kind == "window":
+        assert window["id"] == parent_id
+    else:
+        assert window["title"] == "Tally"
+    assert window["children"] == [result["nodeId"]]
+    assert result["execution"] == "awaiting_user"
+    repaired = tools.repair_program(
+        ctx, source="print(2)", parent_id=window["id"], title="Ignored"
+    )
+    assert repaired["surfaceId"] == result["surfaceId"]
+    assert repaired["nodeId"] == result["nodeId"]
+    assert ctx.snapshot()["layout"]["nodes"] == after["layout"]["nodes"]
+
+
+@pytest.mark.parametrize("tool_name", ["run_python_client", "repair_program"])
+@pytest.mark.parametrize("parent_id", ["missing", "wb_root", "r_chat", "r_left"])
+def test_invalid_program_parent_does_not_publish(ctx, tool_name, parent_id):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    before = ctx.snapshot()
+    with pytest.raises(ValueError):
+        getattr(tools, tool_name)(
+            ctx, title="Tally", source="print(1)", parent_id=parent_id
+        )
+    assert ctx.snapshot() == before
+
+
+def test_program_in_container_inside_window_does_not_nest_windows(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    window = tools.create_container(ctx, "r_canvas", "window", "Tally")
+    # Move a split into the window, retaining the ordinary tree validation.
+    split = tools.create_container(ctx, "r_canvas", "split", "Split")
+    tools.move_panel(ctx, split["nodeId"], window["nodeId"], 0, "medium")
+    tools.run_python_client(ctx, "Tally", "print(1)", split["nodeId"])
+    assert (
+        len([n for n in ctx.snapshot()["layout"]["nodes"] if n["kind"] == "window"])
+        == 1
+    )
+
+
+def test_chart_on_region_does_not_need_a_window(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    tools.show_chart(
+        ctx, "Counts", "bar", [{"id": "a", "label": "A", "value": 2}], "r_canvas"
+    )
+    assert not any(n["kind"] == "window" for n in ctx.snapshot()["layout"]["nodes"])

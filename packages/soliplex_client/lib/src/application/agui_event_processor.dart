@@ -19,6 +19,7 @@ import 'package:soliplex_client/src/application/json_patch.dart';
 import 'package:soliplex_client/src/application/run_ending.dart';
 import 'package:soliplex_client/src/application/run_phase.dart';
 import 'package:soliplex_client/src/application/streaming_state.dart';
+import 'package:soliplex_client/src/application/tool_result_error.dart';
 import 'package:soliplex_client/src/application/transcript_events.dart';
 import 'package:soliplex_client/src/domain/chat_message.dart';
 import 'package:soliplex_client/src/domain/conversation.dart';
@@ -520,7 +521,12 @@ EventProcessingResult _processToolCallResult(
     if (tc.id == toolCallId &&
         (tc.status == ToolCallStatus.pending ||
             tc.status == ToolCallStatus.streaming)) {
-      return tc.copyWith(status: ToolCallStatus.completed, result: content);
+      return tc.copyWith(
+        status: toolResultError(content) == null
+            ? ToolCallStatus.completed
+            : ToolCallStatus.failed,
+        result: content,
+      );
     }
     return tc;
   }).toList();

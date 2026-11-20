@@ -295,8 +295,12 @@ class ExecutionTracker {
 
     final entry = match.entry;
     final step = entry.step;
-    final completed = step.status == StepStatus.active
-        ? step.settled(status: StepStatus.completed, at: _now)
+    final failed = toolResultError(result) != null;
+    final completed = step.status == StepStatus.active || failed
+        ? step.settled(
+            status: failed ? StepStatus.failed : StepStatus.completed,
+            at: _now,
+          )
         : step;
     _replaceEntry(match, entry.withResult(result).withStep(completed));
     if (!identical(completed, step)) {

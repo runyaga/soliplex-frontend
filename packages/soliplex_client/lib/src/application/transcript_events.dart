@@ -1,6 +1,7 @@
 import 'package:ag_ui/ag_ui.dart';
 import 'package:soliplex_client/src/application/a2ui_activity.dart';
 import 'package:soliplex_client/src/application/json_patch.dart';
+import 'package:soliplex_client/src/application/tool_result_error.dart';
 import 'package:soliplex_client/src/domain/transcript.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
 
@@ -47,7 +48,12 @@ Transcript applyTranscriptEvent(Transcript transcript, BaseEvent event) {
     ToolCallResultEvent(:final messageId, :final toolCallId, :final content) =>
       appendToolResult(
         transcript,
-        ToolMessage(id: messageId, toolCallId: toolCallId, content: content),
+        ToolMessage(
+          id: messageId,
+          toolCallId: toolCallId,
+          content: content,
+          error: toolResultError(content),
+        ),
       ),
     ReasoningEncryptedValueEvent() => _setEncryptedValue(transcript, event),
     ActivitySnapshotEvent(activityType: a2uiActivityType) ||

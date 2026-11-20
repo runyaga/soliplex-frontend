@@ -1,4 +1,5 @@
 """The room guide combines registered catalog teaching and executable examples."""
+
 from __future__ import annotations
 
 import json
@@ -10,16 +11,33 @@ TOOL_EXAMPLES = {
     "get_workbench": {},
     "open_panel": {"title": "Note", "text": "Hello", "parent_id": "r_left"},
     "place_form": {"template": "intake", "title": "Intake", "parent_id": "r_left"},
-    "show_chart": {"title": "Counts", "kind": "bar", "points": [{"id": "a", "label": "A", "value": 2.0}], "parent_id": "r_canvas"},
-    "run_python_client": {"title": "Tally", "source": 'import ui\nui.show(ui.Text("0"))', "parent_id": "WINDOW_ID"},
+    "show_chart": {
+        "title": "Counts",
+        "kind": "bar",
+        "points": [{"id": "a", "label": "A", "value": 2.0}],
+        "parent_id": "r_canvas",
+    },
+    "run_python_client": {
+        "title": "Tally",
+        "source": 'import ui\nui.show(ui.Text("0"))',
+        "parent_id": "r_canvas",
+    },
     "run_python_server": {"surface_id": "SURFACE_ID", "source": "print(1)"},
     "create_container": {"parent_id": "r_canvas", "kind": "window", "title": "Tally"},
-    "move_panel": {"node_id": "NODE_ID", "parent_id": "r_right", "order": 0, "size": "medium"},
+    "move_panel": {
+        "node_id": "NODE_ID",
+        "parent_id": "r_right",
+        "order": 0,
+        "size": "medium",
+    },
     "close_panel": {"node_id": "NODE_ID"},
-    "repair_program": {"node_id": "PROGRAM_NODE_ID", "source": 'import ui\nui.show(ui.Text("Fixed"))'},
+    "repair_program": {
+        "node_id": "PROGRAM_NODE_ID",
+        "source": 'import ui\nui.show(ui.Text("Fixed"))',
+    },
 }
 
-DEMO = '''import ui
+DEMO = """import ui
 result_window = ""
 
 def draw():
@@ -41,21 +59,25 @@ def handle_event(name, context):
 
 DATA = {}
 draw()
-'''
+"""
 
 
 def room_skill(skill_name):
     if set(TOOL_EXAMPLES) != set(MINIMUM_ROOM_TOOL_MANIFEST):
         raise ValueError("workbench tool teaching drift")
-    generated = json.loads(Path(__file__).with_name("catalog_teaching.json").read_text())
+    generated = json.loads(
+        Path(__file__).with_name("catalog_teaching.json").read_text()
+    )
     examples = []
     for name, arguments in TOOL_EXAMPLES.items():
         MINIMUM_ROOM_TOOL_MANIFEST[name].model_validate(arguments)
         examples.append(f"- `{name}({json.dumps(arguments, ensure_ascii=False)})`")
     basic = next(c for c in generated["catalogs"] if "Text" in c["components"])
     variants = ", ".join(basic["components"]["Text"]["properties"]["variant"]["enum"])
-    signatures = "\n".join(f"- `{signature}`" for signature in generated["pythonSignatures"].values())
-    return f'''---
+    signatures = "\n".join(
+        f"- `{signature}`" for signature in generated["pythonSignatures"].values()
+    )
+    return f"""---
 name: {skill_name}
 description: Workbench tools and the actual registered Python ui API.
 ---
@@ -69,9 +91,19 @@ canvas ancestry. No nested windows. Maximum depth 8, splits 3 children, tabs
 The user's placements win. run_python_server is declared but disabled and
 returns not_enabled. Client tools only publish source; the user presses Run.
 
+run_python_client accepts a region or plain container on the canvas as
+parent_id and creates a window titled with title when no window is an ancestor.
+It publishes the window and program in one layout revision. Inside an existing
+window it reuses that window. show_chart needs no window and uses a panel.
+A rejected tool call returns an error with corrective guidance: fix it and retry;
+never tell the user that a failed call published content.
+
 To fix a program, call repair_program with its surface node id or window id.
 Alternatively run_python_client with replace=true and the existing window id.
 These preserve identities and placement and never run the revised source.
+repair_program also accepts parent_id and title instead of node_id to place a
+program in a canvas container, creating a window if needed. A populated window
+is repaired in place; an empty window receives the new program.
 Do not close or move the old program before repairing it. A repair reopens a
 closed content leaf while keeping its owning window in place.
 
@@ -114,4 +146,4 @@ This is catalog reference, not a request to emit Express. Author Python source
 through the signatures above and publish it with run_python_client.
 
 {generated["catalogTeaching"]}
-'''
+"""

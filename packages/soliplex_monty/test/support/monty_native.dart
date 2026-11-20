@@ -1,14 +1,42 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_monty/dart_monty.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// `flutter test` cannot resolve the worker through package URIs.
+/// Resolve through the package configuration, including from example/ tests.
 final String montyWorker =
-    Platform.environment['MONTY_WORKER'] ??
-    '../../../../dart_monty2/packages/dart_monty/lib/src/bin/macos-arm64/'
-        'dart_monty_worker';
+    Platform.environment['MONTY_WORKER'] ?? defaultMontyWorker();
+
+/// Finds the worker relative to dart_monty's installed package location.
+String defaultMontyWorker() {
+  var directory = Directory.current.absolute;
+  while (true) {
+    final config = File('${directory.path}/.dart_tool/package_config.json');
+    if (config.existsSync()) {
+      final data =
+          jsonDecode(config.readAsStringSync()) as Map<String, dynamic>;
+      final packages = (data['packages'] as List).cast<Map<String, dynamic>>();
+      final monty = packages
+          .where((p) => p['name'] == 'dart_monty')
+          .firstOrNull;
+      if (monty != null) {
+        final root = Directory.fromUri(
+          config.uri.resolve(monty['rootUri'] as String),
+        ).uri;
+        return root
+            .resolve('lib/src/bin/macos-arm64/dart_monty_worker')
+            .toFilePath();
+      }
+    }
+    final parent = directory.parent;
+    if (parent.path == directory.path) {
+      throw StateError('No package configuration containing dart_monty');
+    }
+    directory = parent;
+  }
+}
 
 /// Skip reason when no worker binary is present.
 Object get skipWithoutMonty =>
