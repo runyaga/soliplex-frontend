@@ -11,23 +11,16 @@ import 'surface_mount_registry.dart';
 /// Room presentation backed by the authenticated U05 snapshot client.
 class ClientWorkbenchPresentation implements WorkbenchPresentation {
   /// Creates an opt-in host with a registered-surface renderer.
-  ClientWorkbenchPresentation({
-    required this.client,
-    required this.surfaceBuilder,
-  });
-
-  /// Authenticated snapshot and action client for this server session.
-  final WorkbenchClient client;
-
-  /// Renders the already registered content surface identity.
-  final Widget Function(String activityMessageId, String surfaceId)
-      surfaceBuilder;
+  const ClientWorkbenchPresentation();
 
   @override
   Widget buildHost({
     required String roomId,
     required String threadId,
     required Widget chat,
+    required WorkbenchClient client,
+    required Widget Function(String activityMessageId, String surfaceId)
+        surfaceBuilder,
   }) =>
       KeyedSubtree(
         key: ValueKey('$roomId\u0000$threadId'),

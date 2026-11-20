@@ -15,14 +15,14 @@ for name in DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMI
   test -n "${!name:-}" || fail "Required variable $name is empty or missing in workbench/stack/workbench.env."
 done
 LOGFIRE_ENV_FILE="${LOGFIRE_ENV_FILE:-$DEV_ROOT/.env}"
-SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-}"
+SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-workbench,workbench-e4b}"
 export DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMIN_PASSWORD LOGFIRE_ENV_FILE SOLIPLEX_WORKBENCH_ROOMS STACK_SCRIPT_DIR WORKBENCH_PACKAGE
 readonly PROJECT=soliplex-a2ui-workbench
 readonly TARGET="$DEV_ROOT/soliplex-a2ui-workbench"
 readonly TEMPLATE="$DEV_ROOT/soliplex-template"
 # Frozen copies. Port upstream changes deliberately (owner decision 2026-11-19).
 readonly LAB="$DEV_ROOT/soliplex-a2ui-workbench-build/lab-snapshot"
-readonly FRONTEND="$DEV_ROOT/soliplex-frontend-wt/exp-workbench"
+readonly FRONTEND="$DEV_ROOT/soliplex-frontend-wt/exp-workbench-preview"
 readonly SCRATCH="$DEV_ROOT/soliplex-a2ui-workbench-build"
 readonly PIN=4d9b4b8e639b38289d2893187343baa8df65bfa3
 export PROJECT TARGET TEMPLATE LAB FRONTEND SCRATCH PIN
@@ -243,6 +243,37 @@ for room_id, agent in [('a2ui-lab','default_chat'), ('a2ui-lab-e4b','alternate_c
     acl = yaml.safe_load((source/'authz.yaml').read_text())
     acl['room_id'] = room_id
     save(p/'backend/environment/rooms'/room_id/'authz.yaml', acl)
+sys.path.insert(0, str(Path(os.environ['WORKBENCH_PACKAGE'])/'src/soliplex_a2ui_workbench/src'))
+from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
+for room_id, agent, model in [('workbench','default_chat','Glimmer'),
+                              ('workbench-e4b','alternate_chat','Gemma 4 E4B')]:
+    room = yaml.safe_load((lab/'backend/environment/rooms/a2ui-lab/room_config.yaml').read_text())
+    room['id'] = room_id
+    room['name'] = f'Workbench ({model})'
+    room['agent']['template_id'] = agent
+    room['tools'] = [{'tool_name': f"soliplex_a2ui_workbench.workbench_tools.{name}"}
+                     for name in MINIMUM_ROOM_TOOL_MANIFEST]
+    save(p/'backend/environment/rooms'/room_id/'room_config.yaml', room)
+    acl = yaml.safe_load((lab/'backend/environment/rooms/a2ui-lab/authz.yaml').read_text())
+    acl['room_id'] = room_id
+    save(p/'backend/environment/rooms'/room_id/'authz.yaml', acl)
+    skill = p/'backend/environment/skills'/f'{room_id}-workbench'
+    skill.mkdir(parents=True, exist_ok=True)
+    (skill/'SKILL.md').write_text('''# Workbench room guide (hand-written for preview)
+
+Use get_workbench before changing the canvas. Use open_panel, place_form,
+show_chart, create_container, move_panel, close_panel, and repair_program to
+act on registered nodes. run_python_client runs user-visible code;
+run_python_server is disabled.
+
+Layout rules: preserve returned stable IDs; create children with a parent ID
+and node kind; use only declared node kinds and keep the tree within the server
+depth limit. Closing a parent closes its descendants. The layout tree owns
+placement; A2UI surfaces carry content.
+''')
+    if not any(x['skill_name'] == f'{room_id}-workbench' for x in data['skill_configs']):
+        data['skill_configs'].append({'skill_name': f'{room_id}-workbench', 'kind': 'filesystem'})
+save(p/'backend/environment/installation.yaml', data)
 q = p/'nginx/nginx.conf'
 s = q.read_text()
 if 'map $http_host $request_host_port' not in s:
@@ -457,7 +488,8 @@ PY
       fail 'Gate failure. Fix it, or set WORKBENCH_ALLOW_GATE_FAILURES=1 to deploy anyway.'
     fi
     cd packages/soliplex_monty/example
-    flutter build web --target lib/main.dart --release --no-tree-shake-icons --no-web-resources-cdn
+    flutter build web --target lib/main.dart --release --no-tree-shake-icons --no-web-resources-cdn \
+      --dart-define=WORKBENCH_ROOMS=workbench,workbench-e4b
   )
   test -s "$SCRATCH/frontend/packages/soliplex_monty/example/build/web/assets/packages/dart_monty/lib/assets/dart_monty_worker.wasm"
   mkdir -p "$TARGET/frontend-web"
@@ -482,7 +514,7 @@ with p.open('w') as f:
 PY
   check_compose
   dc up -d --wait
-  for room in a2ui-lab a2ui-lab-e4b; do
+  for room in a2ui-lab a2ui-lab-e4b workbench workbench-e4b; do
     dc run --rm -T --quiet-build soliplex-dev /app/.venv/bin/soliplex-cli \
       room-authz from-yaml /environment "$room" < "$TARGET/backend/environment/rooms/$room/authz.yaml"
   done

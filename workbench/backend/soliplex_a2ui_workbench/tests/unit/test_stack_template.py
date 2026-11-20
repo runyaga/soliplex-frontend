@@ -16,9 +16,9 @@ def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
     script = helper.parent / "setup-stack.sh"
     assert "from compose_config import configure_workbench_storage" in script.read_text()
     assert "configure_workbench_storage(compose)" in script.read_text()
-    assert 'SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-}"' in script.read_text()
+    assert 'SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-workbench,workbench-e4b}"' in script.read_text()
     env_example = helper.parent / "workbench.env.example"
-    assert 'SOLIPLEX_WORKBENCH_ROOMS=""' in env_example.read_text()
+    assert 'SOLIPLEX_WORKBENCH_ROOMS="workbench,workbench-e4b"' in env_example.read_text()
     spec = importlib.util.spec_from_file_location("workbench_stack_compose_config", helper)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -102,3 +102,26 @@ def test_step3_refuses_router_configuration_without_workbench_module(tmp_path):
     with pytest.raises(ValueError, match="source is incomplete"):
         module.install_workbench_backend(generated, broken_source)
     assert yaml.safe_load(installation.read_text()) == stock
+
+
+def test_step3_registers_manifest_tools_for_preview_rooms_only():
+    helper = Path(__file__).parents[4] / "stack/compose_config.py"
+    script = helper.parent / "setup-stack.sh"
+    source = script.read_text()
+    schemas = Path(__file__).parents[2] / "src/soliplex_a2ui_workbench/workbench_schemas.py"
+    from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
+
+    assert "from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST" in source
+    assert "for name in MINIMUM_ROOM_TOOL_MANIFEST" in source
+    assert "room['tools'] = [{'tool_name': f\"soliplex_a2ui_workbench.workbench_tools.{name}\"}" in source
+    assert "('workbench','default_chat','Glimmer')" in source
+    assert "('workbench-e4b','alternate_chat','Gemma 4 E4B')" in source
+    assert "SOLIPLEX_WORKBENCH_ROOMS=\"${SOLIPLEX_WORKBENCH_ROOMS:-workbench,workbench-e4b}\"" in source
+    assert "for room in a2ui-lab a2ui-lab-e4b workbench workbench-e4b" in source
+    assert "a2ui-lab" not in "workbench,workbench-e4b"
+    assert schemas.is_file()
+    assert set(MINIMUM_ROOM_TOOL_MANIFEST) == {
+        "get_workbench", "open_panel", "place_form", "show_chart",
+        "run_python_client", "run_python_server", "create_container",
+        "move_panel", "close_panel", "repair_program",
+    }

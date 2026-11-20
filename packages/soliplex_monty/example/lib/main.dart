@@ -2,6 +2,15 @@ import 'package:flutter/widgets.dart';
 import 'package:soliplex_frontend/soliplex_frontend.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 
+final Set<String> _workbenchRooms =
+    const String.fromEnvironment(
+          'WORKBENCH_ROOMS',
+        )
+        .split(',')
+        .map((room) => room.trim())
+        .where((room) => room.isNotEmpty)
+        .toSet();
+
 /// The Soliplex logo, bundled by soliplex_frontend as a package asset.
 final AppIdentity _identity = AppIdentity(
   appName: 'Soliplex',
@@ -13,7 +22,7 @@ final AppIdentity _identity = AppIdentity(
   ),
 );
 
-/// Boots the standard client with the lab catalog for chat surfaces.
+/// Boots the workbench client with the lab catalog for chat surfaces.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   installLogSinks();
@@ -21,10 +30,14 @@ Future<void> main() async {
   final oauthCallback = CallbackParamsCapture.captureNow();
   clearCallbackUrl();
   await runSoliplexShell(() async {
-    final flavor = await standardFlavor(
+    final flavor = await workbenchFlavor(
       identity: _identity,
       callbackParams: oauthCallback,
       surfaceCatalogs: [labCatalog(isLive: ChatSurfaceOrigin.isLive)],
+      presentation: WorkbenchRoomAllowlistPresentation(
+        rooms: _workbenchRooms,
+        host: const ClientWorkbenchPresentation(),
+      ),
     );
     return flavor.build();
   });

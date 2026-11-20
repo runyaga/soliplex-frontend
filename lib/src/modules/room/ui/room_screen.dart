@@ -16,6 +16,7 @@ import 'package:soliplex_client/soliplex_client.dart'
         AuthException,
         CancelToken,
         FeedbackType,
+        HttpTransport,
         MalformedResponseException,
         PermissionDeniedException,
         RagDatabaseScope,
@@ -27,7 +28,9 @@ import 'package:soliplex_client/soliplex_client.dart'
         Room,
         TextPart,
         ThreadHistory,
-        WorkdirFile;
+        WorkbenchClient,
+        WorkdirFile,
+        UrlBuilder;
 import 'package:soliplex_logging/soliplex_logging.dart';
 
 import '../../../core/activity_read.dart' show currentUserRoomMarkers;
@@ -57,6 +60,7 @@ import '../pick_file.dart';
 import '../agent_runtime_manager.dart';
 import '../../../interfaces/workbench_presentation.dart';
 import '../a2ui/surface_scope.dart' show ChatSurfaceScope, ChatSurfaceStore;
+import '../a2ui/surface_view.dart' show ChatSurfaceView;
 import '../room_state.dart';
 import '../../../stores/run_registry.dart';
 import '../thread_list_state.dart';
@@ -278,6 +282,29 @@ class _RoomScreenState extends State<RoomScreen> {
           },
         ),
       );
+
+  Widget _buildWorkbenchHost({
+    required String threadId,
+    required Widget chat,
+  }) {
+    final server = widget.serverEntry;
+    return widget.workbenchPresentation!.buildHost(
+      roomId: widget.roomId,
+      threadId: threadId,
+      chat: chat,
+      client: WorkbenchClient(
+        transport: HttpTransport(client: server.httpClient),
+        urlBuilder: UrlBuilder(server.serverUrl.resolve('/api/v1').toString()),
+      ),
+      surfaceBuilder: (activityMessageId, _) {
+        final controller = _surfaceStoreForThread(threadId)[activityMessageId];
+        return controller == null
+            ? const SizedBox.shrink()
+            : ChatSurfaceView(controller: controller);
+      },
+    );
+  }
+
   late RoomState _state;
   late WorkdirController _workdirs;
   void Function()? _autoSelectUnsub;
@@ -2061,11 +2088,7 @@ class _RoomScreenState extends State<RoomScreen> {
                         workspaceStatus, threadId),
                   Expanded(
                     child: _capWidth(
-                      widget.workbenchPresentation!.buildHost(
-                        roomId: widget.roomId,
-                        threadId: threadId,
-                        chat: body,
-                      ),
+                      _buildWorkbenchHost(threadId: threadId, chat: body),
                     ),
                   ),
                   _capWidth(_buildChatInput(threadView, room, messagesStatus)),
@@ -2098,11 +2121,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 Expanded(
                   child: _capWidth(
                     widget.workbenchPresentation != null && threadId != null
-                        ? widget.workbenchPresentation!.buildHost(
-                            roomId: widget.roomId,
-                            threadId: threadId,
-                            chat: body,
-                          )
+                        ? _buildWorkbenchHost(threadId: threadId, chat: body)
                         : body,
                   ),
                 ),

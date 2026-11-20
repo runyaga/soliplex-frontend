@@ -91,7 +91,11 @@ export 'src/core/status_message_config.dart' show StatusMessageConfig;
 export 'src/core/uncaught_errors.dart' show installUncaughtErrorLogging;
 export 'src/flavors/standard.dart' show standard, standardFlavor;
 export 'src/flavors/workbench.dart' show workbenchFlavor;
+export 'src/flavors/workbench_room_allowlist.dart'
+    show WorkbenchRoomAllowlistPresentation;
 export 'src/interfaces/workbench_presentation.dart' show WorkbenchPresentation;
+export 'src/modules/room/workbench/workbench_host.dart'
+    show ClientWorkbenchPresentation;
 export 'src/flavors/standard_kit.dart' show buildStandardKit, StandardKit;
 export 'src/modules/room/a2ui/surface_scope.dart' show ChatSurfaceOrigin;
 // The resolver type for `standard(documentBrowserUrl: ...)`; the provider that
