@@ -101,9 +101,10 @@ export function validateCases(data, { prompts = false } = {}) {
     if (item.actions !== undefined && !Array.isArray(item.actions)) throw new Error('Invalid actions');
     for (const action of item.actions ?? []) {
       const kind = action?.kind ?? 'click';
-      const role = action?.role ?? ({ fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
-      if (!['click', 'fill', 'select', 'choose', 'check'].includes(kind) || typeof action.name !== 'string' || !action.name.trim() || !regions.has(action.region ?? 'workspace')) throw new Error('Invalid action');
-      if ((kind === 'click' && !['button', 'tab'].includes(role)) || (kind === 'fill' && role !== 'textbox') || (kind === 'check' && role !== 'checkbox') || (['select', 'choose'].includes(kind) && !['button', 'checkbox', 'radio', 'option'].includes(role))) throw new Error('Invalid action role');
+      const role = action?.role ?? ({ run_program: 'button', fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
+      if (!['click', 'fill', 'select', 'choose', 'check', 'run_program'].includes(kind) || typeof action.name !== 'string' || !action.name.trim() || !regions.has(action.region ?? 'workspace')) throw new Error('Invalid action');
+      if ((kind === 'run_program' && role !== 'button') || (kind === 'click' && !['button', 'tab'].includes(role)) || (kind === 'fill' && role !== 'textbox') || (kind === 'check' && role !== 'checkbox') || (['select', 'choose'].includes(kind) && !['button', 'checkbox', 'radio', 'option'].includes(role))) throw new Error('Invalid action role');
+      if (kind === 'run_program' && (!prompts || typeof action.expectRepair !== 'boolean')) throw new Error('Invalid program repair expectation');
       if (kind === 'fill' && typeof action.value !== 'string') throw new Error('Missing fill value');
       if (action.awaitTurn !== undefined && (!prompts || typeof action.awaitTurn !== 'boolean' || kind !== 'click')) throw new Error('Invalid awaitTurn flag');
     }

@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 
 import 'support/lab_surface.dart';
 import 'support/monty.dart';
 
-const failing = 'import tkinter\nprint("board")';
+const failing = 'raise ValueError("deliberate failure")';
+const fixed = 'print(pow(7, 12345, 1000003))';
 
-/// A server-published editor with the repair action, as the lab tool sends.
 List<Map<String, Object?>> replSurface(
-  String surfaceId,
   String source, {
   Map<String, Object?> retry = const {},
+  bool workbench = false,
+  String surfaceId = 'program',
 }) => [
   {
     'version': '1.0',
@@ -23,9 +25,7 @@ List<Map<String, Object?>> replSurface(
     'updateDataModel': {
       'surfaceId': surfaceId,
       'path': '/',
-      'value': {
-        'repl': {'source': source},
-      },
+      'value': {'source': source},
     },
   },
   {
@@ -36,14 +36,27 @@ List<Map<String, Object?>> replSurface(
         {
           'id': 'root',
           'component': 'PythonRepl',
-          'source': {'@path': '/repl/source'},
-          'outputPath': '/repl/result',
+          'source': {'@path': '/source'},
+          'outputPath': '/output',
           'retry': retry,
+          if (workbench) ...{
+            'onWorkbench': {
+              'event': {'name': 'workbench.program.layout'},
+            },
+            'onRun': {
+              'event': {
+                'name': 'workbench.program.run_result',
+                'context': {
+                  'result': {'@path': '/output'},
+                },
+              },
+            },
+          },
           'onFailure': {
             'event': {
-              'name': 'python_failed',
+              'name': workbench ? 'workbench.program.repair' : 'python_failed',
               'context': {
-                'result': {'@path': '/repl/result'},
+                'result': {'@path': '/output'},
               },
             },
           },
@@ -53,141 +66,76 @@ List<Map<String, Object?>> replSurface(
   },
 ];
 
-/// One host per controller, so each REPL's controls are found by host.
-class Hosts {
-  Hosts(this.starter, this.chains);
-
-  final MontyStarter starter;
-  final RepairChains chains;
-  final List<LabSurfaceController> controllers = [];
-  final List<Map<String, Object?>> actions = [];
-
-  LabSurfaceController add({required bool live, ReplLimits? limits}) {
-    final controller = LabSurfaceController(
-      startRuntime: starter.call,
-      limits: limits ?? const ReplLimits(),
-      live: live,
-      chains: chains,
-      onActionPayload: actions.add,
-    );
-    controllers.add(controller);
-    return controller;
-  }
-
-  Widget build() => MaterialApp(
-    theme: soliplexLightTheme(),
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            for (final (i, c) in controllers.indexed)
-              KeyedSubtree(
-                key: ValueKey('host-$i'),
-                child: LabSurfaceView(controller: c),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-
-  void dispose() {
-    for (final c in controllers) {
-      c.dispose();
-    }
-  }
-}
-
-Finder inHost(int host, String key) => find.descendant(
-  of: find.byKey(ValueKey('host-$host')),
-  matching: find.byKey(ValueKey(key)),
-);
-
 Map<String, Object?> resultOf(Map<String, Object?> action) =>
     ((action['context']! as Map)['result']! as Map).cast<String, Object?>();
 
-bool enabled(WidgetTester tester, Finder button) =>
-    tester.widget<SoliplexButton>(button).onPressed != null;
-
 void main() {
-  late Hosts hosts;
-
-  Future<void> mount(WidgetTester tester) async {
-    tester.view
-      ..physicalSize = const Size(1200, 4000)
-      ..devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(hosts.build());
-  }
-
-  Future<void> rebuild(WidgetTester tester) async {
-    await tester.pumpWidget(hosts.build());
-    await tester.pump();
-  }
-
-  /// Taps in the real zone, then rebuilds so the tap's state shows.
-  Future<void> tap(WidgetTester tester, int host, String key) async {
-    await tester.runAsync(() => tester.tap(inHost(host, key)));
-    await tester.pump();
-  }
-
+  late MontyStarter starter;
+  late RepairChains chains;
+  late LabSurfaceController controller;
+  late List<Map<String, Object?>> actions;
   final autoRuns = <VoidCallback>[];
+  final run = find.byKey(const ValueKey('python-repl-run'));
+  final checkbox = find.byKey(const ValueKey('python-repl-auto-fix'));
+  final manual = find.byKey(const ValueKey('python-repl-ai-fix'));
+
+  Iterable<Map<String, Object?>> getRepairs() => actions.where(
+    (a) =>
+        a['name'] == 'python_failed' || a['name'] == 'workbench.program.repair',
+  );
+
+  LabSurfaceController host({bool live = true}) => LabSurfaceController(
+    startRuntime: starter.call,
+    live: live,
+    chains: chains,
+    onActionPayload: actions.add,
+  );
 
   setUp(() {
-    hosts = Hosts(MontyStarter(), RepairChains());
+    SharedPreferences.setMockInitialValues({});
+    starter = MontyStarter();
+    chains = RepairChains();
+    actions = [];
     autoRuns.clear();
     PythonReplView.debugScheduleAutoRun = autoRuns.add;
+    controller = host();
   });
 
   tearDown(() => PythonReplView.debugScheduleAutoRun = null);
 
-  /// Unmounts the REPLs, then closes their runtimes in the real zone.
-  Future<void> finish(WidgetTester tester) async {
-    await tester.pumpWidget(const SizedBox());
-    // Lets the views' runtime disposal, begun in the fake zone, finish.
-    await settleFor(tester, const Duration(milliseconds: 300));
-    hosts.dispose();
-    await tester.runAsync(hosts.starter.close);
+  Future<void> mount(WidgetTester tester) async {
+    tester.view
+      ..physicalSize = const Size(1200, 1800)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: soliplexLightTheme(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: LabSurfaceView(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await settleFor(tester, const Duration(milliseconds: 100));
   }
 
-  /// Mounts one editor with [source], runs it and waits for it to finish.
-  Future<void> runFirst(
-    WidgetTester tester,
-    String source, {
-    Map<String, Object?> retry = const {},
-  }) async {
-    hosts.add(live: false).apply(replSurface('first', source, retry: retry));
-    await mount(tester);
-    await tap(tester, 0, 'python-repl-run');
+  Future<void> click(WidgetTester tester, Finder target) async {
+    await tester.runAsync(() => tester.tap(target));
+    await tester.pump();
+  }
+
+  Future<void> runAndWait(WidgetTester tester) async {
+    await click(tester, run);
     await pumpUntil(
       tester,
-      () => enabled(tester, inHost(0, 'python-repl-run')),
+      () => tester.widget<SoliplexButton>(run).onPressed != null,
     );
-    // The repair action resolves its context before it is dispatched.
-    await settleFor(tester, const Duration(milliseconds: 200));
+    await settleFor(tester, const Duration(milliseconds: 100));
   }
 
-  /// Delivers the model's repaired editor into a new host.
-  Future<void> deliver(
-    WidgetTester tester,
-    String source, {
-    required bool live,
-    required int attempt,
-    String? chainId,
-    String surfaceId = 'fix',
-  }) async {
-    final id = chainId ?? resultOf(hosts.actions.last)['chainId']! as String;
-    hosts
-        .add(live: live)
-        .apply(
-          replSurface(
-            surfaceId,
-            source,
-            retry: {'chainId': id, 'attempt': attempt},
-          ),
-        );
-    await rebuild(tester);
-    // Runs on arrival start in the real zone, as a frame callback does live.
+  Future<void> startAutoRuns(WidgetTester tester) async {
     final starts = [...autoRuns];
     autoRuns.clear();
     await tester.runAsync(() async {
@@ -195,282 +143,272 @@ void main() {
         start();
       }
     });
+    await tester.pump();
   }
 
-  testWidgets(
-    'a failure dispatches python_failed once with the error and chain',
-    (tester) async {
-      await runFirst(tester, failing);
-      await settleFor(tester);
-      final action = hosts.actions.single;
-      expect(action['name'], 'python_failed');
-      final result = resultOf(action);
-      expect(result['ok'], false);
-      expect(result['attempt'], 1);
-      expect(result['source'], failing);
-      expect(result['error'], contains('tkinter'));
-      expect(result['chainId'], isA<String>());
-      expect(
-        find.textContaining('Asking the model to fix it (attempt 1 of 2)'),
-        findsOneWidget,
-      );
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
-
-  testWidgets(
-    'a live repaired editor for a live chain runs on arrival',
-    (tester) async {
-      await runFirst(tester, failing);
-      await deliver(tester, 'print("fixed")', live: true, attempt: 1);
-      await pumpUntil(
-        tester,
-        () => find.text('Fixed after 1 attempt').evaluate().isNotEmpty,
-      );
-      expect(find.text('fixed'), findsOneWidget);
-      expect(hosts.actions, hasLength(1));
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
-
-  testWidgets(
-    'the same editor restored from history waits for Run',
-    (tester) async {
-      await runFirst(tester, failing);
-      final starts = hosts.starter.starts;
-      await deliver(tester, 'print("fixed")', live: false, attempt: 1);
-      await settleFor(tester);
-      expect(hosts.starter.starts, starts);
-      expect(find.text('Press Run to execute the code.'), findsOneWidget);
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
-
-  testWidgets(
-    'a repaired editor with no chain in memory waits for Run',
-    (tester) async {
-      hosts
-          .add(live: true)
-          .apply(
-            replSurface(
-              'fix',
-              'print("fixed")',
-              retry: {'chainId': 'from-another-session', 'attempt': 1},
-            ),
-          );
+  Future<void> replace(
+    WidgetTester tester,
+    String source, {
+    bool remount = false,
+    bool live = true,
+    bool tagged = false,
+  }) async {
+    final retry = tagged
+        ? {
+            'chainId': resultOf(getRepairs().last)['chainId'],
+            'attempt': 1,
+          }
+        : <String, Object?>{};
+    if (remount) {
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+      controller = host(live: live)..apply(replSurface(source, retry: retry));
       await mount(tester);
-      await settleFor(tester);
-      expect(hosts.starter.starts, 0);
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
-
-  testWidgets(
-    'exhaustion asks, Yes requests one more round and No ends the chain',
-    (tester) async {
-      await runFirst(tester, failing, retry: {'max': 1});
-      await deliver(tester, 'import pygame', live: true, attempt: 1);
-      await pumpUntil(
-        tester,
-        () => find.text('Do you want to try again?').evaluate().isNotEmpty,
+    } else {
+      controller.apply(
+        replSurface(source, retry: retry, workbench: true).skip(1).toList(),
       );
-      expect(hosts.actions, hasLength(1));
-
-      await tap(tester, 1, 'python-repl-yes');
       await tester.pump();
-      expect(hosts.actions, hasLength(2));
-      expect(resultOf(hosts.actions.last)['attempt'], 2);
-      expect(
-        find.textContaining('(attempt 2 of 2)'),
-        findsOneWidget,
-      );
-
-      await deliver(
-        tester,
-        'import numpy',
-        live: true,
-        attempt: 2,
-        surfaceId: 'fix2',
-      );
-      await pumpUntil(
-        tester,
-        () => find.text('Do you want to try again?').evaluate().isNotEmpty,
-      );
-      await tap(tester, 2, 'python-repl-no');
       await tester.pump();
-      expect(find.text('Do you want to try again?'), findsNothing);
-      final chain =
-          hosts.chains[resultOf(hosts.actions.last)['chainId']! as String]!;
-      expect(chain.status, RepairStatus.ended);
-      expect(hosts.actions, hasLength(2));
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
+    }
+  }
 
-  testWidgets(
-    'Stop cancels the pending repair before it arrives',
-    (tester) async {
-      await runFirst(tester, failing);
-      await tap(tester, 0, 'python-repl-stop');
-      await tester.pump();
-      expect(find.byKey(const ValueKey('python-repl-stop')), findsNothing);
-      final starts = hosts.starter.starts;
-      await deliver(tester, 'print("fixed")', live: true, attempt: 1);
-      await settleFor(tester);
-      expect(hosts.starter.starts, starts);
-      expect(hosts.actions, hasLength(1));
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
+  Future<void> finish(WidgetTester tester) async {
+    await tester.pumpWidget(const SizedBox());
+    await settleFor(tester, const Duration(milliseconds: 100));
+    controller.dispose();
+    await tester.runAsync(starter.close);
+  }
 
-  testWidgets(
-    'a failure of edited code asks instead of requesting a repair',
-    (tester) async {
-      await runFirst(tester, failing);
-      await tap(tester, 0, 'python-repl-stop');
-      await tester.enterText(inHost(0, 'python-repl-editor'), 'import pygame');
-      await tester.pump();
-      await tap(tester, 0, 'python-repl-run');
-      await pumpUntil(
-        tester,
-        () => find.text('Do you want to try again?').evaluate().isNotEmpty,
-      );
-      expect(hosts.actions, hasLength(1));
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
+  testWidgets('default off: failure shows error, no request or scheduled run', (
+    tester,
+  ) async {
+    controller.apply(replSurface(failing, workbench: true));
+    await mount(tester);
+    final semantics = tester.ensureSemantics();
+    expect(find.bySemanticsLabel('AI Fix'), findsOneWidget);
+    expect(tester.widget<Checkbox>(checkbox).value, false);
+    semantics.dispose();
+    await runAndWait(tester);
+    expect(find.textContaining('deliberate failure'), findsWidgets);
+    expect(getRepairs(), isEmpty);
+    expect(autoRuns, isEmpty);
+    expect(actions, isEmpty);
+    expect(find.text('Do you want to try again?'), findsNothing);
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
 
-  testWidgets(
-    'two live copies of one repair run it once',
-    (tester) async {
-      await runFirst(tester, failing);
-      final id = resultOf(hosts.actions.last)['chainId']! as String;
-      final starts = hosts.starter.starts;
-      await deliver(tester, 'print("fixed")', live: true, attempt: 1);
-      await deliver(
-        tester,
-        'print("fixed")',
-        live: true,
-        attempt: 1,
-        chainId: id,
-        surfaceId: 'fix-copy',
-      );
-      await pumpUntil(
-        tester,
-        () => find.text('Fixed after 1 attempt').evaluate().isNotEmpty,
-      );
-      await settleFor(tester);
-      expect(hosts.starter.starts, starts + 1);
-      expect(find.text('Fixed after 1 attempt'), findsOneWidget);
-      await finish(tester);
-    },
-    skip: skipWithoutMonty != false,
-  );
-
-  group('AI Fix', () {
-    Finder aiFix(int host) => inHost(host, 'python-repl-ai-fix');
-
+  for (final tagged in [false, true]) {
     testWidgets(
-      'appears only after a failed run',
+      'on: one repair request and one automatic run, tagged=$tagged',
       (tester) async {
-        hosts.add(live: false).apply(replSurface('first', 'print(1)'));
+        controller.apply(replSurface(failing, workbench: !tagged));
         await mount(tester);
-        expect(aiFix(0), findsNothing);
-        await tap(tester, 0, 'python-repl-run');
-        await pumpUntil(
-          tester,
-          () => enabled(tester, inHost(0, 'python-repl-run')),
+        await click(tester, checkbox);
+        await runAndWait(tester);
+        expect(getRepairs(), hasLength(1));
+        expect(resultOf(getRepairs().single)['aiFix'], true);
+        expect(
+          resultOf(getRepairs().single)['instruction'],
+          contains('runs automatically'),
         );
-        expect(aiFix(0), findsNothing);
-        await tester.enterText(inHost(0, 'python-repl-editor'), failing);
-        await tester.pump();
-        await tap(tester, 0, 'python-repl-run');
-        await pumpUntil(tester, () => aiFix(0).evaluate().isNotEmpty);
-        await finish(tester);
-      },
-      skip: skipWithoutMonty != false,
-    );
-
-    testWidgets(
-      'sends the edited code once per click and is disabled while pending',
-      (tester) async {
-        await runFirst(tester, failing, retry: {'max': 0});
-        expect(hosts.actions, isEmpty);
-        expect(find.text('Do you want to try again?'), findsOneWidget);
-        expect(enabled(tester, aiFix(0)), isTrue);
-
-        const edited = 'import pygame\nprint("mine")';
-        await tester.enterText(inHost(0, 'python-repl-editor'), edited);
-        await tester.pump();
-        await tap(tester, 0, 'python-repl-ai-fix');
-        await tester.pump();
-        expect(hosts.actions, hasLength(1));
-        final result = resultOf(hosts.actions.single);
-        expect(result['source'], edited);
-        expect(result['error'], contains('tkinter'));
-        expect(result['attempt'], 1);
-        expect(enabled(tester, aiFix(0)), isFalse);
-        expect(find.textContaining('(attempt 1 of 1)'), findsOneWidget);
-
-        await tap(tester, 0, 'python-repl-ai-fix');
-        await tester.pump();
-        expect(hosts.actions, hasLength(1));
-
-        await deliver(tester, 'print("fixed")', live: true, attempt: 1);
+        await replace(tester, fixed, remount: tagged, tagged: tagged);
+        expect(tester.widget<Checkbox>(checkbox).value, true);
+        expect(autoRuns, hasLength(1));
+        await startAutoRuns(tester);
         await pumpUntil(
           tester,
           () => find.text('Fixed after 1 attempt').evaluate().isNotEmpty,
         );
+        expect(find.text('766228'), findsOneWidget);
+        expect(getRepairs(), hasLength(1));
+        expect(autoRuns, isEmpty);
+        if (!tagged) {
+          final runs = actions
+              .where((a) => a['name'] == 'workbench.program.run_result')
+              .map(resultOf)
+              .toList();
+          expect(runs, hasLength(1));
+          expect(resultOf(getRepairs().single)['run'], 1);
+          expect(runs.single['run'], 2);
+          expect(runs.single['outcome'], 'success');
+          expect(runs.single['output'], contains('766228'));
+        }
         await finish(tester);
       },
       skip: skipWithoutMonty != false,
     );
-  });
+  }
 
   testWidgets(
-    'the first Run shows Loading Monty… and then Running',
+    'remounting the failed live program cannot claim its own repair',
     (tester) async {
-      hosts = Hosts(
-        MontyStarter(delay: const Duration(milliseconds: 400)),
-        RepairChains(),
-      );
-      hosts
-          .add(
-            live: false,
-            limits: const ReplLimits(
-              maxFeedDuration: Duration(seconds: 5),
-              deadline: Duration(seconds: 10),
-            ),
-          )
-          .apply(
-            replSurface(
-              'first',
-              'n = 0\nfor i in range(3000000):\n    n += i\nn',
-            ),
-          );
+      controller.apply(replSurface(failing, workbench: true));
       await mount(tester);
-      await tap(tester, 0, 'python-repl-run');
-      await tester.pump();
-      expect(find.text('Loading Monty…'), findsOneWidget);
-      await pumpUntil(
-        tester,
-        () => find.text('Running').evaluate().isNotEmpty,
-      );
-      expect(find.text('Loading Monty…'), findsNothing);
-      await pumpUntil(
-        tester,
-        () => enabled(tester, inHost(0, 'python-repl-run')),
-      );
-      expect(find.text('Run'), findsOneWidget);
+      await click(tester, checkbox);
+      await runAndWait(tester);
+      await replace(tester, failing, remount: true);
+      expect(autoRuns, isEmpty);
+      expect(getRepairs(), hasLength(1));
+      await replace(tester, fixed);
+      expect(autoRuns, hasLength(1));
+      await startAutoRuns(tester);
+      await pumpUntil(tester, () => find.text('766228').evaluate().isNotEmpty);
+      expect(getRepairs(), hasLength(1));
       await finish(tester);
     },
     skip: skipWithoutMonty != false,
   );
+
+  testWidgets('unchecking pending repair ends chain and blocks arrival', (
+    tester,
+  ) async {
+    controller.apply(replSurface(failing, workbench: true));
+    await mount(tester);
+    await click(tester, checkbox);
+    await runAndWait(tester);
+    final id = resultOf(getRepairs().single)['chainId']! as String;
+    await click(tester, checkbox);
+    expect(chains[id]!.status, RepairStatus.ended);
+    await replace(tester, fixed);
+    await settleFor(tester);
+    expect(autoRuns, isEmpty);
+    expect(find.text('766228'), findsNothing);
+    expect(tester.widget<Checkbox>(checkbox).value, false);
+    expect(getRepairs(), hasLength(1));
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
+
+  testWidgets('unchecking after arrival blocks an already scheduled run', (
+    tester,
+  ) async {
+    controller.apply(replSurface(failing, workbench: true));
+    await mount(tester);
+    await click(tester, checkbox);
+    await runAndWait(tester);
+    await replace(tester, fixed);
+    expect(autoRuns, hasLength(1));
+    await click(tester, checkbox);
+    await startAutoRuns(tester);
+    await settleFor(tester);
+    expect(find.text('766228'), findsNothing);
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
+
+  testWidgets(
+    'reload preserves on but fresh chains and replay execute nothing',
+    (tester) async {
+      controller.apply(replSurface(failing));
+      await mount(tester);
+      await click(tester, checkbox);
+      await runAndWait(tester);
+      final starts = starter.starts;
+      chains = RepairChains();
+      await replace(tester, fixed, remount: true, live: false, tagged: true);
+      expect(tester.widget<Checkbox>(checkbox).value, true);
+      await settleFor(tester);
+      expect(starter.starts, starts);
+      expect(autoRuns, isEmpty);
+      expect(getRepairs(), hasLength(1));
+      await finish(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets(
+    'live replacement with no in-memory chain also executes nothing',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'soliplex.python.aiFix.program': true,
+      });
+      controller.apply(
+        replSurface(fixed, retry: {'chainId': 'missing', 'attempt': 1}),
+      );
+      await mount(tester);
+      expect(tester.widget<Checkbox>(checkbox).value, true);
+      expect(autoRuns, isEmpty);
+      expect(starter.starts, 0);
+      await finish(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets(
+    'off: manual AI Fix requests once and replacement waits for Run',
+    (tester) async {
+      controller.apply(replSurface(failing));
+      await mount(tester);
+      await runAndWait(tester);
+      await click(tester, manual);
+      expect(getRepairs(), hasLength(1));
+      expect(resultOf(getRepairs().single)['aiFix'], false);
+      expect(resultOf(getRepairs().single)['autoRun'], false);
+      expect(
+        resultOf(getRepairs().single)['instruction'],
+        contains('press Run'),
+      );
+      expect(tester.widget<SoliplexButton>(manual).onPressed, isNull);
+      await replace(tester, fixed, remount: true, tagged: true);
+      expect(autoRuns, isEmpty);
+      expect(tester.widget<Checkbox>(checkbox).value, false);
+      await runAndWait(tester);
+      expect(find.text('766228'), findsOneWidget);
+      expect(getRepairs(), hasLength(1));
+      await finish(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets('enabling during a manual off request never authorizes its run', (
+    tester,
+  ) async {
+    controller.apply(replSurface(failing));
+    await mount(tester);
+    await runAndWait(tester);
+    await click(tester, manual);
+    await click(tester, checkbox);
+    await replace(tester, fixed, remount: true, tagged: true);
+    expect(tester.widget<Checkbox>(checkbox).value, true);
+    expect(autoRuns, isEmpty);
+    expect(find.text('766228'), findsNothing);
+    expect(getRepairs(), hasLength(1));
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
+
+  testWidgets(
+    'retry budget stops automatic requests; manual AI Fix stays usable',
+    (tester) async {
+      controller.apply(
+        replSurface(failing, retry: {'max': 1}, workbench: true),
+      );
+      await mount(tester);
+      await click(tester, checkbox);
+      await runAndWait(tester);
+      await replace(tester, 'raise ValueError("still fails")');
+      await startAutoRuns(tester);
+      await pumpUntil(
+        tester,
+        () => tester.widget<SoliplexButton>(run).onPressed != null,
+      );
+      expect(getRepairs(), hasLength(1));
+      expect(tester.widget<SoliplexButton>(manual).onPressed, isNotNull);
+      expect(find.text('Do you want to try again?'), findsNothing);
+      await click(tester, manual);
+      expect(getRepairs(), hasLength(2));
+      expect(resultOf(getRepairs().last)['attempt'], 2);
+      await finish(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets('preferences belong to the program surface', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'soliplex.python.aiFix.other': true,
+    });
+    controller.apply(replSurface(fixed));
+    await mount(tester);
+    expect(tester.widget<Checkbox>(checkbox).value, false);
+    expect(starter.starts, 0);
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
 }

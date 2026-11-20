@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { csvCell, parseCsv } from '../lib/csv.mjs';
 import { performActions } from '../lib/actions.mjs';
-import { captureTurn } from '../lib/turns.mjs';
+import { captureProgramTurns, captureTurn } from '../lib/turns.mjs';
 import { assertTurn, intakeSubmissions, loadCases, replyExpectation, validateCases } from '../lib/core.mjs';
 
 const noWait = async () => {};
@@ -257,4 +257,95 @@ test('custom form submission and CSV checks ignore the case of model-chosen fiel
   assert.equal(assertTurn({ kind: 'submission', name: 'workbench_form', context: { title: 'Scenario survey', values } }, turn).pass, true);
   assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values }, turn).pass, true);
   assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values: { ...values, color: 'Red' } }, turn).pass, false);
+});
+
+function programFixture({ repair = true, arrive = true, success = true, unrelated = false } = {}) {
+  let handler;
+  const operations = [];
+  const turn = async (name, context, events = []) => {
+    const body = [...events, { type: 'RUN_FINISHED' }].map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
+    await handler({
+      request: () => ({ method: () => 'POST', url: () => unrelated ? url.replace('thread-id', 'other-thread') : url,
+        postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name, context } } } }) }),
+      fetch: async () => ({ text: async () => body, ok: () => true }),
+      fulfill: async () => operations.push('fulfill'),
+      abort: async () => operations.push('abort'),
+      fallback: async () => operations.push('fallback'),
+    });
+  };
+  const page = {
+    route: async (_, callback) => { handler = callback; operations.push('route'); },
+    unroute: async (_, callback) => { assert.equal(callback, handler); operations.push('unroute'); },
+    async trigger() {
+      if (!repair) return;
+      await turn('workbench.program.repair', { result: { run: 1, aiFix: true, autoRun: true } }, [
+        { type: 'TOOL_CALL_START', toolCallName: 'repair_program' },
+        ...(arrive ? [{ type: 'ACTIVITY_SNAPSHOT' }] : []),
+      ]);
+      if (success) await turn('workbench.program.run_result', { outcome: 'success', output: '766228' });
+    },
+  };
+  return { page, operations };
+}
+
+test('AI Fix off observes a full 20 seconds and records zero action turns', async () => {
+  const { page, operations } = programFixture({ repair: false });
+  const waits = [];
+  const observation = await captureProgramTurns(page, options, () => page.trigger(), false, undefined, async ms => waits.push(ms));
+  assert.deepEqual(waits, [20000]);
+  assert.deepEqual(observation, { actionTurns: 0, repairRequests: 0, successfulRuns: 0, observationMs: 20000 });
+  assert.deepEqual(operations, ['route', 'unroute']);
+});
+
+test('AI Fix off rejects any unexpected action and removes the observer', async () => {
+  const { page, operations } = programFixture();
+  await assert.rejects(captureProgramTurns(page, options, () => page.trigger(), false, undefined, noWait), /AI Fix off sent action turn/);
+  assert.equal(operations.at(-1), 'unroute');
+});
+
+test('AI Fix on requires a repair publication and the next successful execution action', async () => {
+  const { page, operations } = programFixture();
+  const turns = [];
+  const result = await captureProgramTurns(page, options, () => page.trigger(), true, t => turns.push(t));
+  assert.equal(result.actionTurns, 2);
+  assert.equal(result.repairRequests, 1);
+  assert.equal(result.successfulRuns, 1);
+  assert.equal(turns[1].programContext.output, '766228');
+  assert.equal(operations.at(-1), 'unroute');
+  const missing = programFixture({ arrive: false });
+  await assert.rejects(captureProgramTurns(missing.page, options, () => missing.page.trigger(), true), /Expected one repair arrival/);
+});
+
+test('AI Fix on times out without automatic success and ignores other threads', async () => {
+  for (const settings of [{ success: false }, { unrelated: true }]) {
+    const { page, operations } = programFixture(settings);
+    await assert.rejects(captureProgramTurns(page, { ...options, timeoutMs: 5 }, () => page.trigger(), true), /timed out/);
+    assert.equal(operations.at(-1), 'unroute');
+    if (settings.unrelated) assert.ok(operations.includes('fallback'));
+  }
+});
+
+test('run_program actions validate and require room context', async () => {
+  const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  for (const state of ['off', 'on']) {
+    const item = cases.find(c => c.id === `ai_fix_${state}`);
+    assert.equal(item.actions.at(-1).kind, 'run_program');
+    assert.equal(item.actions.at(-1).expectRepair, state === 'on');
+    assert.equal(item.actions.some(a => a.kind === 'check'), state === 'on');
+    assert.ok(item.assertions.some(a => a.name === (state === 'on' ? replyExpectation({ pow: [7, 12345, 1000003] }) : 'scenario deliberate failure')));
+    assert.throws(() => validateCases([{ ...item, actions: [{ kind: 'run_program', name: 'Run' }] }], { prompts: true }));
+  }
+  const { page } = fixture();
+  await assert.rejects(performActions(page, [{ kind: 'run_program', name: 'Submit', expectRepair: false }], undefined, undefined, noWait), /requires room and thread/);
+});
+
+test('run_program clicks through the action dispatcher and returns observation counts', async () => {
+  const { page, operations } = fixture();
+  page.trigger = async () => {};
+  const waits = [];
+  const observations = await performActions(page, [{ kind: 'run_program', name: 'Submit', expectRepair: false }], options, undefined, async ms => waits.push(ms));
+  assert.equal(observations[0].actionTurns, 0);
+  assert.ok(operations.includes('click:Submit'));
+  assert.ok(waits.includes(20000));
+  assert.equal(operations.at(-1), 'unroute');
 });

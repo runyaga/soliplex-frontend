@@ -225,7 +225,12 @@ void main() {
               'Scenario zebra',
             );
             await tester.tap(find.text('North').first);
-            await tester.tap(find.byType(Checkbox));
+            await tester.tap(
+              find.descendant(
+                of: find.widgetWithText(ChatSurfaceView, 'Acknowledged'),
+                matching: find.byType(Checkbox),
+              ),
+            );
             await tester.pump();
             await tester.ensureVisible(find.text('Submit'));
             await tester.tap(find.text('Submit'));

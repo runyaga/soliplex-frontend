@@ -36,7 +36,7 @@ export async function checkModels({ page, base, alias, cases, directory, credent
             if (setup.some(a => !a.pass)) throw new Error('Required follow-up setup did not render');
           }
         }
-        await performActions(page, item.actions, { room: model.room, threadId: result.threadId, timeoutMs }, turn => remember(turn, 'action'));
+        result.programRuns = await performActions(page, item.actions, { room: model.room, threadId: result.threadId, timeoutMs }, turn => remember(turn, 'action'));
         for (const prompt of item.followup ?? []) {
           remember(await sendPrompt(page, model.room, prompt, timeoutMs, result.threadId), 'followup');
         }

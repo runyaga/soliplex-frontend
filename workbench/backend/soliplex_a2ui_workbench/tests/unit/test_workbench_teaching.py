@@ -101,3 +101,10 @@ def test_generated_move_close_teaching_matches_executable_content_id_rules():
     assert nodes[owner]["parentId"] == "r_right"
     assert nodes[owner]["visibility"] == "closed"
     assert nodes[chart["nodeId"]]["parentId"] == owner
+
+
+def test_repair_teaching_explains_both_ai_fix_states():
+    text = room_skill("workbench")
+    assert "result.aiFix" in text and "result.instruction" in text
+    assert 'do not say "press Run"' in text
+    assert 'When autoRun is false, say "press Run"' in text
