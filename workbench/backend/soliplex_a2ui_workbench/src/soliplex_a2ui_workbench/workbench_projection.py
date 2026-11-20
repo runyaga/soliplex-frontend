@@ -13,14 +13,24 @@ from collections.abc import Iterable
 
 from ag_ui.core import ActivitySnapshotEvent
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import AsyncSession
 from soliplex.agui.persistence import ThreadStorage
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .workbench_publication import (
-    BASIC_CATALOG, BUILTIN_CATALOG_MANIFESTS, GRAPHICS_CATALOG, LAB_CATALOG,
-    WORKBENCH_CATALOG, WorkbenchCatalogValidator, build_publication,
+    BASIC_CATALOG,
+    BUILTIN_CATALOG_MANIFESTS,
+    GRAPHICS_CATALOG,
+    LAB_CATALOG,
+    WORKBENCH_CATALOG,
+    WorkbenchCatalogValidator,
+    build_publication,
 )
-from .workbench_repository import PublicationConflict, PublicationResult, WorkbenchScope, default_layout
+from .workbench_repository import (
+    PublicationConflict,
+    PublicationResult,
+    WorkbenchScope,
+    default_layout,
+)
 from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
 
 
@@ -90,7 +100,9 @@ class RunWorkbenchProjection:
         if component == "PythonRepl" and role == "program":
             record.update(catalogId=LAB_CATALOG, source=data["source"], title=data["title"], output=data.get("output", ""))
         elif component == "Chart" and role == "content":
-            record.update(catalogId=GRAPHICS_CATALOG, spec=data["spec"])
+            record.update(catalogId=GRAPHICS_CATALOG, spec=data["spec"], selection=root["selection"], description=root["description"])
+            if "height" in root:
+                record["height"] = root["height"]
         elif component == "Column" and role == "content":
             record.update(catalogId=WORKBENCH_CATALOG, component="PlaceForm", template="intake", title=data["title"])
         elif component == "Text" and role == "content":

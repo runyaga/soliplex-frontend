@@ -70,7 +70,7 @@ class LayoutSnapshot(Closed):
             raise ValueError("authenticated program registration metadata is required")
         program_surfaces = info.context["authenticated_program_surfaces"]
         if not isinstance(program_surfaces, set):
-            raise ValueError("registered program surfaces must be a set of IDs")
+            raise ValueError("registered program surfaces must be a set of IDs")  # noqa: TRY004 - retryable payload validation
         for surface_id in program_surfaces:
             _ID_ADAPTER.validate_python(surface_id, strict=True)
         by_id = {node.id: node for node in self.nodes}
@@ -165,9 +165,8 @@ class LayoutSnapshot(Closed):
                 "r_right",
                 "r_canvas",
                 "r_tray",
-            }:
-                if node.id != "wb_root" and node.kind != "region":
-                    raise ValueError("reserved node kind changed")
+            } and node.id != "wb_root" and node.kind != "region":
+                raise ValueError("reserved node kind changed")
         seen: set[str] = set()
         visiting: set[str] = set()
 
@@ -511,11 +510,18 @@ class PlaceForm(Closed):
     parent_id: Id
 
 
+class ChartScale(Closed):
+    min_value: float = 0
+    max_value: float = 100
+    target: float | None = None
+
+
 class ShowChart(Closed):
     title: Title
-    kind: Literal["bar", "line"]
+    kind: Literal["bar", "line", "pie", "gauge"]
     points: Points
     parent_id: Id
+    scale: ChartScale | None = None
 
     @field_validator("points")
     @classmethod

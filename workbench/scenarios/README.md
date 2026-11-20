@@ -42,7 +42,7 @@
 | Failure | Reports update per case. Setup errors produce failed assertions. Any failed case or missing screenshot exits nonzero |
 | Secrets | Credentials stay in memory and stdin. No shell sourcing, credential argv, traces, storage state or raw child logs. Evidence is redacted before serialization. Authentication screenshots are prohibited and account text is masked |
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
-| Scope limits | Region semantics replace geometry classification. Current chart assertions check the placeholder's mounted data. Selectors require live verification |
+| Scope limits | Region semantics replace geometry classification. Chart assertions require image semantics with title and series plus a PNG ink check. Selectors require live verification |
 | Execution | Deterministic programs and replay remain inert. Model counter cases deliberately press Run. The follow-up fix case checks replacement, not the host AI Fix repair chain |
 | Offline tests | Twelve JavaScript tests cover corpus validation, evidence, semantic selectors and cleanup retention. Six Python tests cover recipes, public-storage cleanup and persistence, including all eight seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |

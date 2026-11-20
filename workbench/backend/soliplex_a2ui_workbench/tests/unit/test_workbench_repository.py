@@ -1,11 +1,11 @@
 from soliplex_a2ui_workbench.workbench_repository import default_layout
+
 """Durable workbench snapshot storage tests."""
 
 import json
 import threading
 
 import pytest
-
 from soliplex_a2ui_workbench.workbench_repository import (
     PublicationConflict,
     SQLiteWorkbenchRepository,
@@ -185,8 +185,8 @@ def test_unregistered_mount_rejects_before_writing(tmp_path):
 
 
 @pytest.mark.parametrize("mutate", [
-    lambda spec: spec["series"][0].update(id={"bad": "series-id"}),
-    lambda spec: spec["series"][0]["points"][0].update(label={"bad": "point-label"}),
+    lambda spec: spec["points"][0].update(id={"bad": "series-id"}),
+    lambda spec: spec["points"][0].update(label={"bad": "point-label"}),
 ])
 def test_default_catalog_validator_rejects_malformed_chart_before_commit(tmp_path, mutate):
     scope = WorkbenchScope("actor", "server", "room", "thread")
@@ -236,7 +236,7 @@ def test_overlapping_repository_transactions_are_serialized(tmp_path):
     def publish(scope, key, callback):
         try:
             repo.publish(scope, key, 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts(), before_commit=callback)
-        except BaseException as exc:
+        except BaseException as exc:  # noqa: BLE001 - collect every worker failure for assertions
             errors.append(exc)
 
     def pause_first():

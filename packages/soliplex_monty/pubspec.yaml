@@ -21,6 +21,8 @@ dependencies:
   flutter:
     sdk: flutter
   json_schema_builder: ^0.1.7
+  soliplex_catalogs:
+    path: ../soliplex_catalogs
   soliplex_design:
     path: ../soliplex_design
 

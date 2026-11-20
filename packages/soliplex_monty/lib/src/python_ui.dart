@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:a2ui_core/a2ui_core.dart';
 import 'package:dart_monty/core.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 
 import 'package:soliplex_monty/src/lab_chart_api.dart';
 import 'package:soliplex_monty/src/python_workbench.dart';
@@ -62,7 +63,9 @@ class StagedSurface {
       'version': '1.0',
       'createSurface': {
         'surfaceId': surfaceId,
-        'catalogId': BasicCatalog.v1_0Id,
+        'catalogId': components.firstOrNull?['component'] == 'Chart'
+            ? chartGraphicsCatalogId
+            : BasicCatalog.v1_0Id,
       },
     },
     if (dataModel != null)
@@ -125,6 +128,18 @@ class PythonUiArena {
               current()._construct(name, params, positional, keywords),
             );
           }),
+        'graphics': ExternalModule({
+          'Chart': MontyHostFunction('Chart', (positional, keywords) {
+            return MontyString(
+              current()._construct(
+                'Chart',
+                const ['spec', 'selection', 'description', 'height'],
+                positional,
+                keywords,
+              ),
+            );
+          }),
+        }),
         'bind': MontyHostFunction('bind', (positional, keywords) {
           final path = current()._single(positional, keywords, 'path', 'bind');
           if (path is! String ||
@@ -302,6 +317,19 @@ class PythonUiArena {
     }
 
     visit(rootToken);
+    if (components.any((node) => node['component'] == 'Chart')) {
+      if (components.length != 1) {
+        throw const ExternalException(
+          'ValueError',
+          'Chart must be the root of a standalone surface.',
+        );
+      }
+      try {
+        validateStaticChartSpec(components.single['spec']);
+      } on FormatException catch (error) {
+        throw ExternalException('ValueError', error.message);
+      }
+    }
     return StagedSurface(components, data == null ? null : _lowerData(data));
   }
 

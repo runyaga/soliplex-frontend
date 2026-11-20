@@ -9,7 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:json_schema_builder/json_schema_builder.dart'
     hide ValidationResult;
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
+
+import 'package:soliplex_monty/src/chart_module.dart';
 
 import 'package:soliplex_monty/src/lab_chart.dart';
 import 'package:soliplex_monty/src/lab_chart_api.dart';
@@ -584,6 +587,7 @@ class _PythonReplViewState extends State<PythonReplView> {
     try {
       return await (_starting ??= widget.startRuntime(_resourceLimits, {
         'ui': PythonUiArena.moduleFor(() => _arena),
+        'chart': chartModule(),
       }));
     } on Object catch (error) {
       _starting = null;
@@ -697,7 +701,11 @@ class _PythonReplViewState extends State<PythonReplView> {
   String? _commit(StagedSurface? staged) {
     if (staged == null) return null;
     final next = MessageProcessor<ComponentImplementation>(
-      catalogs: [_pythonBasicCatalog(), labChartCatalog()],
+      catalogs: [
+        _pythonBasicCatalog(),
+        labChartCatalog(),
+        chartGraphicsCatalog(),
+      ],
       validationConfig: ValidationConfig.strict,
     );
     final errors = <String>[

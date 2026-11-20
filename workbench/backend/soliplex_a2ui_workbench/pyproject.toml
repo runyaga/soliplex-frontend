@@ -15,6 +15,7 @@ dependencies = [
     "fastapi >= 0.115, < 1",
     "soliplex >= 0.93, < 0.94",
     "pydantic >= 2, < 3",
+    "jsonschema >= 4, < 5",
 ]
 
 [dependency-groups]

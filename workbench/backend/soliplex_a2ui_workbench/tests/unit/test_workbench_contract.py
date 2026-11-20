@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
-
+from soliplex_a2ui_workbench import workbench_schemas
 from soliplex_a2ui_workbench.workbench_schemas import (
     ActionEnvelope,
     ExportChart,
@@ -28,13 +28,12 @@ from soliplex_a2ui_workbench.workbench_schemas import (
     validate_pointer_owner,
     validate_registered_mounts,
 )
-from soliplex_a2ui_workbench import workbench_schemas
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "workbench"
 EXPECTED = {
-    "snapshot_content_v1.json": "32c52154c5e36a3474faa4742f19f6ddebb475bace80fda1130f4ae9a78cea84",
+    "snapshot_content_v1.json": "1615980ad68b18de8bf4af23b60a4c158dbbfa4c9f7ca8fb69b4ab232e47a7d6",
     "snapshot_fresh_v1.json": "cfb1c76e3cced37771b26483fdff0d4e3d847cffd6b2e7db18aeb122fabcc886",
-    "content_v1.json": "cdafd25c553cf668cf02e7f91fbe1e8c61d3af9dc99c4385d3729478610e90eb",
+    "content_v1.json": "55c062166bf65c5a34700d0e484edf054963dc4bda5ea88dcaec6eeb9d13f2e2",
     "export_action_v1.json": "a855f678939f4c955576a19be3a7902df45bc70e7ae9e4460ecc47a9f2452606",
     "handoff_pointer_v1.json": "257e670dc3261bce37ececea2ed2744a5bdef4ef052014907e37ac4b95659936",
     "intake_action_v1.json": "4158e1b2110a938b8678189f36594607c4ddb7bac1eb0ccffde4fad72c5e42c1",
@@ -363,7 +362,7 @@ def test_minimum_tool_manifest_is_authoritative_and_closed() -> None:
         "move_panel", "close_panel", "repair_program",
     }
     assert set(manifest) == expected
-    for name, model in manifest.items():
+    for model in manifest.values():
         assert model.__name__
         schema = model.model_json_schema()
         assert schema["additionalProperties"] is False

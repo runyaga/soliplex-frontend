@@ -1,8 +1,8 @@
 """Fixed declarative content templates and the minimum callable table."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from types import MappingProxyType
 
 from .workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
@@ -18,9 +18,29 @@ def form_record(activity_id: str, surface_id: str, title: str) -> dict[str, obje
             "component": "PlaceForm", "template": "intake", "title": title}
 
 
-def chart_record(activity_id: str, surface_id: str, title: str, kind: str, points: list[dict[str, object]]) -> dict[str, object]:
-    return {"activityMessageId": activity_id, "surfaceId": surface_id, "catalogId": GRAPHICS_CATALOG,
-            "component": "Chart", "spec": {"kind": kind, "series": [{"id": "values", "label": title, "points": points}]}}
+def chart_record(
+    activity_id: str, surface_id: str, title: str, kind: str,
+    points: list[dict[str, object]], scale: dict[str, float | None] | None = None,
+) -> dict[str, object]:
+    spec = {"kind": kind, "title": title}
+    if kind == "bar":
+        spec["points"] = points
+    elif kind == "line":
+        spec["series"] = [{"id": "values", "label": title, "points": points}]
+    elif kind == "pie":
+        spec["slices"] = points
+    elif kind == "gauge":
+        if len(points) != 1:
+            raise ValueError("gauge requires exactly one point")
+        scale = scale or {}
+        spec.update(value=points[0]["value"], min_value=scale.get("min_value", 0), max_value=scale.get("max_value", 100))
+        if scale.get("target") is not None:
+            spec["target"] = scale["target"]
+    else:
+        raise ValueError("chart kind must be bar, line, pie, or gauge")
+    return {"activityMessageId": activity_id, "surfaceId": surface_id,
+            "catalogId": GRAPHICS_CATALOG, "component": "Chart", "spec": spec,
+            "selection": [], "description": title}
 
 
 def python_record(activity_id: str, surface_id: str, title: str, source: str) -> dict[str, object]:

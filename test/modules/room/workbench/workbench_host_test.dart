@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_client/soliplex_client.dart';
 import 'package:soliplex_client/src/application/thread_history_replay.dart';
 import 'package:soliplex_design/soliplex_design.dart';
@@ -11,7 +12,6 @@ import 'package:soliplex_frontend/src/modules/room/a2ui/surface_view.dart';
 import 'package:soliplex_frontend/src/modules/room/message_expansions.dart';
 import 'package:soliplex_frontend/src/modules/room/room_providers.dart';
 import 'package:soliplex_frontend/src/modules/room/ui/message_timeline.dart';
-import 'package:soliplex_frontend/src/modules/room/workbench/chart_placeholder_catalog.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/layout_tree.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/panel_chrome.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/surface_mount_registry.dart';
@@ -27,7 +27,7 @@ void main() {
     _desktop(tester);
     final events = _events();
     var fold = _fold();
-    final liveStore = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final liveStore = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(liveStore.dispose);
     for (final event in events) {
       fold = fold.apply(DecodedEvent(event, event.toJson())).fold;
@@ -41,7 +41,7 @@ void main() {
     final controller = liveStore[formId]!;
     expect(controller.error, isNull);
     await tester.enterText(find.byType(TextField), 'Need help');
-    await tester.tap(find.text('North'));
+    await tester.tap(find.text('North').first);
     await tester.ensureVisible(find.byType(Checkbox));
     await tester.tap(find.byType(Checkbox));
     await tester.pump();
@@ -77,7 +77,7 @@ void main() {
         null,
         null,
         observer: null);
-    final replayStore = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final replayStore = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(replayStore.dispose);
     replayStore.ingest(history.messages.whereType<GenUiMessage>());
     expect(replayStore.layout!.layout, liveStore.layout!.layout);
@@ -94,7 +94,7 @@ void main() {
     _desktop(tester);
     final events = _events();
     var fold = _fold();
-    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final store = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(store.dispose);
     await tester.pumpWidget(_app(_host(store, const [])));
     for (final event in events.take(2)) {
@@ -128,7 +128,7 @@ void main() {
       () {
     final events = _events();
     var fold = _fold();
-    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final store = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(store.dispose);
     for (final event in events.take(2)) {
       fold = fold.apply(DecodedEvent(event, event.toJson())).fold;
@@ -240,7 +240,7 @@ void main() {
       'sidebar form grows beyond the former panel height and Submit is hittable',
       (tester) async {
     _desktop(tester);
-    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final store = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(store.dispose);
     var fold = _fold();
     for (final event in _events()) {
@@ -261,7 +261,7 @@ void main() {
       (tester) async {
     _desktop(tester);
     final semantics = tester.ensureSemantics();
-    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    final store = ChatSurfaceStore(catalogs: [chartGraphicsCatalog()]);
     addTearDown(store.dispose);
     var fold = _fold();
     for (final event in _events()) {
@@ -314,7 +314,7 @@ void _expectCanvas(WidgetTester tester) {
     expect(
         find.descendant(
             of: find.byType(PanelChrome), matching: find.text(label)),
-        findsOneWidget);
+        label == 'North' ? findsNWidgets(2) : findsOneWidget);
   }
   expect(find.byType(TextField), findsOneWidget);
   expect(
@@ -328,8 +328,9 @@ void _expectCanvas(WidgetTester tester) {
           matching: find.text('Surface in workspace')),
       findsNWidgets(2));
   expect(find.text('Workspace layout updated'), findsOneWidget);
-  expect(find.text('bar chart preview'), findsOneWidget);
-  expect(find.text('North: 80.0'), findsOneWidget);
+  expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == 'BarChart'),
+      findsWidgets);
+  expect(find.text('Counts'), findsWidgets);
   expect(find.textContaining('Cannot render surface'), findsNothing);
   expect(tester.takeException(), isNull);
 }

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:a2ui_agent/a2ui_agent.dart';
 import 'package:a2ui_flutter/basic_catalog.dart';
-import 'package:soliplex_frontend/src/modules/room/workbench/chart_placeholder_catalog.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 import 'package:soliplex_monty/src/lab_chart.dart';
 import 'package:soliplex_monty/src/lab_chart_api.dart';
@@ -15,7 +15,7 @@ Map<String, Object?> workbenchTeaching() {
   final catalogs = [
     basicCatalog(),
     ...workbenchCatalogs(),
-    chartPlaceholderCatalog(),
+    chartGraphicsCatalog(),
     labChartCatalog(),
   ];
   return {
@@ -25,6 +25,8 @@ Map<String, Object?> workbenchTeaching() {
     'pythonSignatures': {
       for (final entry in {...basicSignatures, ...labChartSignatures}.entries)
         entry.key: 'ui.${entry.key}(${entry.value.join(', ')}, id=...)',
+      'graphics.Chart':
+          'ui.graphics.Chart(spec, selection=[], description=..., height=280)',
       'bind': 'ui.bind(path)',
       'Event': 'ui.Event(name, context={})',
       'show': 'ui.show(root, data={})',

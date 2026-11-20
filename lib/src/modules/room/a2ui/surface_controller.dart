@@ -4,6 +4,7 @@ import 'package:a2ui_core/a2ui_core.dart';
 import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:a2ui_flutter/basic_catalog.dart';
 import 'package:flutter/widgets.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 
 /// Owns validated A2UI surfaces independently of chat navigation.
 ///
@@ -17,7 +18,12 @@ class ChatSurfaceController extends ChangeNotifier {
     List<CatalogImplementation> catalogs = const [],
   }) {
     processor = MessageProcessor<ComponentImplementation>(
-      catalogs: [_basicCatalog(), ...catalogs],
+      catalogs: [
+        _basicCatalog(),
+        if (!catalogs.any((catalog) => catalog.id == chartGraphicsCatalogId))
+          chartGraphicsCatalog(),
+        ...catalogs,
+      ],
       validationConfig: ValidationConfig.strict,
     );
     processor.model.onSurfaceCreated.subscribe((_) {
