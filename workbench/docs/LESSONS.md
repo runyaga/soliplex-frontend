@@ -6,6 +6,8 @@ Newest first. Each entry: what happened, the evidence, what changed.
 
 | Lesson | Evidence | What changed |
 | --- | --- | --- |
+| Chrome drops streamed response bodies | `response.text()` on the AG-UI SSE stream failed in 16 of 20 model cases with "No resource with given identifier" | The harness routes the run request, fetches it itself and fulfils the page with the full body |
+| A fixed-height window hides what a program draws | Glimmer wrote a correct tally program. The window clipped at about 450 px, so Run and the buttons were in the semantics tree with blank pixels | Windows and the source editor must scroll or size to content. The pixel check caught it |
 | Type into Flutter web with key events | The first model-suite run failed all 20 prompts: `fill` hit a read-only text area, and `insertText` left Flutter's editing state empty | The harness clicks the composer, waits, and sends key events. Twenty failures in one shape point at the harness first |
 | Flutter web merges labels and hides field values | A textbox was named "Scenario intake Question Districts". Chart text sat in one node. A window title was only a group label. A text area's value was empty until focused | Harness matches whole words inside a labelled region and focuses a field before reading it. The merged textbox name is an accessibility bug to fix in the form |
 | Locate regions by label, not by geometry | The first live harness run reported 0 matches for widgets visible in the screenshot. It placed regions relative to the composer, which is centred on the page while the chat column sits to its left | Each workbench region carries a semantics label and the harness scopes its lookups to it |

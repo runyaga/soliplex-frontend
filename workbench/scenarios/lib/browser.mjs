@@ -101,30 +101,47 @@ export async function freshThread(page, base, alias, room, recordThread) {
 }
 
 export async function sendPrompt(page, room, prompt, timeoutMs, threadId) {
-  // Observe the actual request made by Flutter. No synthetic agent API call.
-  const responsePromise = page.waitForResponse(response => {
-    const path = new URL(response.url()).pathname;
-    return response.request().method() === 'POST' && path.includes(`/rooms/${room}/agui/${threadId}/`) && path.split('/').length >= 8;
-  }, { timeout: timeoutMs });
-  // Install rejection handling before any UI action can fail.
-  responsePromise.catch(() => {});
-  // Flutter web keeps the text area read-only until it has focus, and only
-  // keyboard input reaches its editing state.
-  await composer(page).click();
-  await pause(300);
-  await page.keyboard.type(prompt);
-  await page.keyboard.press('Enter');
-  const response = await responsePromise;
-  if (!response.ok()) throw new Error(`Agent HTTP ${response.status()}`);
-  const body = await bounded(response.text(), timeoutMs, 'Agent stream timed out');
-  const events = parseSSE(body);
-  const summary = summarizeEvents(events);
-  const parts = new URL(response.url()).pathname.split('/');
-  summary.threadId = parts.at(-2);
-  if (!summary.completed && summary.runErrors.length === 0) throw new Error('Agent stream ended without RUN_FINISHED');
-  await waitForComposer(page);
-  await pause(500);
-  return summary;
+  // Chrome does not keep a streamed SSE body, so response.text() fails at
+  // random. Route the run request, fetch it here, and hand the full body to
+  // the page. The request is the one Flutter built: no synthetic agent call.
+  const isRun = url => {
+    const path = new URL(url).pathname;
+    return path.includes(`/rooms/${room}/agui/${threadId}/`) && path.split('/').length === 8;
+  };
+  let settle;
+  const captured = new Promise((resolve, reject) => { settle = { resolve, reject }; });
+  captured.catch(() => {});
+  const handler = async route => {
+    if (route.request().method() !== 'POST' || !isRun(route.request().url())) return route.fallback();
+    try {
+      const response = await route.fetch({ timeout: timeoutMs });
+      const body = await response.text();
+      await route.fulfill({ response, body });
+      settle.resolve({ status: response.status(), ok: response.ok(), url: route.request().url(), body });
+    } catch (error) {
+      settle.reject(error);
+      await route.abort().catch(() => {});
+    }
+  };
+  await page.route('**/agui/**', handler);
+  try {
+    // Flutter web keeps the text area read-only until it has focus, and only
+    // keyboard input reaches its editing state.
+    await composer(page).click();
+    await pause(300);
+    await page.keyboard.type(prompt);
+    await page.keyboard.press('Enter');
+    const response = await bounded(captured, timeoutMs, 'Agent stream timed out');
+    if (!response.ok) throw new Error(`Agent HTTP ${response.status}`);
+    const summary = summarizeEvents(parseSSE(response.body));
+    summary.threadId = new URL(response.url).pathname.split('/').at(-2);
+    if (!summary.completed && summary.runErrors.length === 0) throw new Error('Agent stream ended without RUN_FINISHED');
+    await waitForComposer(page);
+    await pause(500);
+    return summary;
+  } finally {
+    await page.unroute('**/agui/**', handler);
+  }
 }
 
 async function bounded(promise, timeoutMs, message) {
