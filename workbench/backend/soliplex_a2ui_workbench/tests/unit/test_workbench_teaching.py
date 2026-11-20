@@ -120,3 +120,6 @@ def test_repair_teaching_explains_both_ai_fix_states():
     assert "result.aiFix" in text and "result.instruction" in text
     assert 'do not say "press Run"' in text
     assert 'When autoRun is false, say "press Run"' in text
+    assert 'Read repair_program.autoRun' in text
+    assert 'only when true say "the fix will run now"' in text
+    assert 'Never claim a repair ran until a successful workbench.program.run_result arrives.' in text

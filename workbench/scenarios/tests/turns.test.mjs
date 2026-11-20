@@ -304,14 +304,14 @@ test('custom form submission and CSV checks ignore the case of model-chosen fiel
   assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values: { ...values, color: 'Red' } }, turn).pass, false);
 });
 
-function programFixture({ repair = true, arrive = true, success = true, unrelated = false } = {}) {
+function programFixture({ repair = true, arrive = true, success = true, unrelated = false, otherSurface = false, otherChain = false } = {}) {
   let handler;
   const operations = [];
   const turn = async (name, context, events = []) => {
     const body = [...events, { type: 'RUN_FINISHED' }].map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
     await handler({
       request: () => ({ method: () => 'POST', url: () => unrelated ? url.replace('thread-id', 'other-thread') : url,
-        postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name, context } } } }) }),
+        postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name, context, surfaceId: name === 'workbench.program.run_result' && otherSurface ? 'other-program' : 'program' } } } }) }),
       fetch: async () => ({ text: async () => body, ok: () => true }),
       fulfill: async () => operations.push('fulfill'),
       abort: async () => operations.push('abort'),
@@ -323,11 +323,11 @@ function programFixture({ repair = true, arrive = true, success = true, unrelate
     unroute: async (_, callback) => { assert.equal(callback, handler); operations.push('unroute'); },
     async trigger() {
       if (!repair) return;
-      await turn('workbench.program.repair', { result: { run: 1, aiFix: true, autoRun: true } }, [
+      await turn('workbench.program.repair', { result: { run: 1, aiFix: true, autoRun: true, chainId: 'chain-test' } }, [
         { type: 'TOOL_CALL_START', toolCallName: 'repair_program' },
         ...(arrive ? [{ type: 'ACTIVITY_SNAPSHOT' }] : []),
       ]);
-      if (success) await turn('workbench.program.run_result', { outcome: 'success', output: '766228' });
+      if (success) await turn('workbench.program.run_result', { outcome: 'success', output: '766228', chainId: otherChain ? 'other-chain' : 'chain-test' });
     },
   };
   return { page, operations };
@@ -393,4 +393,35 @@ test('run_program clicks through the action dispatcher and returns observation c
   assert.ok(operations.includes('click:Submit'));
   assert.ok(waits.includes(20000));
   assert.equal(operations.at(-1), 'unroute');
+});
+
+
+test('fix examples require automatic output and a second run in the same window', async () => {
+  const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  for (const id of ['ai_fix_on', 'syntax_error_ai_fix', 'name_error_ai_fix', 'type_check_ai_fix']) {
+    const action = cases.find(c => c.id === id).actions.at(-1);
+    assert.equal(action.expectRepair, true);
+    assert.equal(action.expectedOutput, '766228');
+    assert.ok(action.window);
+    for (const name of ['Run 2', '766228', 'ok']) {
+      assert.ok(action.assertions.some(a => a.name === name && a.window === action.window && a.region === 'canvas'));
+    }
+  }
+  const off = cases.find(c => c.id === 'type_check_no_fix');
+  assert.equal(off.actions[0].expectRepair, false);
+  assert.ok(off.assertions.some(a => a.name === 'unsupported-operator'));
+  const { page } = programFixture();
+  await assert.rejects(captureProgramTurns(page, { ...options, expectedOutput: 'wrong value' }, () => page.trigger(), true), /output did not match/);
+});
+
+
+test('repair success is bound to its program, chain and visible window assertions', async () => {
+  for (const settings of [{ otherSurface: true }, { otherChain: true }]) {
+    const { page } = programFixture(settings);
+    await assert.rejects(captureProgramTurns(page, options, () => page.trigger(), true), /repaired program and chain/);
+  }
+  const { page } = fixture();
+  page.trigger = async () => {};
+  await assert.rejects(performActions(page, [{ kind: 'run_program', name: 'Submit', expectRepair: false,
+    assertions: [{ kind: 'text', name: 'Run 2' }] }], options, undefined, noWait, async () => [{ pass: false }]), /Action assertions failed/);
 });

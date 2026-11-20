@@ -102,7 +102,7 @@ class WorkbenchCatalogValidator:
                 raise ValueError("surfaceRevision must be a non-negative integer")
         record_shapes = {
             (GRAPHICS_CATALOG, "Chart"): common | {"spec", "selection", "description", "height"},
-            (LAB_CATALOG, "PythonRepl"): common | {"source", "title", "output"},
+            (LAB_CATALOG, "PythonRepl"): common | {"source", "title", "output", "typeCheck"},
             (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title", "fields"},
         }
         allowed_record_keys = record_shapes.get((catalog_id, component), common | {"properties"})
@@ -115,6 +115,8 @@ class WorkbenchCatalogValidator:
         if catalog_id == GRAPHICS_CATALOG and component == "Chart":
             validate_chart({key: record[key] for key in ("spec", "selection", "description", "height") if key in record})
         elif catalog_id == LAB_CATALOG and component == "PythonRepl":
+            if "typeCheck" in record and type(record["typeCheck"]) is not bool:
+                raise ValueError("typeCheck must be boolean")
             source = record.get("source")
             output = record.get("output", "")
             if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 12_000:
@@ -270,11 +272,11 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     sid = str(record["surfaceId"])
     catalog_id = str(record["catalogId"])
     component = str(record["component"])
-    data = {key: record[key] for key in ("spec", "source", "title", "template", "output") if key in record}
+    data = {key: record[key] for key in ("spec", "source", "title", "template", "output", "typeCheck") if key in record}
     if component == "Chart":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": record["spec"], "selection": record["selection"], "description": record["description"], **({"height": record["height"]} if "height" in record else {})}
     elif component == "PythonRepl":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", "onFailure": {"event": {
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", **({"typeCheck": record["typeCheck"]} if "typeCheck" in record else {}), "onFailure": {"event": {
             "name": "workbench.program.repair", "context": {"result": {"@path": "/output"}},
         }}, "onWorkbench": {"event": {
             "name": "workbench.program.layout", "context": {

@@ -609,6 +609,7 @@ def test_program_repair_reaches_real_model_with_ai_fix_state(boundary, enabled):
     response = send(boundary, action)
     assert response.status_code == 200, response.text
     assert len(boundary.captured) == 1
+    assert boundary.stored[-1].state["workbenchAction"] == CanvasSubmission.model_validate(action).model_dump(mode="json", exclude_none=True)
     messages = submission_messages(CanvasSubmission.model_validate(action))
     data = json.loads(messages[0].content)
     assert data["userAction"]["context"]["result"]["aiFix"] is enabled

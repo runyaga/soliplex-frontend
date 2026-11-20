@@ -32,6 +32,9 @@ class RepairChain extends ChangeNotifier {
   /// Repair rounds requested so far.
   int rounds = 0;
 
+  /// Completed executions, retained across repair surface replacements.
+  int runs = 0;
+
   /// The attempt a repaired editor must carry to run on arrival, or null
   /// when no repair is pending.
   int? awaiting;

@@ -1,0 +1,2 @@
+# Fix the missing closing parenthesis, then read the value from the run log.
+print(pow(7, 12345, 1000003)

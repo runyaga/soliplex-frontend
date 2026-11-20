@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'fixtures/workbench_activity_events.dart';
 import 'support/lab_surface.dart';
+import 'support/monty.dart';
 
 void main() {
   testWidgets('server Python publication validates and stays inert on replay', (
@@ -82,7 +83,7 @@ void main() {
     await tester.runAsync(
       () => tester.tap(find.byKey(const ValueKey('python-repl-run'))),
     );
-    await tester.pumpAndSettle();
+    await pumpUntil(tester, () => actions.isNotEmpty);
     expect(starts, 1);
     final action = actions.single;
     expect(action['name'], 'workbench.program.run_result');

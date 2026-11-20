@@ -21,6 +21,10 @@ class ChatSurfaceStore extends ChangeNotifier {
   final Set<String> _invalid = {};
   bool _closed = false;
 
+  // Surface delivery and RUN_FINISHED may share a frame. Remember the turn
+  // observed by this in-memory store so its final replacement stays live.
+  String? _lastActiveRunId;
+
   final Map<String, WorkbenchRegistration> _registrations = {};
   final _layoutReducer = LayoutReducer();
   String? _layoutActivityId;
@@ -40,6 +44,9 @@ class ChatSurfaceStore extends ChangeNotifier {
   /// This is independent of which timeline rows have been virtualized.
   void ingest(Iterable<GenUiMessage> activities, {String? activeRunId}) {
     if (_closed) throw StateError('Surface store is closed');
+    final deliveryRunId = activeRunId ?? _lastActiveRunId;
+    // Allow the final batch once; later history ingestion has no live turn.
+    _lastActiveRunId = activeRunId;
     final candidates = <(WorkbenchRegistration, List<Map<String, Object?>>)>[];
     var changed = false;
     for (final activity in activities) {
@@ -75,7 +82,11 @@ class ChatSurfaceStore extends ChangeNotifier {
       }
       final before = _wire[activity.id];
       final controller = obtain(activity.id, operations,
-          live: activeRunId != null && activity.runId == activeRunId);
+          live: deliveryRunId != null &&
+              (activity.runId == deliveryRunId ||
+                  (activity.data['updatedByRunIds'] is List &&
+                      (activity.data['updatedByRunIds'] as List)
+                          .contains(deliveryRunId))));
       changed |= !identical(before, _wire[activity.id]);
       if (registration != null &&
           controller.error == null &&
@@ -243,6 +254,10 @@ class ChatSurfaceOrigin extends InheritedWidget {
   static bool isLive(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ChatSurfaceOrigin>()?.live ??
       false;
+
+  /// The in-flight model turn around this surface, or null after it settles.
+  static String? activeRunIdOf(BuildContext context) =>
+      ChatSurfaceScope.activeRunIdOf(context);
 
   @override
   bool updateShouldNotify(ChatSurfaceOrigin oldWidget) =>

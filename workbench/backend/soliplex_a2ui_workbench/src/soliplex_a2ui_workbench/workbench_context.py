@@ -22,6 +22,7 @@ class WorkbenchToolContext:
     run_id: str
     allowed_rooms: frozenset[str] | None = None
     installation: object | None = None
+    repair_request: dict | None = None
     expected_revision: int | None = field(default=None, init=False)
     _mutation_index: int = field(default=0, init=False)
 

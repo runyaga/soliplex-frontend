@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 /// Browser-side marker; browser tests must not import a native worker.
 const Object skipWithoutMonty = 'Monty runtime is native-only';
 
+/// Placeholder for shared test sources; native-worker tests are skipped.
+const String montyWorker = '';
+
 /// Runtime starter stub for browser test loading.
 class MontyStarter {
   MontyStarter({this.delay = Duration.zero});
@@ -30,6 +33,10 @@ Future<void> pumpUntil(
 }) async {
   final end = DateTime.now().add(timeout);
   while (!done() && DateTime.now().isBefore(end)) {
+    // Real async work (preference reads) needs the real zone, as on the VM.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
     await tester.pump(const Duration(milliseconds: 20));
   }
   if (!done()) fail('Timed out waiting for browser test condition');

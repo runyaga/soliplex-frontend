@@ -71,7 +71,7 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
 
 // Observe every action turn, including a repair followed by its automatic Run.
 // Off must stay quiet for the full 20 seconds; a single captured turn is a failure.
-export async function captureProgramTurns(page, { room, threadId, timeoutMs }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+export async function captureProgramTurns(page, { room, threadId, timeoutMs, expectedOutput }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
   const turns = [];
   let completed;
   let rejected;
@@ -96,6 +96,7 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs }, t
         const action = input?.forwardedProps?.a2uiAction?.userAction;
         summary.actionName = action?.name;
         summary.programContext = action?.context;
+        summary.surfaceId = action?.surfaceId;
         summary.activitySnapshots = events.filter(e => e.type === 'ACTIVITY_SNAPSHOT').length;
         turns.push(summary);
         await onTurn(summary);
@@ -128,6 +129,13 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs }, t
     const runs = turns.filter(t => t.actionName === 'workbench.program.run_result');
     if (expectRepair && (repairs.length !== 1 || repairs[0].programContext?.result?.run !== 1 || repairs[0].programContext?.result?.aiFix !== true || repairs[0].programContext?.result?.autoRun !== true || !repairs[0].toolCalls.some(name => ['repair_program', 'run_python_client'].includes(name)) || repairs[0].activitySnapshots < 1 || runs.length !== 1 || runs[0].programContext?.outcome !== 'success' || turns.length !== 2)) {
       throw new Error(`Expected one repair arrival and one automatic success: ${repairs.length} repairs, ${runs.length} results, ${turns.length} action turns`);
+    }
+    if (expectRepair && (!repairs[0].surfaceId || repairs[0].surfaceId !== runs[0].surfaceId ||
+        !repairs[0].programContext.result.chainId || repairs[0].programContext.result.chainId !== runs[0].programContext.chainId)) {
+      throw new Error('Automatic Run did not belong to the repaired program and chain');
+    }
+    if (expectRepair && expectedOutput && !runs[0].programContext.output?.includes(expectedOutput)) {
+      throw new Error('Automatic Run output did not match the expected value');
     }
     return { actionTurns: turns.length, repairRequests: repairs.length, successfulRuns: runs.length, observationMs: expectRepair ? undefined : 20000 };
   } finally {

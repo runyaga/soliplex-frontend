@@ -264,8 +264,8 @@ def test_program_revision_preserves_mount_window_and_position_without_execution(
     assert result["surfaceId"] == program["surfaceId"]
     assert result["nodeId"] == program["nodeId"]
     assert result["execution"] == "client_controlled"
-    assert "autoRun=true runs automatically" in result["instruction"]
-    assert "otherwise say press Run" in result["instruction"]
+    assert result["autoRun"] is False
+    assert "press Run" in result["instruction"]
     content = next(r for r in after["content"] if r["surfaceId"] == result["surfaceId"])
     assert content["source"].endswith('ui.show(ui.Text("fixed"))')
     assert content["activityMessageId"] == program["activityMessageId"]

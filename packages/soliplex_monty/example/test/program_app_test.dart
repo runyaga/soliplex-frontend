@@ -11,6 +11,7 @@ import 'package:soliplex_frontend/src/modules/room/a2ui/surface_scope.dart';
 import 'package:soliplex_frontend/src/modules/room/a2ui/surface_view.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/workbench_host.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
+import 'package:soliplex_monty/src/program_type_check.dart';
 
 import '../../test/support/monty.dart';
 
@@ -44,6 +45,7 @@ void main() {
         SharedPreferences.setMockInitialValues({});
         final starter = MontyStarter();
         final actions = <Map<String, Object?>>[];
+        var checks = 0;
         final fixture =
             jsonDecode(
                   File('test/fixtures/program_app.json').readAsStringSync(),
@@ -51,7 +53,19 @@ void main() {
                 as Map<String, dynamic>;
         final messages = <String, GenUiMessage>{};
         final store = ChatSurfaceStore(
-          catalogs: [labCatalog(startRuntime: starter.call)],
+          catalogs: [
+            labCatalog(
+              startRuntime: starter.call,
+              checkTypes: (source, limits) {
+                checks++;
+                return checkProgramTypes(
+                  source,
+                  limits,
+                  workerLocation: montyWorker,
+                );
+              },
+            ),
+          ],
           onAction: (_, action) => actions.add(action),
         );
         void ingest(String phase) {
@@ -61,6 +75,15 @@ void main() {
             final operations =
                 jsonDecode(jsonEncode(content['a2ui_operations'])) as List;
             for (final op in operations.cast<Map<String, dynamic>>()) {
+              final components = op['updateComponents'];
+              if (components is Map) {
+                for (final component in components['components'] as List) {
+                  if (component is Map &&
+                      component['component'] == 'PythonRepl') {
+                    component['typeCheck'] = true;
+                  }
+                }
+              }
               final update = op['updateDataModel'];
               if (update is Map &&
                   update['value'] is Map &&
@@ -119,6 +142,7 @@ void main() {
         ingest('initial');
         await mount();
         expect(starter.starts, 0);
+        expect(checks, 0);
         expect(appWindow, findsNothing);
         Future<void> runProgram() async {
           final before = actions.length;
@@ -181,6 +205,7 @@ void main() {
         );
         expect(appWindow.evaluate().single, same(appElement));
         expect(actions, hasLength(1));
+        expect(checks, 2); // Run and the user-started event, once each.
         await runProgram();
         await tester.pumpAndSettle();
         expect(appWindow.evaluate().single, same(appElement));
@@ -206,6 +231,7 @@ void main() {
         expect(find.text('Count: 0'), findsNothing);
         expect(starter.starts, 1);
         expect(actions, hasLength(3));
+        expect(checks, 4); // Reload and replay did not check the source.
         await runProgram();
         await tester.pumpAndSettle();
         expect(starter.starts, 2);

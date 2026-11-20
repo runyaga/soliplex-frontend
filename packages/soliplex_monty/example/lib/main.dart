@@ -33,7 +33,10 @@ Future<void> main() async {
     final flavor = await workbenchFlavor(
       identity: _identity,
       callbackParams: oauthCallback,
-      surfaceCatalogs: workbenchCatalogs(isLive: ChatSurfaceOrigin.isLive),
+      surfaceCatalogs: workbenchCatalogs(
+        isLive: ChatSurfaceOrigin.isLive,
+        activeRunId: ChatSurfaceOrigin.activeRunIdOf,
+      ),
       presentation: WorkbenchRoomAllowlistPresentation(
         rooms: _workbenchRooms,
         host: const ClientWorkbenchPresentation(),
