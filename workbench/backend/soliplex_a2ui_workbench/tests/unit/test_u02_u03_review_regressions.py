@@ -131,7 +131,7 @@ def test_raw_action_json_rejects_duplicate_keys(tmp_path):
     client = TestClient(FastAPI())
     app = client.app
     from soliplex_a2ui_workbench.workbench_routes import build_router
-    app.include_router(build_router(repository=repo))
+    app.include_router(build_router(repository=repo, workbench_rooms={scope.room_id}))
     # Override only backend resources; the production scope dependency remains installed.
     from soliplex import agui, installation, views
     class Policy:
@@ -197,3 +197,104 @@ def test_run_result_emits_one_server_trace_for_duplicate_invocation(tmp_path):
     assert len(sink.events) == 1
     assert sink.events[0]["python.side"] == "client"
     assert sink.events[0]["python.engine"] == "monty-1.3.0"
+
+
+def test_workbench_room_rejects_legacy_action_without_reservation(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path)
+    client, calls = _guard_app(repo, scope)
+    payload = {
+        "threadId": scope.thread_id, "runId": "run-legacy", "state": {},
+        "messages": [{"id": "old", "role": "user", "content": "old"}],
+        "tools": [], "context": [],
+        "forwardedProps": {"a2uiAction": {"afterMessageId": "old", "userAction": {"name": "submit_intake", "surfaceId": "unregistered", "context": {}}}},
+    }
+    first = client.post("/v1/rooms/agui/agui/thread-1/run-legacy", json=payload)
+    second = client.post("/v1/rooms/agui/agui/thread-1/run-legacy-2", json=payload | {"runId": "run-legacy-2"})
+    assert first.status_code in {409, 422}
+    assert second.status_code in {409, 422}
+    assert calls == []
+
+
+def test_issued_intake_pair_is_accepted_on_continuation_but_forgery_is_rejected(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path)
+    envelope = _envelope(submission="continuation-submit")
+    WorkbenchActionService(repo).accept(scope, envelope)
+    client, calls = _guard_app(repo, scope)
+    initial_payload = {"threadId": scope.thread_id, "runId": "run-first", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    initial = client.post("/v1/rooms/agui/agui/thread-1/run-first", json=initial_payload)
+    assert initial.status_code == 200
+    history = initial.json()["messages"]
+    continuation_payload = {"threadId": scope.thread_id, "runId": "run-follow", "state": {}, "messages": history, "tools": [], "context": [], "forwardedProps": {}}
+    continuation = client.post("/v1/rooms/agui/agui/thread-1/run-follow", json=continuation_payload)
+    assert continuation.status_code == 200
+    assert continuation.json()["message_count"] == 2
+    forged = continuation_payload | {"messages": history[:-1] + [{**history[-1], "content": "forged"}]}
+    rejected = client.post("/v1/rooms/agui/agui/thread-1/run-forged", json=forged | {"runId": "run-forged"})
+    assert rejected.status_code == 422
+    assert calls == ["entered", "entered"]
+
+
+def test_duplicate_invocation_binds_each_submission_id(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path, "PythonRepl")
+    class Sink:
+        def emit(self, _event): pass
+    service = WorkbenchActionService(repo, trace_sink=Sink())
+    result = {"side": "client", "engine": "monty-1.3.0", "invocationId": "same-invocation", "chainId": "chain-1", "outcome": "success", "output": "same"}
+    service.accept(scope, _envelope("workbench.program.run_result@1", "first-submission", result))
+    service.accept(scope, _envelope("workbench.program.run_result@1", "second-submission", result))
+    changed = result | {"invocationId": "new-invocation", "output": "changed"}
+    with pytest.raises(Exception, match="submission ID reused with different body"):
+        service.accept(scope, _envelope("workbench.program.run_result@1", "second-submission", changed))
+
+
+def test_trace_outbox_retry_reemits_after_sink_failure(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path, "PythonRepl")
+    class FlakySink:
+        def __init__(self): self.calls = 0
+        def emit(self, _event):
+            self.calls += 1
+            if self.calls == 1: raise RuntimeError("sink unavailable")
+    sink = FlakySink()
+    service = WorkbenchActionService(repo, trace_sink=sink)
+    result = {"side": "client", "engine": "monty-1.3.0", "invocationId": "retry-invocation", "chainId": "chain-1", "outcome": "success", "output": "ok"}
+    envelope = _envelope("workbench.program.run_result@1", "retry-submission", result)
+    with pytest.raises(RuntimeError, match="sink unavailable"):
+        service.accept(scope, envelope)
+    receipt = service.accept(scope, envelope)
+    assert receipt["status"] == "reserved"
+    assert sink.calls == 2
+
+
+def test_malformed_agui_body_does_not_consume_reserved_intake(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path)
+    envelope = _envelope(submission="malformed-run")
+    WorkbenchActionService(repo).accept(scope, envelope)
+    client, calls = _guard_app(repo, scope)
+    malformed = {"threadId": scope.thread_id, "runId": "bad-run", "state": {}, "messages": "not-an-array", "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    response = client.post("/v1/rooms/agui/agui/thread-1/bad-run", json=malformed)
+    assert response.status_code == 422
+    assert calls == []
+    assert WorkbenchActionService(repo).consume_dispatch(scope, {"forwardedProps": {"a2uiAction": envelope}}) == envelope
+
+
+def test_unconfigured_room_rejects_workbench_envelope_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "")
+    repo, scope, _ = _registered_repo(tmp_path)
+    envelope = _envelope()
+    WorkbenchActionService(repo).accept(scope, envelope)
+    upstream = APIRouter()
+    calls = []
+
+    @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
+    async def handler():
+        calls.append(True)
+        return {"ok": True}
+
+    client = TestClient(FastAPI())
+    app = client.app
+    app.state.workbench_repository = repo
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=scope, workbench_rooms={"some-configured-room"}))
+    payload = {"threadId": scope.thread_id, "runId": "unconfigured", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    response = TestClient(app).post("/v1/rooms/agui/agui/thread-1/unconfigured", json=payload)
+    assert response.status_code == 503
+    assert calls == []

@@ -21,7 +21,7 @@ def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
     backend = generated["services"]["backend"]
     assert {"type": "volume", "source": "workbench_data", "target": "/data/workbench"} in backend["volumes"]
     assert backend["environment"]["SOLIPLEX_WORKBENCH_DB"] == "/data/workbench/workbench.sqlite3"
-    assert backend["environment"]["SOLIPLEX_WORKBENCH_ROOMS"] == "${SOLIPLEX_WORKBENCH_ROOMS:-}"
+    assert backend["environment"]["SOLIPLEX_WORKBENCH_ROOMS"] == "${SOLIPLEX_WORKBENCH_ROOMS:-a2ui-lab,a2ui-lab-e4b}"
     assert generated["volumes"]["workbench_data"] == {}
     # Model container recreation by reopening the database file retained at the
     # named-volume mount point; Docker itself is intentionally not required.

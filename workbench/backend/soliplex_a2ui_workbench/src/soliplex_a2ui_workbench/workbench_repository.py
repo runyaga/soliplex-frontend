@@ -271,16 +271,16 @@ class SQLiteWorkbenchRepository:
             details = dict(receipt_details or {})
             invocation_id = details.pop("invocationId", None)
             invocation_digest = details.pop("invocationDigest", None)
+            existing_invocation = False
             if invocation_id is not None:
                 invocation = self._db.execute("SELECT digest, receipt_json FROM workbench_invocation WHERE actor=? AND server=? AND room=? AND thread=? AND invocation_id=?", (*scope.key(), invocation_id)).fetchone()
                 if invocation:
                     if invocation["digest"] != invocation_digest:
                         raise PublicationConflict("invocation ID reused with different result")
-                    self._db.execute("COMMIT")
-                    return json.loads(invocation["receipt_json"])
+                    existing_invocation = True
             receipt = {"status": "reserved", "submissionId": submission_id, **details}
             self._db.execute("INSERT INTO workbench_action VALUES(?,?,?,?,?,?,?,?,?,?)", (*key, digest, encoded, "reserved", expected_revision, json.dumps(receipt)))
-            if invocation_id is not None:
+            if invocation_id is not None and not existing_invocation:
                 self._db.execute("INSERT INTO workbench_invocation VALUES(?,?,?,?,?,?,?)", (*scope.key(), invocation_id, invocation_digest, json.dumps(receipt)))
                 if "trace" in details:
                     self._db.execute("INSERT INTO workbench_trace_outbox VALUES(?,?,?,?,?,?,0)", (*scope.key(), invocation_id, json.dumps(details["trace"], separators=(",", ":"))))
@@ -314,6 +314,14 @@ class SQLiteWorkbenchRepository:
             if self._db.in_transaction:
                 self._db.execute("ROLLBACK")
             raise
+
+    def issued_intake_submissions(self, scope: WorkbenchScope) -> list[dict[str, object]]:
+        """Return intake reservations already consumed for this exact thread."""
+        rows = self._db.execute(
+            "SELECT envelope_json FROM workbench_action WHERE actor=? AND server=? AND room=? AND thread=? AND state='dispatching'",
+            scope.key(),
+        ).fetchall()
+        return [json.loads(row["envelope_json"]) for row in rows]
 
     def emit_trace_once(self, scope: WorkbenchScope, invocation_id: str, sink) -> bool:
         """Deliver one accepted invocation event and mark it emitted atomically."""

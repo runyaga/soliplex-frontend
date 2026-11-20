@@ -56,22 +56,57 @@ def _reject_client_workbench_intake_tool(payload: dict[str, object]) -> None:
             function = tool.get("function")
             if tool.get("name") == WORKBENCH_INTAKE_TOOL_NAME or (isinstance(function, dict) and function.get("name") == WORKBENCH_INTAKE_TOOL_NAME):
                 raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
+
+
+def _validate_issued_intake_history(payload: dict[str, object], issued: list[dict[str, object]]) -> None:
     messages = payload.get("messages")
     if not isinstance(messages, list):
-        return
-    for message in messages:
-        if not isinstance(message, dict):
-            continue
-        if message.get("name") == WORKBENCH_INTAKE_TOOL_NAME:
-            raise HTTPException(422, "client-supplied workbench_intake messages are forbidden")
-        calls = message.get("toolCalls", message.get("tool_calls"))
-        if isinstance(calls, list) and any(
+        raise HTTPException(422, "AG-UI messages must be an array")
+    try:
+        adapter = TypeAdapter(Message)
+        normalized = [adapter.validate_python(item).model_dump(mode="json", by_alias=True, exclude_none=True) for item in messages]
+        issued_pairs = []
+        for envelope in issued:
+            pair = synthetic_intake_messages(envelope)
+            issued_pairs.append([
+                adapter.validate_python(item).model_dump(mode="json", by_alias=True, exclude_none=True)
+                for item in pair
+            ])
+    except (TypeError, ValueError, ValidationError) as exc:
+        raise HTTPException(422, "invalid AG-UI message history") from exc
+    index = 0
+    while index < len(normalized):
+        message = normalized[index]
+        calls = message.get("toolCalls", [])
+        reserved_call = isinstance(calls, list) and any(
             isinstance(call, dict)
             and isinstance(call.get("function"), dict)
             and call["function"].get("name") == WORKBENCH_INTAKE_TOOL_NAME
             for call in calls
-        ):
-            raise HTTPException(422, "client-supplied workbench_intake messages are forbidden")
+        )
+        reserved_result = message.get("role") == "tool" and (
+            message.get("name") == WORKBENCH_INTAKE_TOOL_NAME
+            or (isinstance(message.get("toolCallId"), str) and message["toolCallId"].startswith("workbench-intake-"))
+        )
+        if reserved_call or reserved_result:
+            match = next((pair for pair in issued_pairs if normalized[index:index + 2] == pair), None)
+            if match is None:
+                raise HTTPException(422, "client-supplied workbench_intake messages are forbidden")
+            index += 2
+        else:
+            index += 1
+
+
+async def _validate_full_agui_request(request: Request) -> None:
+    """Parse the complete run body before any reservation state can change."""
+    try:
+        from pydantic_ai import Agent
+        from pydantic_ai.models.test import TestModel
+        from pydantic_ai.ui.ag_ui import AGUIAdapter
+
+        await AGUIAdapter.from_request(request, agent=Agent(TestModel()))
+    except Exception as exc:
+        raise HTTPException(422, "invalid AG-UI run input") from exc
 
 
 async def _read_request_json(request: Request) -> dict[str, object]:
@@ -87,11 +122,14 @@ async def _read_request_json(request: Request) -> dict[str, object]:
     return value
 
 
-def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_sink=None) -> APIRouter:
+def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_sink=None, workbench_rooms: set[str] | None = None) -> APIRouter:
     """Build routes with the installed Soliplex 0.93 public dependencies."""
     from soliplex import agui, authz, installation, views
 
     router = APIRouter()
+    allowed_rooms = workbench_rooms
+    if allowed_rooms is None:
+        allowed_rooms = {room.strip() for room in os.environ.get("SOLIPLEX_WORKBENCH_ROOMS", "").split(",") if room.strip()}
 
     async def scope_dependencies(
         room_id: str,
@@ -102,6 +140,8 @@ def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_s
         policy=views.depend_the_room_authz_policy,
         claims=views.depend_the_user_claims,
     ) -> WorkbenchScope:
+        if room_id not in allowed_rooms:
+            raise HTTPException(503, "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS")
         username = claims.get("preferred_username")
         if not username:
             raise HTTPException(401, "authenticated user required")
@@ -264,9 +304,16 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         if not is_workbench_run(request):
             room_id = request.path_params.get("room_id")
             if room_id not in lab_rooms:
+                payload = await _read_request_json(request)
+                props = payload.get("forwardedProps")
+                action = props.get("a2uiAction") if isinstance(props, dict) else None
+                if action is not None:
+                    raise HTTPException(503, "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS")
                 return
             try:
-                legacy_payload = json.loads(await request.body())
+                legacy_payload = parse_json_no_duplicates(await request.body())
+            except DuplicateJSONKey as exc:
+                raise HTTPException(400, "duplicate JSON object key") from exc
             except (ValueError, UnicodeDecodeError):
                 return
             if not isinstance(legacy_payload, dict):
@@ -298,13 +345,18 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 raise HTTPException(404, "replay run is not authorized")
             payload = await _read_request_json(request)
             _reject_client_workbench_intake_tool(payload)
+            if payload.get("threadId") != request.path_params.get("thread_id") or payload.get("runId") != request.path_params.get("run_id"):
+                raise HTTPException(400, "AG-UI URL and body identifiers do not match")
             state = payload.get("state")
             props = payload.get("forwardedProps")
             if (isinstance(state, dict) and "workbenchAction" in state) or (isinstance(props, dict) and "a2uiAction" in props):
                 raise HTTPException(422, "reconnect cannot carry a workbench action")
+            if scope is None:
+                raise HTTPException(403, "authenticated workbench scope required")
+            await _validate_full_agui_request(request)
+            _validate_issued_intake_history(payload, _repository_for(request, None).issued_intake_submissions(scope))
             return
         payload = await _read_request_json(request)
-        _reject_client_workbench_intake_tool(payload)
         path_thread_id = request.path_params.get("thread_id")
         path_run_id = request.path_params.get("run_id")
         if payload.get("threadId") != path_thread_id or payload.get("runId") != path_run_id:
@@ -314,25 +366,20 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             raise HTTPException(422, "AG-UI state must be an object")
         if isinstance(state, dict) and "workbenchAction" in state:
             raise HTTPException(422, "workbenchAction is server-owned")
+        if scope is None:
+            raise HTTPException(403, "authenticated workbench scope required")
+        _reject_client_workbench_intake_tool(payload)
+        await _validate_full_agui_request(request)
+        repository = _repository_for(request, None)
+        _validate_issued_intake_history(payload, repository.issued_intake_submissions(scope))
         props = payload.get("forwardedProps")
         if not isinstance(props, dict) or "a2uiAction" not in props:
             return
-        legacy_action = props.get("a2uiAction")
-        if (
-            isinstance(legacy_action, dict)
-            and "actionSchemaVersion" not in legacy_action
-            and isinstance(legacy_action.get("afterMessageId"), str)
-            and user_action(props) is not None
-        ):
-            return
-        if scope is None:
-            raise HTTPException(403, "authenticated workbench scope required")
-        if not isinstance(props["a2uiAction"], dict):
-            raise HTTPException(422, "invalid workbench action")
+        if not isinstance(props["a2uiAction"], dict) or "actionSchemaVersion" not in props["a2uiAction"]:
+            raise HTTPException(422, "workbench rooms require a reserved workbench action envelope")
         messages = payload.get("messages")
         if not isinstance(messages, list):
             raise HTTPException(422, "AG-UI messages must be an array")
-        repository = _repository_for(request, None)
         context = WorkbenchActionService(repository).consume_dispatch(scope, {"forwardedProps": props})
         if context is None:
             raise HTTPException(409, "workbench action is not reserved or is not dispatchable")

@@ -180,9 +180,12 @@ def test_run_result_persists_client_trace_tags_without_model(tmp_path):
     scope = WorkbenchScope("alice", "server", "room", "thread")
     _register(repo, scope, "PythonRepl")
     class TraceCapture:
+        def __init__(self):
+            self.events = []
         def emit(self, event):
-            pass
-    service = WorkbenchActionService(repo, trace_sink=TraceCapture())
+            self.events.append(event)
+    sink = TraceCapture()
+    service = WorkbenchActionService(repo, trace_sink=sink)
     payload = {
         "v": 1, "submissionId": "result-submit-1", "activityMessageId": "activity-1",
         "surfaceRevision": 1, "actionSchemaVersion": "workbench.program.run_result@1",
@@ -196,7 +199,11 @@ def test_run_result_persists_client_trace_tags_without_model(tmp_path):
         "invocation_id": "invocation-1",
     }
     duplicate = service.accept(scope, payload | {"submissionId": "result-submit-2"})
-    assert duplicate == receipt
+    assert duplicate["status"] == receipt["status"]
+    assert duplicate["trace"] == receipt["trace"]
+    assert len(sink.events) == 1
+    assert sink.events[0]["python.side"] == "client"
+    assert sink.events[0]["python.engine"] == "monty-1.3.0"
     changed = payload | {"submissionId": "result-submit-3", "userAction": payload["userAction"] | {"output": "forged"}}
     with pytest.raises(PublicationConflict):
         service.accept(scope, changed)

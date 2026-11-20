@@ -70,7 +70,7 @@ def test_production_scope_checks_room_write_permission(tmp_path):
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.READ)})
     app = FastAPI()
-    app.include_router(build_router(repository=repo))
+    app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     response = _test_client(app, repo, policy, threads).post(
         "/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-a"}
     )
@@ -79,12 +79,23 @@ def test_production_scope_checks_room_write_permission(tmp_path):
     assert threads.thread_checks == []
 
 
+def test_workbench_routes_fail_closed_when_room_is_not_configured(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    app = FastAPI()
+    app.include_router(build_router(repository=repo, workbench_rooms=set()))
+    policy = MemoryRoomPolicy(set())
+    threads = MemoryThreadStorage()
+    response = _test_client(app, repo, policy, threads).get("/rooms/unlisted/threads/thread-a/workbench")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS"
+
+
 def test_production_scope_checks_thread_ownership(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     threads = MemoryThreadStorage()  # Alice does not own this thread.
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.READ)})
     app = FastAPI()
-    app.include_router(build_router(repository=repo))
+    app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     response = _test_client(app, repo, policy, threads).get("/rooms/room-a/threads/foreign-thread/workbench")
     assert response.status_code == 404
     assert policy.checks == [("room-a", "alice", authz.Permission.READ)]
@@ -102,7 +113,7 @@ def test_snapshot_loads_only_authenticated_actor_room_thread(tmp_path):
     other_record = record | {"activityMessageId": "only-thread-b", "surfaceId": "surface-b"}
     repo.publish(other_scope, "seed-b", 0, layout, [other_record], registered_program_surfaces=set(), registered_mounts={("only-thread-b", "surface-b")})
     app = FastAPI()
-    app.include_router(build_router(repository=repo))
+    app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.READ)})
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
     response = _test_client(app, repo, policy, threads).get("/rooms/room-a/threads/thread-a/workbench")
@@ -202,7 +213,7 @@ def test_client_cannot_call_or_supply_workbench_intake_tool(tmp_path, messages, 
     assert called == []
 
 
-def test_legacy_lab_action_reader_is_room_scoped_and_workbench_ignores_legacy_action():
+def test_legacy_lab_action_reader_is_room_scoped_and_workbench_ignores_legacy_action(tmp_path):
     action = {"name": "python_failed", "surfaceId": "surface-1", "context": {"output": "failed"}}
     legacy_payload = {
         "threadId": "thread-a", "runId": "run-a", "state": {},
@@ -223,8 +234,9 @@ def test_legacy_lab_action_reader_is_room_scoped_and_workbench_ignores_legacy_ac
         return {"wire_messages": [message.model_dump(mode="json", by_alias=True) for message in adapter.run_input.messages], "model_text": model_text}
 
     app = FastAPI()
+    app.state.workbench_repository = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     # Workbench room is deliberately separate. The legacy labs are the package defaults.
-    app.include_router(create_guarded_agui_router(upstream, scope_provider=lambda _request: None, workbench_rooms={"workbench-room"}))
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=WorkbenchScope("alice", "server", "workbench-room", "thread-wb"), workbench_rooms={"workbench-room"}))
     client = TestClient(app)
     lab = client.post("/v1/rooms/a2ui-lab/agui/thread-a/run-a", json=legacy_payload)
     assert lab.status_code == 200
@@ -232,12 +244,16 @@ def test_legacy_lab_action_reader_is_room_scoped_and_workbench_ignores_legacy_ac
     assert lab.json()["wire_messages"][-1]["id"] == action_wire.id
     assert lab.json()["wire_messages"][-1]["content"] == action_wire.content
     assert lab.json()["model_text"] == ["Earlier", action_wire.content]
+    duplicate = client.post(
+        "/v1/rooms/a2ui-lab/agui/thread-a/run-duplicate",
+        content=b'{"threadId":"thread-a","runId":"run-duplicate","forwardedProps":{"a2uiAction":{},"a2uiAction":{}}}',
+        headers={"content-type": "application/json"},
+    )
+    assert duplicate.status_code == 400
 
     workbench_payload = legacy_payload | {"threadId": "thread-wb", "runId": "run-wb"}
     workbench = client.post("/v1/rooms/workbench-room/agui/thread-wb/run-wb", json=workbench_payload)
-    assert workbench.status_code == 200
-    assert [message["id"] for message in workbench.json()["wire_messages"]] == ["anchor"]
-    assert workbench.json()["model_text"] == ["Earlier"]
+    assert workbench.status_code == 422  # Workbench runs cannot use legacy envelopes.
 
 
 def test_reconnect_post_requires_write_and_checks_run_exists(tmp_path):
@@ -259,6 +275,11 @@ def test_reconnect_post_requires_write_and_checks_run_exists(tmp_path):
     assert threads.thread_checks == []
     assert threads.run_checks == []
     assert policy.checks == [("room-a", "alice", authz.Permission.WRITE)]
+    policy.permissions.add(("room-a", "alice", authz.Permission.WRITE))
+    allowed = client.post("/v1/rooms/room-a/agui/thread-a/run-a", json={"threadId": "thread-a", "runId": "run-a", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {}}, headers={"Last-Event-ID": "run-a:0"})
+    assert allowed.status_code == 200
+    assert threads.thread_checks == [("alice", "room-a", "thread-a")]
+    assert threads.run_checks == [("alice", "room-a", "thread-a", "run-a")]
 
 
 def test_stale_action_revision_is_http_409(tmp_path):
@@ -269,12 +290,33 @@ def test_stale_action_revision_is_http_409(tmp_path):
     record = {"activityMessageId": "activity-form", "surfaceId": "surface-form", "catalogId": "urn:soliplex:catalog:workbench:1", "component": "PlaceForm", "title": "Intake", "template": "intake"}
     repo.publish(scope, "seed", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity-form", "surface-form")})
     app = FastAPI()
-    app.include_router(build_router(repository=repo))
+    app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.WRITE)})
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
     payload = {"v": 1, "submissionId": "stale", "activityMessageId": "activity-form", "surfaceRevision": 0, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
     response = _test_client(app, repo, policy, threads).post("/rooms/room-a/threads/thread-a/workbench/actions", json=payload)
     assert response.status_code == 409
+
+
+def test_restore_route_restores_owned_closed_layout_node(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
+    scope = WorkbenchScope("alice", "server-a", "room-a", "thread-a")
+    layout = json.loads((Path(__file__).parents[1] / "fixtures/workbench/layout_tree_v1.json").read_text())
+    layout["nodes"][2]["children"] = ["panel-closed"]
+    layout["nodes"].append({"id": "panel-closed", "parentId": "r_left", "children": [], "kind": "panel", "title": "Closed", "size": "small", "visibility": "closed", "payload": {}})
+    repo.publish(scope, "closed", 0, layout, [], registered_program_surfaces=set(), registered_mounts=set())
+    app = FastAPI()
+    app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
+    policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.WRITE)})
+    threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
+    response = _test_client(app, repo, policy, threads).post(
+        "/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-closed"}
+    )
+    assert response.status_code == 200
+    assert response.json() == {"status": "restored", "nodeId": "panel-closed", "revision": 2, "sequence": 2}
+    assert next(node for node in repo.load_snapshot(scope)["layout"]["nodes"] if node["id"] == "panel-closed")["visibility"] == "open"
+    assert policy.checks == [("room-a", "alice", authz.Permission.WRITE)]
+    assert threads.thread_checks == [("alice", "room-a", "thread-a")]
 
 
 def test_non_run_stock_agui_routes_and_legacy_room_payload_pass_through_unchanged():

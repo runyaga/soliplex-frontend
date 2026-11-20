@@ -83,6 +83,8 @@ class WorkbenchActionService:
         digest = hashlib.sha256(encoded).hexdigest()
         duplicate = self.repository.existing_action(scope, action.submissionId, digest)
         if duplicate is not None:
+            if isinstance(action.userAction, RunResult):
+                self.repository.emit_trace_once(scope, action.userAction.invocationId, self.trace_sink)
             return duplicate
         current = self.repository.load_snapshot(scope)
         if current["layout"] is None:
