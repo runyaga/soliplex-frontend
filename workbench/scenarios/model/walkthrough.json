@@ -15,7 +15,7 @@
     "assertions": [
       {
         "kind": "role",
-        "name": "line chart: Weekly visits; Mon: 12, Tue: 18, Wed: 9, Thu: 22, Fri: 30",
+        "name": "line chart: Weekly visits; Weekly visits, Mon: 12, Tue: 18, Wed: 9, Thu: 22, Fri: 30",
         "role": "img",
         "region": "canvas"
       }
