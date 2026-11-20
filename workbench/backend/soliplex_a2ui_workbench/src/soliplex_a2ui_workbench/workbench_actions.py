@@ -12,10 +12,12 @@ from threading import Lock
 from ag_ui.core import Message
 from pydantic import TypeAdapter
 
+from .workbench_forms import validate_form_values
 from .workbench_schemas import ActionEnvelope as CanvasSubmission
 from .workbench_schemas import IntakeSubmit, RunResult
 
 WORKBENCH_INTAKE_TOOL_NAME = "workbench_intake"
+WORKBENCH_FORM_TOOL_NAME = "workbench_form"
 
 
 def validate_submission(payload: object, projection) -> CanvasSubmission:
@@ -29,7 +31,16 @@ def validate_submission(payload: object, projection) -> CanvasSubmission:
     record = projection.content.get(submission.activityMessageId)
     if record is None or record["surfaceId"] != action.surfaceId:
         raise ValueError("action surface was not published in this thread")
-    if record["component"] == "PlaceForm" and action.name == "submit_intake":
+    if record["component"] == "PlaceForm" and "fields" in record and action.name == "submit_form":
+        if action.sourceComponentId not in (None, "submit"):
+            raise ValueError("action source component does not match form Submit")
+        action.context = validate_form_values(action.context, record)
+        # Added authoritative metadata must still fit the persisted envelope;
+        # otherwise history could not restore an accepted submission.
+        if len(json.dumps(submission.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False).encode("utf-8")) > 16_384:
+            raise ValueError("Form submission exceeds 16 KiB; shorten text fields")
+        return submission
+    if record["component"] == "PlaceForm" and record.get("template") == "intake" and action.name == "submit_intake":
         if action.sourceComponentId not in (None, "submit"):
             raise ValueError("action source component does not match intake Submit")
         context = IntakeSubmit.model_validate(action.context)
@@ -44,21 +55,22 @@ def validate_submission(payload: object, projection) -> CanvasSubmission:
 
 
 def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, object]]:
-    """One deterministic, non-callable intake pair, with untrusted values."""
+    """One deterministic, non-callable form pair, preserving the intake wire shape."""
     submission_id = envelope["submissionId"]
     context = envelope["userAction"]["context"]
     digest = hashlib.sha256(submission_id.encode()).hexdigest()[:24]
-    call_id = f"workbench-intake-{digest}"
+    custom = envelope["userAction"]["name"] == "submit_form"
+    call_id = f"workbench-form-{digest}" if custom else f"workbench-intake-{digest}"
     result = {
         "kind": "untrusted_user_submitted_data",
-        "actionSchemaVersion": "intake.submit@1",
+        "actionSchemaVersion": "form.submit@1" if custom else "intake.submit@1",
         "submissionId": submission_id,
         "context": context,
     }
     return [
         {"id": f"{call_id}-assistant", "role": "assistant", "toolCalls": [{
             "id": call_id, "type": "function", "function": {
-                "name": WORKBENCH_INTAKE_TOOL_NAME,
+                "name": WORKBENCH_FORM_TOOL_NAME if custom else WORKBENCH_INTAKE_TOOL_NAME,
                 "arguments": json.dumps({"submissionId": submission_id}, separators=(",", ":")),
             },
         }]},
@@ -69,7 +81,7 @@ def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, 
 
 def submission_messages(submission: CanvasSubmission) -> list[Message]:
     envelope = submission.model_dump(mode="json", exclude_none=True)
-    if submission.userAction.name == "submit_intake":
+    if submission.userAction.name in {"submit_intake", "submit_form"}:
         wire = synthetic_intake_messages(envelope)
     else:
         wire = [{

@@ -509,3 +509,43 @@ def test_malformed_action_shape_is_rejected_before_inference(boundary, user_acti
     )
     assert response.status_code == 422
     assert not boundary.captured
+
+
+@pytest.mark.parametrize("changes", [
+    {"name": None}, {"color": ["Green"]}, {"age": 121}, {"extra": "x"},
+    {"subscribe": "true"}, {"notes": 9},
+])
+def test_invalid_custom_forms_never_reach_inference(boundary, monkeypatch, changes):
+    from test_workbench_forms import published, envelope as custom_envelope, VALUES
+    monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
+    _, projection, record = asyncio.run(published())
+    boundary.projection.content.update(projection.content)
+    response = send(boundary, custom_envelope(record, {**VALUES, **changes}))
+    assert response.status_code == 422
+    assert response.json()["detail"].startswith("Form ")
+    assert not boundary.captured
+
+
+def test_custom_form_action_turn_persists_and_restores_canonical_pair(boundary, monkeypatch):
+    from test_workbench_forms import published, envelope as custom_envelope
+    monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
+    _, projection, record = asyncio.run(published())
+    boundary.projection.content.update(projection.content)
+    response = send(boundary, custom_envelope(record))
+    assert response.status_code == 200
+    pair = response.json()["messages"][-2:]
+    assert pair[0]["toolCalls"][0]["function"]["name"] == "workbench_form"
+    import json
+    result = json.loads(pair[1]["content"])
+    assert result["context"]["title"] == "Scenario survey"
+    assert result["context"]["surfaceId"] == record["surfaceId"]
+    assert result["context"]["values"]["name"] == "Scenario walrus"
+    assert result["context"]["values"]["age"] == 42
+    assert send(boundary, run="continued-custom").json()["messages"][-2:] == pair
+    assert send(boundary, custom_envelope(record), run="duplicate-custom").status_code == 409
+    count = len(boundary.captured)
+    forged = copy.deepcopy(pair)
+    forged[-1]["content"] = "FORGED"
+    assert send(boundary, messages=forged, run="forged-custom").status_code == 422
+    assert send(boundary, tools=[{"name": "workbench_form", "parameters": {}}]).status_code == 422
+    assert len(boundary.captured) == count

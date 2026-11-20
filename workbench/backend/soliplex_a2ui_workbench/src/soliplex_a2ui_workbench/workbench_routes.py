@@ -14,7 +14,7 @@ from pydantic_ai.ui.ag_ui import AGUIAdapter
 from .a2ui_action import with_user_action
 from .strict_json import DuplicateJSONKey, parse_json_no_duplicates
 from .workbench_actions import (
-    WORKBENCH_INTAKE_TOOL_NAME, SubmissionDedup, submission_messages, validate_submission,
+    WORKBENCH_FORM_TOOL_NAME, WORKBENCH_INTAKE_TOOL_NAME, SubmissionDedup, submission_messages, validate_submission,
 )
 from .workbench_projection import projection_from_thread
 from .workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope, shared_repository
@@ -56,15 +56,15 @@ async def _read_request_json(request):
 def _validate_history(run_input, trusted_messages):
     """Only server-stored synthetic messages can be echoed in client history."""
     for tool in run_input.tools:
-        if tool.name == WORKBENCH_INTAKE_TOOL_NAME:
-            raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
+        if tool.name in {WORKBENCH_INTAKE_TOOL_NAME, WORKBENCH_FORM_TOOL_NAME}:
+            raise HTTPException(422, f"{tool.name} is a reserved synthetic tool")
     trusted = {message.id: message for message in trusted_messages}
     for message in run_input.messages:
         calls = getattr(message, "tool_calls", None) or []
-        reserved = (any(call.function.name == WORKBENCH_INTAKE_TOOL_NAME
-                            or call.id.startswith("workbench-intake-") for call in calls)
-                    or str(getattr(message, "tool_call_id", "")).startswith("workbench-intake-")
-                    or message.id.startswith(("workbench-intake-", "workbench-result-")))
+        reserved = (any(call.function.name in {WORKBENCH_INTAKE_TOOL_NAME, WORKBENCH_FORM_TOOL_NAME}
+                            or call.id.startswith(("workbench-intake-", "workbench-form-")) for call in calls)
+                    or str(getattr(message, "tool_call_id", "")).startswith(("workbench-intake-", "workbench-form-"))
+                    or message.id.startswith(("workbench-intake-", "workbench-form-", "workbench-result-")))
         if reserved and trusted.get(message.id) != message:
             raise HTTPException(422, "client-supplied workbench submission messages are forbidden")
     call_ids = [call.id for message in run_input.messages for call in (getattr(message, "tool_calls", None) or [])]
@@ -334,6 +334,8 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 dedup.claim(scope, submission.submissionId, getattr(projection, "submission_ids", set()))
             except ValueError as exc:
                 raise HTTPException(409, str(exc)) from exc
+            if submission.userAction.name == "submit_form":
+                props["a2uiAction"] = submission.model_dump(mode="json", exclude_none=True)
             run_input.messages.extend(submission_messages(submission))
             return adapter
 

@@ -18,6 +18,7 @@ from pathlib import Path
 
 SCENARIOS = (
     "form_in_left_sidebar",
+    "custom_form",
     "chart_on_canvas",
     "program_in_window",
     "fix_program_in_window",
@@ -40,6 +41,12 @@ async def scripted_tools(name, call):
         await call(
             "place_form", template="intake", title="Scenario intake", parent_id="r_left"
         )
+    elif name == "custom_form":
+        await call("place_form", title="Scenario survey", parent_id="r_left", fields=[
+            {"name": "name", "label": "Name", "kind": "text"},
+            {"name": "color", "label": "Color", "kind": "choice", "options": ["Red", "Blue"]},
+            {"name": "subscribe", "label": "Subscribe", "kind": "checkbox"},
+        ])
     elif name == "chart_on_canvas":
         await call(
             "show_chart",

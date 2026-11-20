@@ -13,9 +13,10 @@ LAB_CATALOG = "urn:soliplex:catalog:lab:1"
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 
 
-def form_record(activity_id: str, surface_id: str, title: str) -> dict[str, object]:
+def form_record(activity_id: str, surface_id: str, title: str, *, fields: list[dict] | None = None) -> dict[str, object]:
     return {"activityMessageId": activity_id, "surfaceId": surface_id, "catalogId": WORKBENCH_CATALOG,
-            "component": "PlaceForm", "template": "intake", "title": title}
+            "component": "PlaceForm", "title": title,
+            **({"template": "intake"} if fields is None else {"fields": fields})}
 
 
 def chart_record(

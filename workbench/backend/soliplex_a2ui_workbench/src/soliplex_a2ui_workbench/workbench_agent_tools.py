@@ -73,12 +73,15 @@ async def open_panel(
 
 
 async def place_form(
-    ctx: RunContext[AgentDependencies], template: str, title: str, parent_id: str
+    ctx: RunContext[AgentDependencies], title: str, parent_id: str,
+    template: str | None = None, fields: list[dict[str, object] | str] | None = None
 ) -> ToolReturn:
-    """Place the built-in intake form.
+    """Place an intake template or a custom form with safe, non-sensitive fields.
 
     Args:
-        template: The available form template, currently ``intake``.
+        template: Use ``intake`` alone, or omit it when providing fields.
+        fields: Up to 12 fields with name, label, kind, required and kind-specific bounds.
+            Kinds: text, textarea, number, choice (options, multiple), checkbox, date.
         title: Short heading shown above the form.
         parent_id: Existing container node where the form should be placed.
     """
@@ -86,6 +89,7 @@ async def place_form(
         workbench_tools.place_form,
         ctx,
         template=template,
+        fields=fields,
         title=title,
         parent_id=parent_id,
     )
@@ -279,6 +283,13 @@ async def _call(function, ctx: RunContext[AgentDependencies], **kwargs):
                 "IDs must be unique. Pie values must be nonnegative. "
                 "Gauge takes exactly one point within scale.min_value..scale.max_value (defaults 0..100); "
                 "target, if supplied, must be on that scale."
+            )
+        if function.__name__ == "place_form":
+            correction = (
+                "Use template='intake' OR fields=[{name:'name',label:'Name',kind:'text'}]. "
+                "Use text, textarea, number, choice, checkbox or date only; no credentials. "
+                "Limit fields/options to 12, title/labels to 80, option labels to 60. "
+                "Choice needs options; number accepts min/max; text accepts max_length (1..4000)."
             )
         # The error envelope survives AG-UI versions without tool outcome fields.
         # ModelRetry also makes this a rejected call in the model's own history.

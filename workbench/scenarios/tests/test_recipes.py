@@ -33,6 +33,18 @@ class RecipesTest(unittest.IsolatedAsyncioTestCase):
             sequences.append(calls)
         self.assertEqual(sequences[0], sequences[1])
 
+    async def test_custom_form_uses_the_public_wrapper_without_template(self):
+        calls = []
+        async def call(tool, **arguments):
+            calls.append((tool, arguments))
+        await seed.scripted_tools("custom_form", call)
+        self.assertEqual(len(calls), 1)
+        tool, args = calls[0]
+        self.assertEqual(tool, "place_form")
+        self.assertNotIn("template", args)
+        self.assertEqual(args["parent_id"], "r_left")
+        self.assertEqual([f["kind"] for f in args["fields"]], ["text", "choice", "checkbox"])
+
     async def test_unknown_scenario_is_rejected(self):
         with self.assertRaises(ValueError):
             await seed.scripted_tools("invented", None)

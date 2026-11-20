@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
 
 export function parseCredentials(text) {
   const values = {};
@@ -81,11 +82,13 @@ export function validateCases(data, { prompts = false } = {}) {
         continue;
       }
       if (a?.kind === 'submission') {
-        if (!prompts || a.name !== 'workbench_intake' || !a.context || typeof a.context.question !== 'string' || !Array.isArray(a.context.districts) || a.context.districts.some(d => !['north', 'south'].includes(d)) || a.context.acknowledged !== true) throw new Error('Invalid submission assertion');
+        const intake = a.name === 'workbench_intake' && typeof a.context?.question === 'string' && Array.isArray(a.context.districts) && a.context.districts.every(d => ['north', 'south'].includes(d)) && a.context.acknowledged === true;
+        const custom = a.name === 'workbench_form' && typeof a.context?.title === 'string' && a.context.title.trim() && a.context.values && typeof a.context.values === 'object' && !Array.isArray(a.context.values);
+        if (!prompts || !(intake || custom)) throw new Error('Invalid submission assertion');
         continue;
       }
       if (!a || !['text', 'role', 'source'].includes(a.kind) || typeof a.name !== 'string' || !a.name.trim() || !regions.has(a.region ?? 'workspace')) throw new Error('Invalid assertion');
-      if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'img'].includes(a.role)) throw new Error('Invalid accessible role');
+      if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'radio', 'img'].includes(a.role)) throw new Error('Invalid accessible role');
       if (a.kind === 'source' && (typeof a.includes !== 'string' || !a.includes)) throw new Error('Missing source expectation');
       if (a.absent !== undefined && typeof a.absent !== 'boolean') throw new Error('Invalid absence assertion');
       if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.absent)) throw new Error('Invalid count');
@@ -159,21 +162,29 @@ export function assertTurn(a, turn) {
     detail: turn?.finalMessage || 'No captured assistant reply',
   };
   if (a.kind === 'submission') {
-    const matches = (turn?.submissions ?? []).filter(s => s.name === a.name && s.context.question === a.context.question && s.context.acknowledged === a.context.acknowledged && JSON.stringify(s.context.districts) === JSON.stringify(a.context.districts));
-    return { label: assertionLabel(a), pass: Boolean(turn?.completed && turn.actionName === 'submit_intake' && !turn.runErrors?.length && matches.length === 1), detail: `${matches.length} matching submissions in persisted run input, RUN_FINISHED=${Boolean(turn?.completed)}` };
+    const matches = (turn?.submissions ?? []).filter(s => s.name === a.name && isDeepStrictEqual(a.name === 'workbench_form' ? { title: s.context.title, values: s.context.values } : s.context, a.context));
+    return { label: assertionLabel(a), pass: Boolean(turn?.completed && turn.actionName === (a.name === 'workbench_form' ? 'submit_form' : 'submit_intake') && !turn.runErrors?.length && matches.length === 1), detail: `${matches.length} matching submissions in persisted run input, RUN_FINISHED=${Boolean(turn?.completed)}` };
   }
   throw new Error('Unknown turn assertion');
 }
 
-// Persist only the intake data needed by assertions, never the complete input.
+// Persist only assertion data from paired synthetic results, never the full input.
 export function intakeSubmissions(input) {
   const messages = input?.messages ?? [];
-  const calls = new Set(messages.flatMap(m => (m.toolCalls ?? []).filter(c => c.function?.name === 'workbench_intake').map(c => c.id)));
+  const calls = new Map(messages.flatMap(m => (m.toolCalls ?? []).filter(c => ['workbench_intake', 'workbench_form'].includes(c.function?.name)).map(c => [c.id, c.function.name])));
   return messages.filter(m => m.role === 'tool' && calls.has(m.toolCallId)).flatMap(m => {
-    const result = JSON.parse(m.content);
-    if (result.kind !== 'untrusted_user_submitted_data' || result.actionSchemaVersion !== 'intake.submit@1') return [];
+    let result;
+    try { result = JSON.parse(m.content); } catch { return []; }
+    if (result.kind !== 'untrusted_user_submitted_data' || !result.context) return [];
+    const name = calls.get(m.toolCallId);
+    if (name === 'workbench_form') {
+      const { surfaceId, title, values } = result.context;
+      if (result.actionSchemaVersion !== 'form.submit@1' || typeof surfaceId !== 'string' || typeof title !== 'string' || !values || typeof values !== 'object' || Array.isArray(values)) return [];
+      return [{ name, context: { surfaceId, title, values } }];
+    }
+    if (result.actionSchemaVersion !== 'intake.submit@1') return [];
     const { question, districts, acknowledged } = result.context;
-    return [{ name: 'workbench_intake', context: { question, districts, acknowledged } }];
+    return [{ name, context: { question, districts, acknowledged } }];
   });
 }
 

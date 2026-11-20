@@ -10,14 +10,15 @@ from typing import Protocol, TypedDict, runtime_checkable
 from ag_ui.core import ActivitySnapshotEvent
 
 from .chart_validation import validate_chart
-from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
+from .workbench_forms import custom_form_components
+from .workbench_schemas import LayoutSnapshot, PlaceForm, validate_registered_mounts
 
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 GRAPHICS_CATALOG = "urn:soliplex:catalog:graphics:2"
 LAB_CATALOG = "urn:soliplex:catalog:lab:1"
 WORKBENCH_CATALOG = "urn:soliplex:catalog:workbench:1"
 
-BASIC_COMPONENTS = frozenset({"Text", "Card", "Column", "Row", "List", "CheckBox", "TextField", "ChoicePicker", "Slider", "Button"})
+BASIC_COMPONENTS = frozenset({"Text", "Card", "Column", "Row", "List", "CheckBox", "TextField", "DateTimeInput", "ChoicePicker", "Slider", "Button"})
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 BUILTIN_CATALOG_MANIFESTS: dict[str, frozenset[str]] = {
     BASIC_CATALOG: BASIC_COMPONENTS,
@@ -102,7 +103,7 @@ class WorkbenchCatalogValidator:
         record_shapes = {
             (GRAPHICS_CATALOG, "Chart"): common | {"spec", "selection", "description", "height"},
             (LAB_CATALOG, "PythonRepl"): common | {"source", "title", "output"},
-            (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title"},
+            (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title", "fields"},
         }
         allowed_record_keys = record_shapes.get((catalog_id, component), common | {"properties"})
         if set(record) - allowed_record_keys:
@@ -121,8 +122,8 @@ class WorkbenchCatalogValidator:
             if not isinstance(output, str) or len(output) > 4_000:
                 raise ValueError("invalid PythonRepl output")
         elif catalog_id == WORKBENCH_CATALOG and component == "PlaceForm":
-            if record.get("template") != "intake" or not isinstance(record.get("title"), str):
-                raise ValueError("invalid intake template registration")
+            PlaceForm.model_validate({"title": record.get("title"), "parent_id": "r_left",
+                                      "template": record.get("template"), "fields": record.get("fields")})
         elif catalog_id == BASIC_CATALOG:
             props = record.get("properties", {})
             if not isinstance(props, dict):
@@ -185,7 +186,8 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "Row": common | {"children"},
         "List": common | {"children"},
         "CheckBox": common | {"label", "value"},
-        "TextField": common | {"label", "value"},
+        "TextField": common | {"label", "value", "variant"},
+        "DateTimeInput": common | {"label", "value", "enableDate", "enableTime"},
         "ChoicePicker": common | {"label", "variant", "options", "value", "displayStyle", "filterable"},
         "Slider": common | {"min", "max", "value", "label"},
         "Button": common | {"label", "child", "action"},
@@ -201,6 +203,7 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "List": {"children"},
         "CheckBox": {"label", "value"},
         "TextField": {"label", "value"},
+        "DateTimeInput": {"label", "value", "enableDate", "enableTime"},
         "ChoicePicker": {"label", "variant", "options", "value"},
         "Slider": {"min", "max", "value"},
         "Button": {"action"},
@@ -225,13 +228,17 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         value = item["value"]
         if not isinstance(item["label"], str) or not isinstance(value, (bool, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
             raise ValueError("invalid emitted CheckBox properties")
-    if component == "TextField":
+    if component in {"TextField", "DateTimeInput"}:
         value = item["value"]
         if not isinstance(item["label"], str) or not isinstance(value, (str, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
             raise ValueError("invalid emitted TextField properties")
+    if component == "TextField" and item.get("variant", "shortText") not in {"shortText", "longText", "number"}:
+        raise ValueError("invalid emitted TextField variant")
+    if component == "DateTimeInput" and (item["enableDate"] is not True or item["enableTime"] is not False):
+        raise ValueError("forms support date only")
     if component == "ChoicePicker":
         options, value = item["options"], item["value"]
-        if (not isinstance(item["label"], str) or item["variant"] != "multipleSelection"
+        if (not isinstance(item["label"], str) or item["variant"] not in {"multipleSelection", "mutuallyExclusive"}
             or not isinstance(options, list) or not options or any(not isinstance(option, dict) or set(option) != {"label", "value"} or not isinstance(option.get("label"), str) or not option["label"] or not isinstance(option.get("value"), str) or not option["value"] for option in options)
             or not isinstance(value, dict) or set(value) != {"@path"} or not isinstance(value["@path"], str)
             or ("displayStyle" in item and item["displayStyle"] not in {"checkbox", "chips"})
@@ -277,13 +284,21 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
                 **{key: {"@path": f"/output/{key}"} for key in ("invocationId", "chainId", "outcome", "output")},
             },
         }}}
+    elif component == "PlaceForm" and "fields" in record:
+        data, components = custom_form_components(record)
+        return [
+            _operation(sid, "createSurface", {"catalogId": BASIC_CATALOG}),
+            _operation(sid, "updateDataModel", {"path": "/", "value": data}),
+            _operation(sid, "updateComponents", {"components": components}),
+        ]
     elif component == "PlaceForm":
         catalog_id = BASIC_CATALOG
         data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}
         component_def = {
-            "id": "root", "component": "Column", "children": ["title", "question", "districts", "acknowledged", "submit"],
+            "id": "root", "component": "Column", "children": ["title", "provenance", "question", "districts", "acknowledged", "submit"],
         }
         extra = [
+            {"id": "provenance", "component": "Text", "text": "Form created by the assistant"},
             {"id": "title", "component": "Text", "text": str(record["title"])},
             {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}},
             {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"},

@@ -291,12 +291,15 @@ def create_container(
 
 
 def place_form(
-    ctx: WorkbenchToolContext, title: str, template: str, parent_id: str
+    ctx: WorkbenchToolContext, title: str, parent_id: str,
+    template: str | None = None, fields: list[dict[str, object] | str] | None = None
 ) -> dict[str, object]:
-    """Place the fixed bound intake form under an allowed container."""
+    """Place a validated bound form under an allowed container."""
+    from .workbench_schemas import PlaceForm
+    definition = PlaceForm.model_validate({"title": title, "parent_id": parent_id, "template": template, "fields": fields})
     activity_id, surface_id = _record_ids()
     return _content_result(
-        ctx, form_record(activity_id, surface_id, title), parent_id, title=title
+        ctx, form_record(activity_id, surface_id, title, fields=definition.model_dump()["fields"]), parent_id, title=title
     )
 
 

@@ -589,7 +589,7 @@ def test_tool_schemas_are_closed_and_minimum_only() -> None:
         assert schema["additionalProperties"] is False
         assert len(schema.get("properties", {})) <= 5
         assert _all_objects_closed(schema)
-    assert manifest["place_form"].model_json_schema()["properties"]["template"]["const"] == "intake"
+    assert manifest["place_form"].model_json_schema()["properties"]["template"]["anyOf"][0]["const"] == "intake"
     assert "selection_group" not in ShowChart.model_fields
     with pytest.raises(TypeError):
         manifest["show_table"] = ShowChart

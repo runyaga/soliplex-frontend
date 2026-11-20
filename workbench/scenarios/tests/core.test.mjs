@@ -11,14 +11,14 @@ const valid = () => [{ id: 'intake', prompt: 'Make a form', assertions: [{ kind:
 
 const AT = '@';
 
-test('prompt corpus has twelve independent cases and checked follow-up prerequisites', async () => {
+test('prompt corpus has fourteen independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
-  assert.equal(prompts.length, 12);
+  assert.equal(prompts.length, 14);
   assert.ok(prompts.find(p => p.id === 'fix_program').setup.length);
   for (const prompt of prompts.filter(p => p.setup)) assert.ok(prompt.setup_assertions.length);
   assert.ok(prompts.some(p => p.actions?.some(a => a.name === 'Run')));
   const deterministic = await loadCases(new URL('deterministic/cases.json', root));
-  assert.equal(deterministic.length, 8);
+  assert.equal(deterministic.length, 9);
   assert.equal(deterministic.find(c => c.id === 'reload_replay').reload, true);
 });
 

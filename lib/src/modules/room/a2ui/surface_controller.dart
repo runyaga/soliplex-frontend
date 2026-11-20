@@ -106,7 +106,8 @@ CatalogImplementation _basicCatalog() {
   final basic = basicCatalog();
   return basic.copyWith(components: [
     for (final component in basic.components.values)
-      if (component.name == 'TextField')
+      if ({'TextField', 'ChoicePicker', 'CheckBox', 'DateTimeInput'}
+          .contains(component.name))
         ComponentImplementation(
           name: component.name,
           schema: component.schema,

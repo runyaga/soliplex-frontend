@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
+import re
+import unicodedata
 from types import MappingProxyType
 from typing import Annotated, Literal
 
@@ -504,10 +507,104 @@ class OpenPanel(Closed):
     parent_id: Id
 
 
+def _no_credentials(value: str) -> str:
+    # Split camelCase and separators, fold compatibility characters, then
+    # compare compact words too (api_key, creditCard, access-token).
+    words = re.sub(r"([a-z])([A-Z])", r"\1 \2", unicodedata.normalize("NFKC", value))
+    words = re.sub(r"[^a-z0-9]+", " ", words.lower()).split()
+    compact = "".join(words)
+    if (set(words) & {"pin", "ssn", "cvv", "cvc", "otp", "credential", "credentials"}
+        or any(term in compact for term in (
+            "password", "passwd", "passcode", "token", "apikey", "secret",
+            "creditcard", "debitcard", "socialsecurity", "securitycode",
+            "privatekey", "recoverycode", "verificationcode", "onetimepassword",
+            "pincode", "cardnumber", "bankaccount", "seedphrase", "authcode",
+            "authenticationcode", "twofactorcode", "2facode",
+        ))):
+        raise ValueError("Remove credential requests; use a non-sensitive field such as Name or Color")
+    return value
+
+
+class FormOption(Closed):
+    value: Annotated[str, Field(min_length=1, max_length=60)]
+    label: Annotated[str, Field(min_length=1, max_length=60)]
+
+    @model_validator(mode="before")
+    @classmethod
+    def string_option(cls, value):
+        return {"value": value, "label": value} if isinstance(value, str) else value
+
+    @field_validator("label", "value")
+    @classmethod
+    def safe_option(cls, value):
+        return _no_credentials(value)
+
+
+class FormField(Closed):
+    name: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_]*$")]
+    label: Title
+    kind: Literal["text", "textarea", "number", "choice", "checkbox", "date"] = "text"
+    required: Annotated[bool, Field(strict=True)] = False
+    options: Annotated[list[FormOption], Field(min_length=1, max_length=12)] | None = None
+    multiple: Annotated[bool, Field(strict=True)] = False
+    min: Annotated[float, Field(strict=True)] | None = None
+    max: Annotated[float, Field(strict=True)] | None = None
+    max_length: Annotated[int, Field(strict=True, ge=1, le=4000)] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def near_misses(cls, value):
+        if isinstance(value, str):
+            name = re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+            value = {"name": name if name[:1].isalpha() else "field_" + name, "label": value}
+        if isinstance(value, dict):
+            value = dict(value)
+            kind = value.get("kind", "text")
+            if isinstance(kind, str) and kind in {"select", "dropdown", "radio", "multiselect"}:
+                value["kind"] = "choice"
+                if kind == "multiselect":
+                    value["multiple"] = True
+        return value
+
+    @field_validator("name", "label")
+    @classmethod
+    def safe_field(cls, value):
+        return _no_credentials(value)
+
+    @model_validator(mode="after")
+    def kind_bounds(self):
+        if self.kind == "choice":
+            if not self.options:
+                raise ValueError("For choice provide options=['Red','Blue'] (1..12 unique options)")
+            if len({option.value for option in self.options}) != len(self.options):
+                raise ValueError("Use unique option values")
+        elif self.options is not None or self.multiple:
+            raise ValueError("Use options and multiple only with kind='choice'")
+        if self.kind != "number" and (self.min is not None or self.max is not None):
+            raise ValueError("Use min/max only with kind='number'")
+        if any(bound is not None and not math.isfinite(bound) for bound in (self.min, self.max)):
+            raise ValueError("Use finite min/max numbers")
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError("Set min less than or equal to max")
+        if self.max_length is not None and self.kind not in {"text", "textarea"}:
+            raise ValueError("Use max_length only with text or textarea")
+        return self
+
+
 class PlaceForm(Closed):
-    template: Literal["intake"]
+    template: Literal["intake"] | None = None
     title: Title
     parent_id: Id
+    fields: Annotated[list[FormField], Field(min_length=1, max_length=12)] | None = None
+
+    @model_validator(mode="after")
+    def form_definition(self):
+        if (self.template is None) == (self.fields is None):
+            raise ValueError("Supply template='intake' OR fields=[...]; do not combine them")
+        if self.fields and len({field.name for field in self.fields}) != len(self.fields):
+            raise ValueError("Use unique field names")
+        _no_credentials(self.title)
+        return self
 
 
 class ChartScale(Closed):

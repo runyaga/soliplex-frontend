@@ -163,3 +163,27 @@ test('validation rejects malformed new fields and accepts explicit expected-fail
   }
   assert.throws(() => validateCases(valid()));
 });
+
+
+test('custom form assertions require a paired persisted submission, exact values, and its action turn', async () => {
+  const context = { surfaceId: 'surface-survey', title: 'Scenario survey', values: { name: 'Scenario walrus', color: 'Blue', subscribe: true } };
+  const input = { messages: [
+    { role: 'assistant', toolCalls: [{ id: 'form-call', function: { name: 'workbench_form' } }] },
+    { role: 'tool', toolCallId: 'form-call', content: JSON.stringify({ kind: 'untrusted_user_submitted_data', actionSchemaVersion: 'form.submit@1', context }) },
+  ] };
+  assert.deepEqual(intakeSubmissions(input), [{ name: 'workbench_form', context }]);
+  const assertion = { kind: 'submission', name: 'workbench_form', context: { title: context.title, values: context.values } };
+  const turn = { completed: true, actionName: 'submit_form', submissions: intakeSubmissions(input), runErrors: [] };
+  assert.equal(assertTurn(assertion, turn).pass, true);
+  assert.equal(assertTurn(assertion, { ...turn, actionName: 'submit_intake' }).pass, false);
+  assert.equal(assertTurn({ ...assertion, context: { ...assertion.context, values: { ...context.values, color: 'Red' } } }, turn).pass, false);
+  assert.equal(assertTurn(assertion, { ...turn, submissions: [...turn.submissions, ...turn.submissions] }).pass, false);
+  input.messages[1].toolCallId = 'unpaired';
+  assert.deepEqual(intakeSubmissions(input), []);
+  const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  const custom = cases.find(c => c.id === 'custom_form');
+  assert.equal(custom.actions[1].role, 'radio');
+  assert.equal(custom.actions.at(-1).awaitTurn, true);
+  assert.ok(cases.find(c => c.id === 'credential_form').assertions.some(a => a.absent && a.name === 'Password'));
+  assert.throws(() => validateCases([{ id: 'bad', prompt: 'Test', assertions: [{ ...assertion, context: { title: 'T', values: [] } }] }], { prompts: true }));
+});

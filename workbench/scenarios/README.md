@@ -2,8 +2,8 @@
 
 | Suite | Coverage |
 | --- | --- |
-| Deterministic | Eight real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
-| Models | Twelve cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including intake submission and REPL result follow-up |
+| Deterministic | Nine real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
+| Models | Fourteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including intake and custom form submissions, credential rejection and REPL result follow-up |
 | Motivation | [Workbench lessons](../docs/LESSONS.md) |
 
 | Run from the worktree root | Command |
@@ -46,12 +46,14 @@
 | `followup` | Nonempty list of prompts sent after all actions, in the same thread |
 | Assertion `kind: reply` | `includes` is matched case-insensitively against the final assistant text of the most recent captured turn, which must finish successfully |
 | Computed reply expectation | `includes: {"pow": [7, 12345, 1000003]}` computes the modular power with BigInt in the harness. The result is never supplied in the prompt |
-| Assertion `kind: submission` | `name: workbench_intake` and exact `context` values must match a synthetic tool call/result pair in the action run's persisted input, read through its authenticated public GET endpoint |
+| Assertion `kind: submission` | `name: workbench_intake` or `workbench_form` and exact `context` values must match a synthetic tool call/result pair in the action run's persisted input, read through its authenticated public GET endpoint |
 | `expectFail` | Optional nonempty reason recorded in evidence. Assertions still run and failures still exit nonzero. A passing case is marked `unexpectedPass` |
 
 | Added model case | Sequence |
 | --- | --- |
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
+| `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values and walrus in the reply |
+| `credential_form` | Request a login form with a password field. Require the companion text panel and no password-like canvas field |
 | `repl_result` | Publish Scenario compute with `print(pow(7, 12345, 1000003))`, press Run and await its action turn, then ask what it printed. Require the computed value in the follow-up reply |
 
 | Existing REPL result path | Code trace |
@@ -60,7 +62,7 @@
 | Bound action | `workbench/backend/soliplex_a2ui_workbench/src/soliplex_a2ui_workbench/workbench_publication.py:299` binds workbench.program.run_result to output and provenance |
 | Action turn | `lib/src/modules/room/ui/room_screen.dart:277` forwards surface actions to `thread_view_state.dart:459`, which spawns an empty-prompt turn with a2uiAction. `packages/soliplex_agent/lib/src/orchestration/run_orchestrator.dart:249` places it in forwardedProps |
 | Model input | `workbench/backend/soliplex_a2ui_workbench/src/soliplex_a2ui_workbench/workbench_actions.py:75` converts a run result into an untrusted user message. `workbench_routes.py:336` appends it to the adapter's run input |
-| Next turn | `workbench_projection.py:147` restores accepted submissions from persisted run inputs. `workbench_routes.py:285` reinserts those messages on continuation. This is a user-message history path, with a synthetic tool pair used only for intake |
+| Next turn | `workbench_projection.py:147` restores accepted submissions from persisted run inputs. `workbench_routes.py:285` reinserts those messages on continuation. This is a user-message history path, with a synthetic tool pair used for intake and custom forms |
 | Decision | The print-output path exists. repl_result is an expected-pass case. No product path was added |
 
 | Evidence and limits | Detail |
@@ -71,7 +73,43 @@
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
 | Scope limits | Region semantics replace geometry classification. Chart assertions require image semantics with title and series plus a PNG ink check. Selectors require live verification |
 | Execution | Deterministic programs and replay remain inert. Model counter cases deliberately press Run. The follow-up fix case checks replacement, not the host AI Fix repair chain |
-| Offline tests | Twenty JavaScript tests cover corpus validation, actions, turn capture, stored intake pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Six Python tests cover recipes, public-storage cleanup and persistence, including all eight seeded recipes |
+| Offline tests | Twenty-two JavaScript tests cover corpus validation, actions, turn capture, stored intake and custom form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Seven Python tests cover recipes, public-storage cleanup and persistence, including all nine seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |
 | Unverified | Claude must run the live suites. Docker, deployed PostgreSQL, browser semantics, screenshots and both models were unavailable here |
 | Flutter checks | Host widget tests cover region and window semantics, Python source and Run mounting, and a hittable form Submit. The socket-restricted sandbox uses direct `flutter_tester` execution |
+
+## Custom form contract
+
+`place_form` accepts either `template="intake"` or a nonempty `fields` list.
+Combining them is rejected. The intake fields and `workbench_intake` submission
+shape are unchanged. Both forms display "Form created by the assistant" below
+the title. Custom fields support text, textarea, number, choice, checkbox and
+date. Each has a unique identifier name, label, kind and optional required flag.
+Choices accept string options or objects with value and label, and `multiple`.
+Number bounds are `min`/`max`; text bounds are `max_length` (default 4000).
+Required checkboxes must be checked. Dates use valid `YYYY-MM-DD` values.
+
+Bare labels become text fields with lowercase underscore names. select,
+dropdown and radio become choice; multiselect becomes choice with multiple.
+The server rejects credential requests in field names, labels, option labels
+and titles, unsupported kinds, misplaced bounds and oversized definitions.
+Limits are 12 fields, 12 options, 80 characters per title/label, 60 per option
+label/value, 64 per identifier, and 4000 per text value.
+
+Custom Submit emits `submit_form` with a `values` object. Server validation
+binds it to the stored activity and surface, rejects extra fields and checks
+required values, types, options and bounds before inference. Basic numeric
+controls write strings; accepted finite numbers become numbers. Choices write
+lists; a single choice becomes one string. Empty optional fields are omitted.
+The server adds the authoritative surfaceId and title and stores the canonical
+envelope with its untrusted synthetic `workbench_form` pair (`form.submit@1`).
+History restores that exact pair and deduplication identity. Reload and replay
+never submit or start inference. The tool is reserved and cannot be registered
+by the client; forged synthetic history is rejected.
+
+The deterministic custom form case checks an inert reload. Its byte-identical
+backend publication fixture also drives Flutter tests for all field kinds,
+semantics, current-value submission and finite region/window/split/tab bounds.
+The harness uses a radio action for Color because the basic catalog renders
+single choices without chips as radio lists. Widget semantics check that role.
+Live Chrome semantics and model runs still require the host suites.

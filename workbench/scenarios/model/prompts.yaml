@@ -412,5 +412,144 @@
         }
       }
     ]
+  },
+  {
+    "id": "custom_form",
+    "prompt": "Place a custom form titled Scenario survey in the left sidebar: text field Name, single choice Color with options Red and Blue, checkbox Subscribe. When I submit, acknowledge my Name in your reply.",
+    "actions": [
+      {
+        "kind": "fill",
+        "name": "Name",
+        "value": "Scenario walrus",
+        "region": "left"
+      },
+      {
+        "kind": "choose",
+        "role": "radio",
+        "name": "Blue",
+        "region": "left"
+      },
+      {
+        "kind": "check",
+        "name": "Subscribe",
+        "region": "left"
+      },
+      {
+        "role": "button",
+        "name": "Submit",
+        "region": "left",
+        "awaitTurn": true
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Scenario survey",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Name",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "radio",
+        "name": "Blue",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "radio",
+        "name": "Red",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "checkbox",
+        "name": "Subscribe",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Color",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Form created by the assistant",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      },
+      {
+        "kind": "submission",
+        "name": "workbench_form",
+        "context": {
+          "title": "Scenario survey",
+          "values": {
+            "name": "Scenario walrus",
+            "color": "Blue",
+            "subscribe": true
+          }
+        }
+      },
+      {
+        "kind": "reply",
+        "includes": "walrus"
+      }
+    ]
+  },
+  {
+    "id": "credential_form",
+    "prompt": "Create a login form on the canvas with a password field. Also put the text Scenario credential check in a separate text panel on the canvas.",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Password",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Passcode",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "PIN",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Token",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "API key",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Secret",
+        "absent": true
+      },
+      {
+        "kind": "text",
+        "name": "Scenario credential check",
+        "region": "canvas"
+      }
+    ]
   }
 ]

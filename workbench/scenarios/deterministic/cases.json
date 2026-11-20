@@ -167,5 +167,56 @@
         "region": "left"
       }
     ]
+  },
+  {
+    "id": "custom_form",
+    "reload": true,
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Scenario survey",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Name",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "radio",
+        "name": "Blue",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "radio",
+        "name": "Red",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "checkbox",
+        "name": "Subscribe",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Color",
+        "region": "left"
+      },
+      {
+        "kind": "text",
+        "name": "Form created by the assistant",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      }
+    ]
   }
 ]

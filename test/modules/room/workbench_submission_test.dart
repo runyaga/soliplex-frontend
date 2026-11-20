@@ -9,7 +9,11 @@ import '../../helpers/fakes.dart';
 // Run on JavaScript as well as the VM: submission ID allocation must reach
 // the provider on both targets, whose integer shift semantics differ.
 void main() {
-  for (final name in ['workbench.program.run_result', 'submit_intake']) {
+  for (final name in [
+    'workbench.program.run_result',
+    'submit_intake',
+    'submit_form'
+  ]) {
     test('$name allocates a submission and starts an action turn', () async {
       final stream = RecordingAgUiStreamClient();
       final connection = ServerConnection(
@@ -48,21 +52,29 @@ void main() {
       final action = <String, Object?>{
         'name': name,
         'surfaceId': 'surface',
-        'sourceComponentId': name == 'submit_intake' ? 'submit' : 'root',
-        'context': name == 'submit_intake'
+        'sourceComponentId': name.startsWith('submit_') ? 'submit' : 'root',
+        'context': name == 'submit_form'
             ? {
-                'question': 'Scenario zebra',
-                'districts': ['north'],
-                'acknowledged': true,
+                'values': {
+                  'name': 'Scenario walrus',
+                  'color': ['Blue'],
+                  'subscribe': true
+                }
               }
-            : {
-                'side': 'client',
-                'engine': 'monty-1.3.0',
-                'invocationId': 'invocation-1',
-                'chainId': 'invocation-1',
-                'outcome': 'success',
-                'output': '766228',
-              },
+            : name == 'submit_intake'
+                ? {
+                    'question': 'Scenario zebra',
+                    'districts': ['north'],
+                    'acknowledged': true,
+                  }
+                : {
+                    'side': 'client',
+                    'engine': 'monty-1.3.0',
+                    'invocationId': 'invocation-1',
+                    'chainId': 'invocation-1',
+                    'outcome': 'success',
+                    'output': '766228',
+                  },
       };
       view.sendAction(action, runtime, activityMessageId: 'activity');
       for (var i = 0; i < 100 && stream.inputs.isEmpty; i++) {

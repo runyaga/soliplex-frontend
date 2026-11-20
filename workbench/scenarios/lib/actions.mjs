@@ -41,8 +41,8 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
       } else if (kind === 'check') {
         await check(target, wait);
       } else if (kind === 'select' || kind === 'choose') {
-        // Intake Districts uses FilterChip, exposed as a labelled button.
-        // Checkbox/radio variants are selected idempotently as well.
+        // Roles are explicit: multiple choices expose checkboxes; single
+        // choices with displayStyle=checkbox expose radio buttons.
         if (role === 'checkbox' || role === 'radio') await check(target, wait);
         else if ((await target.getAttribute('aria-pressed')) !== 'true' && (await target.getAttribute('aria-selected')) !== 'true') await target.click();
       } else {

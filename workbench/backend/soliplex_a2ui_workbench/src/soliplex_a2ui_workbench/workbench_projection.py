@@ -104,7 +104,8 @@ class RunWorkbenchProjection:
             if "height" in root:
                 record["height"] = root["height"]
         elif component == "Column" and role == "content":
-            record.update(catalogId=WORKBENCH_CATALOG, component="PlaceForm", template="intake", title=data["title"])
+            record.update(catalogId=WORKBENCH_CATALOG, component="PlaceForm", title=data["title"],
+                          **({"fields": data["fields"]} if "fields" in data else {"template": "intake"}))
         elif component == "Text" and role == "content":
             record.update(catalogId=BASIC_CATALOG, properties={"text": root["text"]})
         else:
