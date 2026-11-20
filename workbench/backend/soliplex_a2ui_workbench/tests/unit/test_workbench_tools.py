@@ -286,7 +286,12 @@ def test_repair_reopens_a_previously_closed_program_leaf(ctx):
 
     window = tools.create_container(ctx, "r_canvas", "window", "Tally")
     program = tools.run_python_client(ctx, "Tally", 'print("old")', window["nodeId"])
-    tools.close_panel(ctx, program["nodeId"])
+    # Reproduce a historical closed leaf; close_panel now closes its window.
+    layout = ctx.snapshot()["layout"]
+    next(n for n in layout["nodes"] if n["id"] == program["nodeId"])["visibility"] = (
+        "closed"
+    )
+    tools._publish(ctx, layout)
     result = tools.repair_program(ctx, window["nodeId"], 'print("fixed")')
     layout = ctx.snapshot()["layout"]
     assert (
@@ -369,3 +374,365 @@ def test_chart_on_region_does_not_need_a_window(ctx):
         ctx, "Counts", "bar", [{"id": "a", "label": "A", "value": 2}], "r_canvas"
     )
     assert not any(n["kind"] == "window" for n in ctx.snapshot()["layout"]["nodes"])
+
+
+@pytest.mark.parametrize("operation", ["move_panel", "close_panel"])
+@pytest.mark.parametrize("owner_kind", ["panel", "window"])
+@pytest.mark.parametrize("target_kind", ["owner", "content"])
+def test_panel_tools_accept_owner_or_content_in_one_mutation(
+    ctx, operation, owner_kind, target_kind
+):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    owner = tools.create_container(ctx, "r_canvas", owner_kind, "Owner")["nodeId"]
+    content = tools.open_panel(ctx, "Note", "Unchanged", owner)["nodeId"]
+    before = ctx.snapshot()
+    target = owner if target_kind == "owner" else content
+    if operation == "move_panel":
+        destination = tools.create_container(ctx, "r_canvas", "tabs", "Destination")[
+            "nodeId"
+        ]
+        before = ctx.snapshot()
+        result = tools.move_panel(ctx, target, destination, 0, "large")
+    else:
+        result = tools.close_panel(ctx, target)
+    after = ctx.snapshot()
+    nodes = {node["id"]: node for node in after["layout"]["nodes"]}
+    assert result["nodeId"] == owner
+    assert after["revision"] == before["revision"] + 1 == result["layoutRevision"]
+    assert [event["kind"] for event in result["events"]] == ["layout"]
+    assert set(nodes) == {node["id"] for node in before["layout"]["nodes"]}
+
+    def content_payload(state):
+        return [
+            {
+                key: value
+                for key, value in record.items()
+                if key not in {"workbenchCommit", "surfaceRevision"}
+            }
+            for record in state["content"]
+        ]
+
+    assert content_payload(after) == content_payload(before)
+    assert nodes[content]["parentId"] == owner
+    assert nodes[owner]["children"] == [content]
+    if operation == "move_panel":
+        assert nodes[owner]["parentId"] == destination
+        assert nodes[owner]["size"] == "large"
+        assert owner not in nodes["r_canvas"]["children"]
+        assert nodes[destination]["children"] == [owner]
+    else:
+        assert nodes[owner]["visibility"] == "closed"
+        assert nodes[content]["visibility"] == "open"
+
+
+@pytest.mark.parametrize("operation", ["move_panel", "close_panel"])
+def test_content_target_uses_nearest_panel_inside_window(ctx, operation):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    window = tools.create_container(ctx, "r_canvas", "window", "Window")["nodeId"]
+    split = tools.create_container(ctx, "r_canvas", "split", "Split")["nodeId"]
+    tools.move_panel(ctx, split, window, 0, "medium")
+    content = tools.open_panel(ctx, "Note", "Hello", split)["nodeId"]
+    before = ctx.snapshot()
+    previous = {node["id"]: node for node in before["layout"]["nodes"]}
+    panel = previous[content]["parentId"]
+    if operation == "move_panel":
+        result = tools.move_panel(ctx, content, "r_right", 0, "large")
+    else:
+        result = tools.close_panel(ctx, content)
+    after = ctx.snapshot()
+    nodes = {node["id"]: node for node in after["layout"]["nodes"]}
+    assert result["nodeId"] == panel
+    assert nodes[window] == previous[window]
+    assert nodes[content] == previous[content]
+    assert after["revision"] == before["revision"] + 1
+
+
+def _assert_layout_rejection(ctx, action, *details):
+    before = ctx.snapshot()
+    revision = ctx.expected_revision
+    with pytest.raises(ValueError) as failure:
+        action()
+    message = str(failure.value)
+    for detail in details:
+        assert detail in message
+    assert ctx.snapshot() == before
+    assert ctx.expected_revision == revision
+
+
+@pytest.mark.parametrize("kind,limit", [("split", 3), ("tabs", 12)])
+def test_container_capacity_error_identifies_parent_children_and_alternative(
+    ctx, kind, limit
+):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    parent = tools.create_container(ctx, "r_left", kind, "Full")["nodeId"]
+    children = [
+        tools.create_container(ctx, parent, "panel", "Child")["nodeId"]
+        for _ in range(limit)
+    ]
+    incoming = tools.create_container(ctx, "r_right", "panel", "Incoming")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, incoming, parent, 0, "medium"),
+        f"{kind} capacity exceeded",
+        f"{parent} ({kind})",
+        f"{children[0]} (panel)",
+        f"{incoming} (panel)",
+        f"maximum {limit}",
+        "move a child",
+        "r_canvas",
+    )
+
+
+def test_wrong_parent_and_occupied_parent_errors_give_valid_alternatives(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    panel = tools.create_container(ctx, "r_left", "panel", "Panel")["nodeId"]
+    content = tools.open_panel(ctx, "Note", "Text", panel)["nodeId"]
+    incoming = tools.create_container(ctx, "r_right", "panel", "Incoming")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, incoming, content, 0, "medium"),
+        "wrong parent kind",
+        f"{incoming} (panel)",
+        f"{content} (surface)",
+        "use r_left",
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.open_panel(ctx, "Extra", "Text", panel),
+        f"{panel} (panel)",
+        f"{content} (surface)",
+        "must be empty",
+        "empty panel/window",
+    )
+    tabs = tools.create_container(ctx, "r_right", "tabs", "Tabs")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, tabs, panel, 0, "medium"),
+        "panel capacity exceeded",
+        f"{panel} (panel)",
+        f"{tabs} (tabs)",
+        "maximum 1",
+        "empty panel/window",
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.open_panel(ctx, "Extra", "Text", content),
+        f"{content} (surface)",
+        "not a container",
+        "r_left (region)",
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.create_container(ctx, panel, "panel", "Extra"),
+        f"{panel} (panel)",
+        "container parent",
+        "r_canvas (region)",
+    )
+
+
+@pytest.mark.parametrize(
+    "reserved", ["wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"]
+)
+@pytest.mark.parametrize("operation", ["move_panel", "close_panel"])
+def test_reserved_node_errors_identify_kind_and_authored_alternative(
+    ctx, reserved, operation
+):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    args = (
+        (ctx, reserved, "r_left", 0, "medium")
+        if operation == "move_panel"
+        else (ctx, reserved)
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: getattr(tools, operation)(*args),
+        f"{reserved} ({'workspace' if reserved == 'wb_root' else 'region'})",
+        "protected",
+        "authored panel/window",
+        "get_workbench",
+    )
+
+
+def test_chat_placement_error_identifies_region_and_alternatives(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    incoming = tools.create_container(ctx, "r_left", "panel", "Panel")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, incoming, "r_chat", 0, "medium"),
+        "r_chat (region)",
+        f"{incoming} (panel)",
+        "chat cannot have children",
+        "use r_left (region)",
+    )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["move_panel", "close_panel", "open_panel", "create_container", "repair_program"],
+)
+def test_unknown_id_error_names_id_and_how_to_find_valid_ids(ctx, operation):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    arguments = {
+        "move_panel": (ctx, "missing", "r_left", 0, "medium"),
+        "close_panel": (ctx, "missing"),
+        "open_panel": (ctx, "Title", "Text", "missing"),
+        "create_container": (ctx, "missing", "panel", "Title"),
+        "repair_program": (ctx, "missing", "print(1)"),
+    }
+    _assert_layout_rejection(
+        ctx,
+        lambda: getattr(tools, operation)(*arguments[operation]),
+        "unknown workbench node 'missing'",
+        "kind unknown",
+        "get_workbench",
+        "returned node id",
+        "r_canvas (region)",
+    )
+
+
+def test_depth_error_names_deep_node_parent_and_shallower_alternative(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    parent = "r_canvas"
+    for _ in range(6):
+        parent = tools.create_container(ctx, parent, "split", "Deep")["nodeId"]
+    incoming = tools.create_container(ctx, "r_left", "panel", "Panel")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, incoming, parent, 0, "medium"),
+        "maximum depth exceeded",
+        f"{incoming} (panel)",
+        f"{parent} (split)",
+        "depth 9",
+        "maximum 8",
+        "shallower parent",
+        "r_canvas (region)",
+    )
+
+
+def test_window_ancestry_errors_identify_nodes_and_valid_canvas_placement(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    first = tools.create_container(ctx, "r_canvas", "window", "First")["nodeId"]
+    second = tools.create_container(ctx, "r_canvas", "window", "Second")["nodeId"]
+    split = tools.create_container(ctx, "r_canvas", "split", "Split")["nodeId"]
+    tools.move_panel(ctx, split, first, 0, "medium")
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, second, split, 0, "medium"),
+        "nested windows are forbidden",
+        f"{second} (window)",
+        f"{first} (window)",
+        "under r_canvas (region)",
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, second, "r_right", 0, "medium"),
+        "windows require canvas ancestry",
+        f"{second} (window)",
+        "r_right (region)",
+        "under r_canvas (region)",
+    )
+    program = tools.run_python_client(ctx, "Program", "print(1)", split)["nodeId"]
+    panel = next(
+        n["parentId"] for n in ctx.snapshot()["layout"]["nodes"] if n["id"] == program
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, program, "r_right", 0, "medium"),
+        "program surface requires window ancestry",
+        f"{program} (surface)",
+        f"{panel} (panel)",
+        "split/tabs inside a window",
+        "r_canvas (region)",
+    )
+
+
+def test_open_mount_and_window_capacity_errors_explain_how_to_free_capacity(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    contents = [
+        tools.open_panel(ctx, "Note", "Text", "r_left")["nodeId"] for _ in range(12)
+    ]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.open_panel(ctx, "Overflow", "Text", "r_left"),
+        "open content mount capacity exceeded",
+        f"{contents[0]} (surface in ",
+        "maximum 12",
+        "close_panel",
+        "free an open mount",
+    )
+    first = tools.create_container(ctx, "r_canvas", "window", "First")["nodeId"]
+    tools.create_container(ctx, "r_canvas", "window", "Second")
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.create_container(ctx, "r_canvas", "window", "Third"),
+        "expanded window capacity exceeded",
+        f"{first} (window)",
+        "maximum 2",
+        "close_panel",
+        "repair_program",
+    )
+
+
+def test_total_node_capacity_error_explains_closed_nodes_still_count(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    for _ in range(58):
+        tools.create_container(ctx, "r_left", "panel", "Panel")
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.create_container(ctx, "r_right", "panel", "Overflow"),
+        "total node capacity exceeded",
+        "r_left (region)",
+        "maximum 64 including closed nodes",
+        "move existing nodes or repair an existing program",
+        "start a new thread for new content",
+        "closing nodes does not free",
+    )
+
+
+def test_cycle_and_order_errors_identify_nodes_and_valid_retry(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    split = tools.create_container(ctx, "r_left", "split", "Split")["nodeId"]
+    panel = tools.create_container(ctx, split, "panel", "Panel")["nodeId"]
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, split, panel, 0, "medium"),
+        f"{split} (split)",
+        f"{panel} (panel)",
+        "descendant",
+        "parent outside the subtree",
+    )
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools.move_panel(ctx, panel, "r_right", 2, "medium"),
+        f"{panel} (panel)",
+        "r_right (region)",
+        "out of range",
+        "use order from 0 to 0",
+    )
+
+
+def test_control_data_capacity_error_names_workspace_and_valid_alternative(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+
+    layout = ctx.snapshot()["layout"]
+    layout["shared"]["oversized"] = "x" * 65_536
+    _assert_layout_rejection(
+        ctx,
+        lambda: tools._publish(ctx, layout),
+        "layout exceeds 64 KiB",
+        "wb_root (workspace)",
+        "reuse existing nodes",
+        "start a new thread",
+    )

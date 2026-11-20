@@ -25,12 +25,12 @@ TOOL_EXAMPLES = {
     "run_python_server": {"surface_id": "SURFACE_ID", "source": "print(1)"},
     "create_container": {"parent_id": "r_canvas", "kind": "window", "title": "Tally"},
     "move_panel": {
-        "node_id": "NODE_ID",
+        "node_id": "CONTENT_NODE_ID",
         "parent_id": "r_right",
         "order": 0,
         "size": "medium",
     },
-    "close_panel": {"node_id": "NODE_ID"},
+    "close_panel": {"node_id": "CONTENT_NODE_ID"},
     "repair_program": {
         "node_id": "PROGRAM_NODE_ID",
         "source": 'import ui\nui.show(ui.Text("Fixed"))',
@@ -97,6 +97,25 @@ It publishes the window and program in one layout revision. Inside an existing
 window it reuses that window. show_chart needs no window and uses a panel.
 A rejected tool call returns an error with corrective guidance: fix it and retry;
 never tell the user that a failed call published content.
+
+move_panel and close_panel accept a panel id, a window id, or a content leaf
+node id (kind surface). Content tools return the content leaf's nodeId; pass it
+directly to move_panel or close_panel to act on its nearest enclosing panel or
+window. These calls return the affected container's nodeId, preserve all stable
+ids and content, and publish one layout revision. Nested panels use the nearest
+owner, not the outer window. surfaceId and activityMessageId are not node ids.
+For example, after show_chart returns nodeId=CONTENT_NODE_ID, move_panel with
+node_id=CONTENT_NODE_ID and parent_id='r_right' moves its panel and chart together.
+Programs and windows must stay on r_canvas or inside its containers, with no
+nested windows. Splits and tabs can also be moved or closed by their own ids.
+Use the ids, kinds, and alternative in a validation error to correct the call;
+call get_workbench when an id is unknown. For a full split choose another parent
+or tabs; for depth overflow use a shallower region. Close an existing panel to
+free an open content mount, or a window to free the two-window limit. Closing
+does not free the total limit of 64 nodes; move existing nodes or repair existing
+programs without allocating nodes, or start a new thread for new content.
+Never move or close wb_root or reserved regions. r_chat cannot contain content;
+use r_left, r_right, r_canvas, or r_tray for placement.
 
 To fix a program, call repair_program with its surface node id or window id.
 Alternatively run_python_client with replace=true and the existing window id.

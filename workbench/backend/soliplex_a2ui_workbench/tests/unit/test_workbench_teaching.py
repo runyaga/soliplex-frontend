@@ -4,7 +4,10 @@ import inspect
 import json
 from pathlib import Path
 
-from soliplex_a2ui_workbench import workbench_agent_tools
+from soliplex_a2ui_workbench import workbench_agent_tools, workbench_tools
+from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
+from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
+from soliplex_a2ui_workbench.workbench_repository import WorkbenchScope
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 from soliplex_a2ui_workbench.workbench_teaching import TOOL_EXAMPLES, room_skill
 
@@ -40,3 +43,47 @@ def test_generated_catalog_contains_actual_component_schemas():
         name for catalog in generated["catalogs"] for name in catalog["components"]
     }
     assert {"Text", "Button", "PythonRepl", "Chart"} <= names
+
+
+def test_generated_move_close_teaching_matches_executable_content_id_rules():
+    text = room_skill("workbench")
+    for phrase in (
+        "accept a panel id, a window id, or a content leaf",
+        "nearest enclosing panel or",
+        "return the affected container's nodeId",
+        "publish one layout revision",
+        "Nested panels use the nearest",
+        "surfaceId and activityMessageId are not node ids",
+        "Splits and tabs can also be moved or closed by their own ids",
+        "Closing\ndoes not free the total limit of 64 nodes",
+    ):
+        assert phrase in text
+    for name in ("move_panel", "close_panel"):
+        assert TOOL_EXAMPLES[name]["node_id"] == "CONTENT_NODE_ID"
+        assert "nearest enclosing panel/window" in inspect.getdoc(
+            getattr(workbench_agent_tools, name)
+        )
+
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    ctx = WorkbenchToolContext(
+        scope, RunWorkbenchProjection(scope), "run", allowed_rooms=frozenset({"room"})
+    )
+    chart = workbench_tools.show_chart(ctx, **TOOL_EXAMPLES["show_chart"])
+    leaf = next(
+        n for n in ctx.snapshot()["layout"]["nodes"] if n["id"] == chart["nodeId"]
+    )
+    owner = leaf["parentId"]
+    before = ctx.snapshot()
+    for name in ("move_panel", "close_panel"):
+        arguments = {**TOOL_EXAMPLES[name], "node_id": chart["nodeId"]}
+        result = getattr(workbench_tools, name)(ctx, **arguments)
+        assert result["nodeId"] == owner
+        assert result["layoutRevision"] == before["revision"] + 1
+        assert len(result["events"]) == 1
+        after = ctx.snapshot()
+        assert after["content"] == before["content"]
+        before = after
+    nodes = {node["id"]: node for node in after["layout"]["nodes"]}
+    assert nodes[owner]["parentId"] == "r_right"
+    assert nodes[owner]["visibility"] == "closed"
+    assert nodes[chart["nodeId"]]["parentId"] == owner

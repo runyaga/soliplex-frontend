@@ -184,7 +184,7 @@ async def move_panel(
     """Move a workbench panel and set its placement.
 
     Args:
-        node_id: Identity of the panel to move.
+        node_id: Panel, window, or content node id; content moves its nearest enclosing panel/window.
         parent_id: Existing container node that will receive the panel.
         order: Zero-based position among the container's children.
         size: Requested panel size: ``small``, ``medium``, or ``large``.
@@ -203,7 +203,7 @@ async def close_panel(ctx: RunContext[AgentDependencies], node_id: str) -> ToolR
     """Close a workbench panel.
 
     Args:
-        node_id: Identity of the panel to close.
+        node_id: Panel, window, or content node id; content closes its nearest enclosing panel/window.
     """
     return await _call(workbench_tools.close_panel, ctx, node_id=node_id)
 
@@ -262,7 +262,9 @@ async def _call(function, ctx: RunContext[AgentDependencies], **kwargs):
         else:
             detail = str(exc)
         correction = "Call get_workbench, then retry with valid node ids and arguments."
-        if "window ancestry" in detail or "canvas ancestry" in detail:
+        if function.__name__ in {"run_python_client", "repair_program"} and (
+            "window ancestry" in detail or "canvas ancestry" in detail
+        ):
             correction = (
                 "Programs need a window on the canvas: call create_container(kind='window', "
                 "parent_id='r_canvas', title='Program') first, or pass a window id. "

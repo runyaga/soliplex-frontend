@@ -26,8 +26,21 @@ def _record_ids() -> tuple[str, str]:
 def _node(nodes: list[dict[str, Any]], node_id: str) -> dict[str, Any]:
     found = next((node for node in nodes if node["id"] == node_id), None)
     if found is None:
-        raise ValueError("unknown workbench node")
+        raise ValueError(
+            f"unknown workbench node {node_id!r} (kind unknown); call get_workbench "
+            "and use a returned node id, not a surfaceId or activityMessageId. "
+            "For placement use r_left (region), r_right (region), or r_canvas (region)"
+        )
     return found
+
+
+def _panel_target(nodes: list[dict[str, Any]], node_id: str) -> dict[str, Any]:
+    """Resolve content to its nearest owner without changing the snapshot."""
+    node = _node(nodes, node_id)
+    if node["kind"] == "surface":
+        while node["kind"] not in {"panel", "window"} and node["parentId"]:
+            node = _node(nodes, node["parentId"])
+    return node
 
 
 def _publish(
@@ -43,6 +56,13 @@ def _publish(
     if expected is None or current["layout"] is None:
         raise PublicationConflict("workbench has no registered layout")
     layout = snapshot
+    if len(layout["nodes"]) > 64:
+        nodes = ", ".join(f"{node['id']} ({node['kind']})" for node in layout["nodes"])
+        raise ValueError(
+            f"total node capacity exceeded: {nodes}; maximum 64 including closed nodes; "
+            "move existing nodes or repair an existing program without allocating more nodes; "
+            "start a new thread for new content at this limit; closing nodes does not free this limit"
+        )
     layout["layoutRevision"] = expected + 1
     all_content = [
         {key: value for key, value in item.items() if key != "workbenchCommit"}
@@ -109,9 +129,20 @@ def _content_result(
     _, layout = _current(ctx)
     parent = _node(layout["nodes"], parent_id)
     if parent["kind"] not in {"region", "split", "tabs", "panel", "window"}:
-        raise ValueError("content parent is not a container")
+        raise ValueError(
+            f"{parent_id} ({parent['kind']}): content parent is not a container; "
+            "use r_left (region), r_right (region), or an empty panel/window id"
+        )
     if parent["kind"] in {"panel", "window"} and parent["children"]:
-        raise ValueError("content parent must be empty")
+        children = ", ".join(
+            f"{child_id} ({_node(layout['nodes'], child_id)['kind']})"
+            for child_id in parent["children"]
+        )
+        raise ValueError(
+            f"{parent_id} ({parent['kind']}) contains {children}: content parent must be empty; "
+            "use an empty panel/window or r_canvas (region) to create another owner. "
+            "For an existing Python program use repair_program with its surface node id"
+        )
     content_parent_id = parent_id
     ancestors = []
     current = parent
@@ -124,7 +155,8 @@ def _content_result(
     if needs_window:
         if not any(node["id"] == "r_canvas" for node in ancestors):
             raise ValueError(
-                "program windows require canvas ancestry; pass 'r_canvas' or a container inside it"
+                f"{parent_id} ({parent['kind']}): program windows require canvas ancestry; "
+                "pass 'r_canvas' (region) or a container inside it"
             )
         # A panel can contain a split, which can in turn contain a window.
         # Keep the caller's container identity and publish the entire change once.
@@ -229,7 +261,11 @@ def create_container(
     _, layout = _current(ctx)
     parent = _node(layout["nodes"], parent_id)
     if parent["kind"] not in {"region", "split", "tabs"}:
-        raise ValueError("container parent cannot accept a child")
+        raise ValueError(
+            f"{parent_id} ({parent['kind']}): container parent cannot accept a child "
+            f"via create_container(kind={kind!r}); use r_left (region), r_right (region), "
+            "r_canvas (region), or a split/tabs id"
+        )
     node_id = _node_id_override or _node_id()
     parent["children"].append(node_id)
     payload = {"axis": "horizontal"} if kind == "split" else {}
@@ -334,22 +370,37 @@ def run_python_server(
 def move_panel(
     ctx: WorkbenchToolContext, node_id: str, parent_id: str, order: int, size: str
 ) -> dict[str, object]:
-    """Move a stable subtree and validate all grammar, scope and capacity rules."""
+    """Move a stable subtree, resolving content leaves to their nearest owner."""
     _, layout = _current(ctx)
     nodes = layout["nodes"]
     protected = {"wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"}
+    moving = _panel_target(nodes, node_id)
+    node_id = moving["id"]
     if node_id in protected:
-        raise ValueError("protected workbench node cannot be moved")
-    moving = _node(nodes, node_id)
+        raise ValueError(
+            f"{node_id} ({moving['kind']}): protected workbench node cannot be moved; "
+            "move an authored panel/window or its content node instead; call get_workbench for ids"
+        )
     parent = _node(nodes, parent_id)
     if moving["parentId"] is None:
-        raise ValueError("workbench root cannot be moved")
+        raise ValueError(
+            f"{node_id} ({moving['kind']}): workbench root cannot be moved; "
+            "move an authored panel/window under r_left, r_right, or r_canvas (regions)"
+        )
     old_parent = _node(nodes, moving["parentId"])
     old_parent["children"].remove(node_id)
     if parent_id == node_id or _is_descendant(nodes, node_id, parent_id):
-        raise ValueError("cannot move a node into its descendant")
+        raise ValueError(
+            f"{node_id} ({moving['kind']}) cannot move a node into its descendant "
+            f"{parent_id} ({parent['kind']}) or itself; choose a parent outside the subtree, "
+            "such as r_canvas (region)"
+        )
     if not 0 <= order <= len(parent["children"]):
-        raise ValueError("child order is out of range")
+        raise ValueError(
+            f"{node_id} ({moving['kind']}) into {parent_id} ({parent['kind']}): "
+            f"child order {order} is out of range; use order from 0 to {len(parent['children'])} "
+            "after removing the moving node from its old position"
+        )
     moving["parentId"] = parent_id
     moving["size"] = size
     parent["children"].insert(order, node_id)
@@ -378,11 +429,15 @@ def _descendant_ids(nodes: list[dict[str, Any]], node: dict[str, Any]) -> set[st
 
 
 def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
-    """Mark one allowed node closed while retaining its edges and descendants."""
+    """Close a subtree or a content leaf's nearest owner, retaining identities."""
     _, layout = _current(ctx)
+    node = _panel_target(layout["nodes"], node_id)
+    node_id = node["id"]
     if node_id in {"wb_root", "r_chat", "r_left", "r_right", "r_canvas", "r_tray"}:
-        raise ValueError("protected workbench node cannot be closed")
-    node = _node(layout["nodes"], node_id)
+        raise ValueError(
+            f"{node_id} ({node['kind']}): protected workbench node cannot be closed; "
+            "close an authored panel/window or its content node instead; call get_workbench for ids"
+        )
     node["visibility"] = "closed"
     result = _publish(ctx, layout)
     return {
@@ -418,7 +473,9 @@ def repair_program(
         node = _node(layout["nodes"], node["children"][0])
     if node["kind"] != "surface":
         raise ValueError(
-            "repair target must be a registered program surface or its window"
+            f"{node['id']} ({node['kind']}): repair target must be a registered program "
+            "surface or its window; call get_workbench and pass that surface node id, "
+            "or use parent_id='r_canvas' to place a new program"
         )
     record = next(
         (
@@ -430,7 +487,11 @@ def repair_program(
         None,
     )
     if record is None:
-        raise ValueError("repair target is not a registered program")
+        raise ValueError(
+            f"{node['id']} ({node['kind']}): repair target is not a registered program; "
+            "pass a Python program surface node id or its window, "
+            "or use parent_id='r_canvas' to place a new program"
+        )
     # Older repair attempts closed the content leaf before replacing it.
     # Reopen that leaf; retain the owning window's visibility and placement.
     node["visibility"] = "open"

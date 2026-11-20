@@ -118,15 +118,46 @@ class LayoutSnapshot(Closed):
             for child_id in node.children:
                 child = by_id.get(child_id)
                 if child is None or child.parentId != node.id:
-                    raise ValueError("inconsistent child edge")
+                    raise ValueError(
+                        f"inconsistent child edge: {node.id} ({node.kind}) to {child_id} "
+                        f"({child.kind if child else 'unknown'}); call get_workbench and "
+                        "use move_panel with existing node ids to change parents"
+                    )
                 if not self._allows_child(node.kind, child.kind):
-                    raise ValueError("wrong parent kind")
+                    if child.kind == "surface":
+                        alternative = (
+                            "keep surface content in its panel/window; pass the content node id "
+                            "to move_panel and it moves its nearest enclosing panel/window"
+                        )
+                    elif child.kind == "window":
+                        alternative = "move the window under r_canvas (region), outside any other window"
+                    else:
+                        alternative = (
+                            "use r_left, r_right, or r_canvas (regions), or a split/tabs; "
+                            "a panel/window accepts only one split, tabs, or surface"
+                        )
+                    raise ValueError(
+                        f"wrong parent kind: {child.id} ({child.kind}) cannot be placed "
+                        f"under {node.id} ({node.kind}); {alternative}"
+                    )
             if node.kind == "split" and len(node.children) > 3:
-                raise ValueError("split capacity exceeded")
+                raise ValueError(
+                    f"split capacity exceeded: {node.id} (split) has children "
+                    f"{self._describe_children(node, by_id)}; maximum 3; "
+                    "move a child to r_left, r_right, or r_canvas (regions), or use tabs (maximum 12)"
+                )
             if node.kind == "tabs" and len(node.children) > 12:
-                raise ValueError("tabs capacity exceeded")
+                raise ValueError(
+                    f"tabs capacity exceeded: {node.id} (tabs) has children "
+                    f"{self._describe_children(node, by_id)}; maximum 12; "
+                    "move a child to another tabs or r_left, r_right, or r_canvas (regions)"
+                )
             if node.kind in {"panel", "window"} and len(node.children) > 1:
-                raise ValueError("panel capacity exceeded")
+                raise ValueError(
+                    f"panel capacity exceeded: {node.id} ({node.kind}) has children "
+                    f"{self._describe_children(node, by_id)}; maximum 1; "
+                    "choose an empty panel/window or move the incoming panel to r_canvas (region)"
+                )
             if node.kind in {"workspace", "region"} and node.id in {
                 "wb_root",
                 "r_chat",
@@ -141,12 +172,24 @@ class LayoutSnapshot(Closed):
         visiting: set[str] = set()
 
         def walk(node_id: str, depth: int) -> None:
+            node = by_id[node_id]
             if depth > 8:
-                raise ValueError("maximum depth exceeded")
+                parent = by_id[node.parentId]
+                raise ValueError(
+                    f"maximum depth exceeded: {node_id} ({node.kind}) under "
+                    f"{parent.id} ({parent.kind}) reaches depth {depth}; maximum 8 (root is 1); "
+                    "move the subtree to a shallower parent such as r_canvas (region)"
+                )
             if node_id in visiting:
-                raise ValueError("cycle")
+                raise ValueError(
+                    f"cycle at {node_id} ({node.kind}); move to a parent outside its subtree, "
+                    "such as r_canvas (region)"
+                )
             if node_id in seen:
-                raise ValueError("multiple parents")
+                raise ValueError(
+                    f"multiple parents for {node_id} ({node.kind}); use move_panel "
+                    "to move the existing node rather than adding a second reference"
+                )
             visiting.add(node_id)
             seen.add(node_id)
             for child_id in by_id[node_id].children:
@@ -165,35 +208,76 @@ class LayoutSnapshot(Closed):
         for node in self.nodes:
             ancestors = self._ancestors(node, by_id)
             if node.kind == "window":
-                if any(parent.kind == "window" for parent in ancestors):
-                    raise ValueError("nested windows are forbidden")
+                window = next((p for p in ancestors if p.kind == "window"), None)
+                if window:
+                    raise ValueError(
+                        f"nested windows are forbidden: {node.id} (window) is inside "
+                        f"{window.id} (window); move {node.id} under r_canvas (region) "
+                        "or a split/tabs on the canvas outside any window"
+                    )
                 if not any(parent.id == "r_canvas" for parent in ancestors):
-                    raise ValueError("windows require canvas ancestry")
+                    parent = by_id[node.parentId]
+                    raise ValueError(
+                        f"windows require canvas ancestry: {node.id} (window) under "
+                        f"{parent.id} ({parent.kind}); move {node.id} under r_canvas (region) "
+                        "or a container inside it, outside any window"
+                    )
             if (
                 node.kind == "surface"
                 and node.payload["surfaceId"] in program_surfaces
                 and not any(parent.kind == "window" for parent in ancestors)
             ):
-                raise ValueError("program surface requires window ancestry")
+                parent = by_id[node.parentId]
+                raise ValueError(
+                    f"program surface requires window ancestry: {node.id} (surface) under "
+                    f"{parent.id} ({parent.kind}); move its enclosing panel under a "
+                    "split/tabs inside a window on r_canvas (region), or place a program with "
+                    "run_python_client(parent_id='r_canvas')"
+                )
         self._validate_reserved(by_id)
         open_mounts = sum(
             node.kind == "surface" and self._effectively_open(node, by_id)
             for node in self.nodes
         )
         if open_mounts > 12:
-            raise ValueError("open content mount capacity exceeded")
+            opened = ", ".join(
+                f"{node.id} (surface in {node.parentId})"
+                for node in self.nodes
+                if node.kind == "surface" and self._effectively_open(node, by_id)
+            )
+            raise ValueError(
+                f"open content mount capacity exceeded: {opened}; maximum 12; "
+                "call close_panel with an existing content node or its panel/window "
+                "to free an open mount, then retry"
+            )
         expanded_windows = sum(
             node.kind == "window" and self._effectively_open(node, by_id)
             for node in self.nodes
         )
         if expanded_windows > 2:
-            raise ValueError("expanded window capacity exceeded")
+            opened = ", ".join(
+                f"{node.id} (window)"
+                for node in self.nodes
+                if node.kind == "window" and self._effectively_open(node, by_id)
+            )
+            raise ValueError(
+                f"expanded window capacity exceeded: {opened}; maximum 2; "
+                "call close_panel with an existing window id or reuse its program "
+                "with repair_program, then retry"
+            )
         control_data = json.dumps(
             self.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8")
         if len(control_data) > 65_536:
-            raise ValueError("layout exceeds 64 KiB")
+            raise ValueError(
+                f"layout exceeds 64 KiB: {root.id} ({root.kind}) uses {len(control_data)} bytes; "
+                "reuse existing nodes instead of adding layout data, or start a new thread"
+            )
         return self
+
+    @staticmethod
+    def _describe_children(node: LayoutNode, nodes: dict[str, LayoutNode]) -> str:
+        return ", ".join(f"{child} ({nodes[child].kind})" for child in node.children)
 
     @staticmethod
     def _ancestors(node: LayoutNode, nodes: dict[str, LayoutNode]) -> list[LayoutNode]:
@@ -254,7 +338,11 @@ class LayoutSnapshot(Closed):
         ):
             raise ValueError("reserved nodes must remain open")
         if nodes["r_chat"].children:
-            raise ValueError("chat cannot have children")
+            raise ValueError(
+                "r_chat (region): chat cannot have children; rejected children "
+                f"{LayoutSnapshot._describe_children(nodes['r_chat'], nodes)}; "
+                "use r_left (region), r_right (region), or r_canvas (region) instead"
+            )
 
 
 class IntakeSubmit(Closed):

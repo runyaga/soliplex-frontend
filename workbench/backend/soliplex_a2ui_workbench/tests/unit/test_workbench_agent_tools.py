@@ -383,7 +383,135 @@ def test_tree_validation_retry_keeps_the_previous_snapshot(monkeypatch):
             )
         error = json.loads(failure.value.message)["error"]
         assert "windows require canvas ancestry" in error
-        assert "or pass a window id" in error
+        assert "under r_canvas (region)" in error
         assert context.deps._workbench_context.snapshot() == before
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("content_kind", ["form", "chart", "program"])
+def test_content_node_moves_and_closes_owner_at_real_tool_boundary(
+    content_kind, monkeypatch
+):
+    monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
+    context, form, chart, _window, program = asyncio.run(publication_fixture())
+    target = {"form": form, "chart": chart, "program": program}[
+        content_kind
+    ].return_value["nodeId"]
+    working = context.deps._workbench_context
+    before = working.snapshot()
+    owner = next(n["parentId"] for n in before["layout"]["nodes"] if n["id"] == target)
+
+    async def exercise():
+        destination = "r_right"
+        if content_kind == "program":
+            container = await _tool("create_container").function(
+                context, parent_id="r_canvas", kind="tabs", title="Destination"
+            )
+            destination = container.return_value["nodeId"]
+        previous = working.snapshot()
+        moved = await _tool("move_panel").function(
+            context, node_id=target, parent_id=destination, order=0, size="medium"
+        )
+        assert moved.return_value["nodeId"] == owner
+        assert moved.return_value["layoutRevision"] == previous["revision"] + 1
+        assert len(moved.metadata) == 1
+        nodes = {n["id"]: n for n in working.snapshot()["layout"]["nodes"]}
+        assert nodes[owner]["parentId"] == destination
+        assert nodes[target]["parentId"] == owner
+        closed = await _tool("close_panel").function(context, node_id=target)
+        assert closed.return_value["nodeId"] == owner
+        assert (
+            closed.return_value["layoutRevision"]
+            == moved.return_value["layoutRevision"] + 1
+        )
+        assert len(closed.metadata) == 1
+        after = working.snapshot()
+        assert (
+            next(n for n in after["layout"]["nodes"] if n["id"] == owner)["visibility"]
+            == "closed"
+        )
+        assert after["content"] == before["content"]
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize(
+    "failure_kind",
+    ["unknown", "reserved", "wrong_parent", "capacity", "depth", "window"],
+)
+def test_layout_retry_retains_specific_node_kinds_and_corrective_action(
+    failure_kind, monkeypatch
+):
+    monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
+    context = _context()
+
+    async def exercise():
+        await _tool("get_workbench").function(context)
+        working = context.deps._workbench_context
+        target = workbench_tools.create_container(working, "r_left", "panel", "Panel")[
+            "nodeId"
+        ]
+        parent = "r_right"
+        expected = []
+        if failure_kind == "unknown":
+            parent = "missing"
+            expected = ["missing", "kind unknown", "returned node id"]
+        elif failure_kind == "reserved":
+            target = "r_chat"
+            expected = ["r_chat (region)", "protected", "authored panel/window"]
+        elif failure_kind == "wrong_parent":
+            parent = workbench_tools.open_panel(working, "Note", "Text", "r_right")[
+                "nodeId"
+            ]
+            expected = [
+                f"{target} (panel)",
+                f"{parent} (surface)",
+                "wrong parent kind",
+                "use r_left",
+            ]
+        elif failure_kind == "capacity":
+            parent = workbench_tools.create_container(
+                working, "r_right", "split", "Full"
+            )["nodeId"]
+            for _ in range(3):
+                workbench_tools.create_container(working, parent, "panel", "Child")
+            expected = [
+                f"{parent} (split)",
+                f"{target} (panel)",
+                "maximum 3",
+                "move a child",
+            ]
+        elif failure_kind == "depth":
+            parent = "r_right"
+            for _ in range(6):
+                parent = workbench_tools.create_container(
+                    working, parent, "split", "Deep"
+                )["nodeId"]
+            expected = [
+                f"{target} (panel)",
+                f"{parent} (split)",
+                "maximum 8",
+                "shallower parent",
+            ]
+        elif failure_kind == "window":
+            target = workbench_tools.create_container(
+                working, "r_canvas", "window", "Window"
+            )["nodeId"]
+            expected = [
+                f"{target} (window)",
+                "r_right (region)",
+                "under r_canvas (region)",
+            ]
+        before = working.snapshot()
+        with pytest.raises(ModelRetry) as failure:
+            await _tool("move_panel").function(
+                context, node_id=target, parent_id=parent, order=0, size="medium"
+            )
+        error = json.loads(failure.value.message)["error"]
+        assert error.startswith("move_panel:")
+        for detail in expected:
+            assert detail in error
+        assert working.snapshot() == before
 
     asyncio.run(exercise())
