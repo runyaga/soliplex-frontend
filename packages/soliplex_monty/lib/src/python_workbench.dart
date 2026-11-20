@@ -57,7 +57,7 @@ class PythonWorkbench {
             );
           }
           final stamp = DateTime.now().microsecondsSinceEpoch;
-          final nonce = Random.secure().nextInt(1 << 32);
+          final nonce = Random.secure().nextInt(0x100000000);
           final id = 'wbp_${stamp}_$nonce';
           actions.add({'op': 'open', 'window_id': id, ...args});
           return MontyString(id);

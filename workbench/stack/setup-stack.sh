@@ -459,11 +459,17 @@ data = yaml.safe_load(q.read_text())
 data['dependencies']['dart_monty']['path'] = str(p/'deps/dart_monty2/packages/dart_monty')
 with q.open('w') as f:
     yaml.safe_dump(data, f, sort_keys=False)
-q = p/'frontend/packages/soliplex_monty/lib/src/python_ui.dart'
-s = q.read_text().replace('nextInt(1 << 32)', 'nextInt(0x7fffffff)')
-assert 'nextInt(0x7fffffff)' in s, 'Nonce implementation changed. Review web safety.'
+q = p/'frontend/packages/soliplex_monty/example/pubspec.yaml'
+data = yaml.safe_load(q.read_text())
+for section in ('dependencies', 'dev_dependencies'):
+    if 'dart_monty' in (data.get(section) or {}):
+        data[section]['dart_monty']['path'] = str(p/'deps/dart_monty2/packages/dart_monty')
 with q.open('w') as f:
-    f.write(s)
+    yaml.safe_dump(data, f, sort_keys=False)
+# dart2js wraps a shift by 32 to zero, and Random.nextInt(0) throws on the web.
+shifts = [str(f) for f in (p/'frontend').rglob('*.dart')
+          if '/build/' not in str(f) and '<< 32' in f.read_text(errors='ignore')]
+assert not shifts, f'Shift by 32 breaks dart2js: {shifts}'
 assert '_anotherTextFieldHasFocus' in (p/'frontend/lib/src/modules/room/ui/room_screen.dart').read_text()
 # DCM reads options from package config files, not an --options CLI flag.
 options = (p/'frontend/packages/soliplex_agent/dcm_options.yaml').read_text()
