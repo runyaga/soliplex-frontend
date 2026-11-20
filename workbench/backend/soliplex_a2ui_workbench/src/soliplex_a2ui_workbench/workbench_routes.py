@@ -376,7 +376,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
     scope_dependency = authenticated_scope if scope_provider is None else test_scope
     guarded = APIRouter()
 
-    async def validate_before_dispatch(request: Request, scope=Depends(scope_dependency)):
+    async def _validate_before_dispatch(request: Request, scope):
         if not is_execution_run(request):
             return
         if not is_workbench_run(request):
@@ -461,10 +461,25 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         # Soliplex 0.93's AGUIAdapter.from_request consumes Request.body().
         # Starlette Request caches those bytes after the strict JSON parse.
         request._body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        if not repository.mark_action_issued(scope, str(context.get("submissionId", ""))):
-            raise HTTPException(409, "workbench action handoff could not be recorded")
+        request.state.workbench_pending_submission_id = str(context.get("submissionId", ""))
 
-    guarded.include_router(upstream_router, dependencies=[Depends(validate_before_dispatch)])
+    async def validate_before_dispatch(request: Request, scope=Depends(scope_dependency)):
+        """Issue consumed reservations only after the stock handler returns successfully."""
+        await _validate_before_dispatch(request, scope)
+        try:
+            yield
+        except BaseException:
+            # FastAPI sends endpoint and validation failures through dependency teardown.
+            # Keep dispatching reservations unresolved when downstream did not accept them.
+            raise
+        else:
+            submission_id = getattr(request.state, "workbench_pending_submission_id", None)
+            if submission_id:
+                repository = _repository_for(request, None)
+                if not repository.mark_action_issued(scope, submission_id):
+                    raise HTTPException(409, "workbench action handoff could not be recorded")
+
+    guarded.include_router(upstream_router, dependencies=[Depends(validate_before_dispatch, scope="function")])
     return guarded
 
 

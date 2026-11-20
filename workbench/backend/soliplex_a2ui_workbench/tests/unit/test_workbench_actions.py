@@ -221,5 +221,12 @@ def test_restore_does_not_invalidate_pending_intake_reservation(tmp_path):
     service = WorkbenchActionService(repo)
     envelope = {"v": 1, "submissionId": "pending-before-restore", "activityMessageId": "activity-1", "surfaceRevision": 2, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
     service.accept(scope, envelope)
-    repo.restore_node(scope, "panel-closed")
+    before = repo.load_snapshot(scope)
+    assert next(node for node in before["layout"]["nodes"] if node["id"] == "panel-closed")["visibility"] == "closed"
+    restored = repo.restore_node(scope, "panel-closed")
+    after = repo.load_snapshot(scope)
+    assert restored == {"status": "restored", "nodeId": "panel-closed", "revision": 3, "sequence": 3}
+    assert next(node for node in after["layout"]["nodes"] if node["id"] == "panel-closed")["visibility"] == "open"
+    assert after["revision"] == before["revision"] + 1
+    assert after["sequence"] == before["sequence"] + 1
     assert service.consume_dispatch(scope, {"forwardedProps": {"a2uiAction": envelope}}) == envelope

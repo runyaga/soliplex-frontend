@@ -162,6 +162,28 @@ class SQLiteWorkbenchRepository:
                 raise PublicationConflict("stale layout revision")
             if snapshot.layoutRevision != expected_revision + 1:
                 raise PublicationConflict("layout revision must advance by one")
+            stored_content = self._db.execute(
+                "SELECT record_json FROM workbench_content WHERE actor=? AND server=? AND room=? AND thread=?",
+                key,
+            ).fetchall()
+            previous_surfaces = {
+                (item.get("activityMessageId"), item.get("surfaceId")): item
+                for row in stored_content
+                for item in [json.loads(row["record_json"])]
+            }
+            for incoming in content:
+                identity = (incoming.get("activityMessageId"), incoming.get("surfaceId"))
+                previous = previous_surfaces.get(identity)
+                old_revision = previous.get("surfaceRevision") if previous is not None else None
+                new_revision = incoming.get("surfaceRevision")
+                if (
+                    isinstance(old_revision, int)
+                    and not isinstance(old_revision, bool)
+                    and isinstance(new_revision, int)
+                    and not isinstance(new_revision, bool)
+                    and new_revision < old_revision
+                ):
+                    raise PublicationConflict("surface revision cannot regress")
             next_sequence = sequence + 1
             scope_digest = hashlib.sha256("/".join(key).encode()).hexdigest()[:24]
             plan = build_publication(

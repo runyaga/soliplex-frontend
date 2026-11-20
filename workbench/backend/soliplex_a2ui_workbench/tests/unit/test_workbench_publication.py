@@ -71,6 +71,16 @@ def test_builtin_validator_accepts_valid_basic_button_and_rejects_invalid_emitte
         build_publication([invalid], validator, {basic: {"Button"}}, layout=layout)
 
 
+def test_emitted_component_validator_rejects_invalid_wire_action_even_if_record_validation_is_stubbed(monkeypatch):
+    validator = WorkbenchCatalogValidator()
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    basic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+    record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Button", "properties": {"label": "Go", "action": 123}}
+    monkeypatch.setattr(WorkbenchCatalogValidator, "_validate_record", staticmethod(lambda *_args: None))
+    with pytest.raises(ValueError, match="Button action"):
+        build_publication([record], validator, {basic: {"Button"}}, layout=layout)
+
+
 def test_basic_emitter_rejects_top_level_properties_it_does_not_copy():
     validator = WorkbenchCatalogValidator()
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())

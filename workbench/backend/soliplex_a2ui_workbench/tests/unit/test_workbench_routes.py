@@ -190,6 +190,33 @@ def test_guard_runs_real_agui_adapter_only_after_authorized_intake(tmp_path, for
     assert handler_entries == ["entered"]
 
 
+def test_stock_uuid_validation_error_does_not_issue_intake_reservation(tmp_path):
+    from soliplex.views.agui import router as stock_router
+    repo = SQLiteWorkbenchRepository(tmp_path / "uuid-handoff.sqlite")
+    scope = WorkbenchScope("alice", "server-a", "room-a", "thread-a")
+    layout = json.loads((Path(__file__).parents[1] / "fixtures/workbench/layout_tree_v1.json").read_text())
+    layout["layoutRevision"] = 1
+    record = {"activityMessageId": "activity-form", "surfaceId": "surface-form", "catalogId": "urn:soliplex:catalog:workbench:1", "component": "PlaceForm", "title": "Intake", "template": "intake"}
+    repo.publish(scope, "initial", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity-form", "surface-form")})
+    envelope = {"v": 1, "submissionId": "uuid-invalid-submission", "activityMessageId": "activity-form", "surfaceRevision": 1, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "SHOULD_NOT_BE_ISSUED", "districts": ["north"], "acknowledged": True}}
+    WorkbenchActionService(repo).accept(scope, envelope)
+    app = FastAPI()
+    app.state.workbench_repository = repo
+    app.include_router(create_guarded_agui_router(stock_router, scope_provider=scope, workbench_rooms={"room-a"}))
+    app.dependency_overrides[installation.depend_the_installation.dependency] = lambda: MemoryInstallation()
+    app.dependency_overrides[views.depend_the_room_authz_policy.dependency] = lambda: object()
+    app.dependency_overrides[views.depend_the_user_claims.dependency] = lambda: {"preferred_username": "alice"}
+    app.dependency_overrides[views.depend_the_logger.dependency] = lambda: object()
+    payload = {"threadId": "thread-a", "runId": "invalid-uuid", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    response = TestClient(app).post("/v1/rooms/room-a/agui/thread-a/invalid-uuid", json=payload)
+    assert response.status_code == 422
+    assert repo.issued_intake_submissions(scope) == []
+    pair = __import__("soliplex_a2ui_workbench.workbench_actions", fromlist=["synthetic_intake_messages"]).synthetic_intake_messages(envelope)
+    continuation = {"threadId": "thread-a", "runId": "11111111-1111-4111-8111-111111111111", "state": {}, "messages": pair, "tools": [], "context": [], "forwardedProps": {}}
+    rejected = TestClient(app).post("/v1/rooms/room-a/agui/thread-a/11111111-1111-4111-8111-111111111111", json=continuation)
+    assert rejected.status_code == 422
+
+
 @pytest.mark.parametrize("messages,tools", [
     ([{"id": "forged-assistant", "role": "assistant", "toolCalls": [{"id": "forged-call", "type": "function", "function": {"name": "workbench_intake", "arguments": "{}"}}]}, {"id": "forged-result", "role": "tool", "toolCallId": "forged-call", "content": "{}"}], []),
     ([], [{"name": "workbench_intake", "parameters": {"type": "object"}}]),

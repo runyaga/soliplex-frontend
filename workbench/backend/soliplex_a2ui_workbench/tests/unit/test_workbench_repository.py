@@ -82,6 +82,24 @@ def test_stale_revision_and_changed_duplicate_do_not_write(tmp_path):
     repo.close()
 
 
+def test_surface_revision_regression_leaves_snapshot_and_receipts_unchanged(tmp_path):
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    repo = fixture_repo(tmp_path / "surface-revision.sqlite")
+    first_layout = snapshot()
+    first_content = [record | {"surfaceRevision": 5} for record in content()]
+    first = repo.publish(scope, "surface-five", 0, first_layout, first_content, registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
+    before_snapshot = repo.load_snapshot(scope)
+    before_receipt = repo.get_receipt(scope, "surface-five")
+    regressed = [record | {"surfaceRevision": 1} for record in content()]
+    next_layout = snapshot_at(2)
+    with pytest.raises(PublicationConflict, match="surface revision"):
+        repo.publish(scope, "surface-one", 1, next_layout, regressed, registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
+    assert repo.load_snapshot(scope) == before_snapshot
+    assert repo.get_receipt(scope, "surface-five") == before_receipt == first
+    assert repo.get_receipt(scope, "surface-one") is None
+    repo.close()
+
+
 def test_validation_and_transaction_failure_leave_previous_snapshot(tmp_path):
     scope = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t")
     repo = fixture_repo(tmp_path / "db.sqlite")
