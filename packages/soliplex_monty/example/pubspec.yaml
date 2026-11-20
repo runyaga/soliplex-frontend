@@ -11,10 +11,10 @@ environment:
 
 dependencies:
   a2ui_flutter: ^0.4.0
-  soliplex_catalogs:
-    path: ../../soliplex_catalogs
   flutter:
     sdk: flutter
+  soliplex_catalogs:
+    path: ../../soliplex_catalogs
   soliplex_frontend:
     path: ../../..
   soliplex_monty:
@@ -22,8 +22,12 @@ dependencies:
 
 dev_dependencies:
   a2ui_agent: 0.4.0
+  dart_monty:
+    path: ../../../../../dart_monty2/packages/dart_monty
   flutter_test:
     sdk: flutter
+  soliplex_agent:
+    path: ../../soliplex_agent
   soliplex_client:
     path: ../../soliplex_client
   soliplex_design:

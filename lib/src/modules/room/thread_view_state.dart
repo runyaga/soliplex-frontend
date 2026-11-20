@@ -426,8 +426,10 @@ class ThreadViewState {
       'userAction': jsonDecode(jsonEncode(userAction)),
       if (activityMessageId != null) ...{
         'activityMessageId': activityMessageId,
+        // A shift by 32 becomes zero in JavaScript; keep the random bound
+        // as a literal so browser submissions reach the action turn too.
         'submissionId': 'submission-${DateTime.now().microsecondsSinceEpoch}-'
-            '${Random.secure().nextInt(1 << 32).toRadixString(16)}',
+            '${Random.secure().nextInt(0x100000000).toRadixString(16)}',
       },
     };
     if (_sessionState.value == null && _queuedActions.isEmpty) {
