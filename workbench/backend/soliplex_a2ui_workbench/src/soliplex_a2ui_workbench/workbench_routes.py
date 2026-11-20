@@ -15,7 +15,7 @@ from pydantic import TypeAdapter
 from .a2ui_action import user_action, with_user_action
 from .strict_json import DuplicateJSONKey, parse_json_no_duplicates
 from .workbench_actions import WORKBENCH_INTAKE_TOOL_NAME, WorkbenchActionService, synthetic_intake_messages
-from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope
+from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope, shared_repository
 
 
 class ActionBody(BaseModel):
@@ -39,11 +39,19 @@ def _repository_for(request: Request, repository: SQLiteWorkbenchRepository | No
     configured = getattr(request.app.state, "workbench_repository", None)
     if configured is not None:
         return configured
-    path = Path(os.environ.get("SOLIPLEX_WORKBENCH_DB", "/data/workbench/workbench.sqlite3"))
-    path.parent.mkdir(parents=True, exist_ok=True)
-    configured = SQLiteWorkbenchRepository(path)
+    configured = shared_repository()
     request.app.state.workbench_repository = configured
     return configured
+
+
+def workbench_scope(the_installation, actor_id: str, room_id: str, thread_id: str) -> WorkbenchScope:
+    """Build the authenticated identity shared by room tools and snapshot routes."""
+    server_id = (
+        getattr(the_installation, "server_id", None)
+        or the_installation.get_environment("SOLIPLEX_WORKBENCH_SERVER_ID")
+        or "default"
+    )
+    return WorkbenchScope(str(actor_id), str(server_id), room_id, thread_id)
 
 
 def _reject_client_workbench_intake_tool(payload: dict[str, object]) -> None:
@@ -248,12 +256,7 @@ def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_s
             await the_threads.get_thread(user_name=username, room_id=room_id, thread_id=thread_id)
         except Exception as exc:
             raise HTTPException(404, "thread not found") from exc
-        server_id = (
-            getattr(the_installation, "server_id", None)
-            or the_installation.get_environment("SOLIPLEX_WORKBENCH_SERVER_ID")
-            or "default"
-        )
-        return WorkbenchScope(str(username), str(server_id), room_id, thread_id)
+        return workbench_scope(the_installation, str(username), room_id, thread_id)
 
     @router.get("/v1/rooms/{room_id}/threads/{thread_id}/workbench")
     async def snapshot(room_id: str, thread_id: str, request: Request, scope=Depends(scope_dependencies)):

@@ -113,7 +113,7 @@ def test_step3_registers_manifest_tools_for_preview_rooms_only():
 
     assert "from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST" in source
     assert "for name in MINIMUM_ROOM_TOOL_MANIFEST" in source
-    assert "room['tools'] = [{'tool_name': f\"soliplex_a2ui_workbench.workbench_tools.{name}\"}" in source
+    assert "room['tools'] = [{'tool_name': f\"soliplex_a2ui_workbench.workbench_agent_tools.{name}\"}" in source
     assert "('workbench','default_chat','Glimmer')" in source
     assert "('workbench-e4b','alternate_chat','Gemma 4 E4B')" in source
     assert "SOLIPLEX_WORKBENCH_ROOMS=\"${SOLIPLEX_WORKBENCH_ROOMS:-workbench,workbench-e4b}\"" in source

@@ -251,7 +251,7 @@ for room_id, agent, model in [('workbench','default_chat','Glimmer'),
     room['id'] = room_id
     room['name'] = f'Workbench ({model})'
     room['agent']['template_id'] = agent
-    room['tools'] = [{'tool_name': f"soliplex_a2ui_workbench.workbench_tools.{name}"}
+    room['tools'] = [{'tool_name': f"soliplex_a2ui_workbench.workbench_agent_tools.{name}"}
                      for name in MINIMUM_ROOM_TOOL_MANIFEST]
     save(p/'backend/environment/rooms'/room_id/'room_config.yaml', room)
     acl = yaml.safe_load((lab/'backend/environment/rooms/a2ui-lab/authz.yaml').read_text())

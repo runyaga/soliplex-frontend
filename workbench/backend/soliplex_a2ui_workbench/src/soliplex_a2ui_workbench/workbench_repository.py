@@ -120,6 +120,7 @@ class SQLiteWorkbenchRepository:
             );
         """)
 
+
     @_serialized
     def publish(
         self,
@@ -423,3 +424,22 @@ class SQLiteWorkbenchRepository:
     @_serialized
     def close(self) -> None:
         self._db.close()
+
+
+_shared_repositories: dict[str, SQLiteWorkbenchRepository] = {}
+_shared_repositories_lock = threading.Lock()
+
+
+def shared_repository(path: str | Path | None = None) -> SQLiteWorkbenchRepository:
+    """Return the backend-wide repository for the configured workbench database."""
+    import os
+
+    configured_path = Path(path or os.environ.get("SOLIPLEX_WORKBENCH_DB", "/data/workbench/workbench.sqlite3"))
+    key = str(configured_path.resolve())
+    with _shared_repositories_lock:
+        repository = _shared_repositories.get(key)
+        if repository is None:
+            configured_path.parent.mkdir(parents=True, exist_ok=True)
+            repository = SQLiteWorkbenchRepository(configured_path)
+            _shared_repositories[key] = repository
+        return repository

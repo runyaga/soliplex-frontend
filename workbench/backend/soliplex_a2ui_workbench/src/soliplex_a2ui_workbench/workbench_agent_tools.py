@@ -1,0 +1,141 @@
+"""Soliplex-facing adapters for the deterministic workbench tools."""
+from __future__ import annotations
+
+import threading
+
+from pydantic_ai import RunContext
+from soliplex.agents import AgentDependencies
+
+from . import workbench_tools
+from .workbench_context import WorkbenchToolContext, configured_rooms
+from .workbench_repository import shared_repository
+from .workbench_routes import workbench_scope
+
+_contexts: dict[tuple[str, str, str, str, str], WorkbenchToolContext] = {}
+_contexts_lock = threading.Lock()
+
+
+def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
+    """Create one context per authenticated scope and model run."""
+    deps = ctx.deps
+    user = deps.user
+    actor = getattr(user, "preferred_username", None) or getattr(user, "username", None)
+    if not actor or not deps.room_id or not deps.thread_id or not deps.run_id:
+        raise ValueError("authenticated user, room, thread, and run are required for workbench tools")
+    scope = workbench_scope(deps.the_installation, str(actor), deps.room_id, deps.thread_id)
+    context_key = (*scope.key(), deps.run_id)
+    with _contexts_lock:
+        if context_key not in _contexts:
+            _contexts[context_key] = WorkbenchToolContext(
+                scope, shared_repository(), deps.run_id, allowed_rooms=configured_rooms()
+            )
+        return _contexts[context_key]
+
+
+async def get_workbench(ctx: RunContext[AgentDependencies]) -> dict[str, object]:
+    """Return the current workbench structure, catalogs, templates, and revision."""
+    return _call(workbench_tools.get_workbench, ctx)
+
+
+async def open_panel(ctx: RunContext[AgentDependencies], title: str, text: str, parent_id: str) -> dict[str, object]:
+    """Open a text panel with the supplied text.
+
+    Args:
+        title: Short heading shown on the panel.
+        text: Text content to display.
+        parent_id: Existing container node where the panel should be placed.
+    """
+    return _call(workbench_tools.open_panel, ctx, title=title, text=text, parent_id=parent_id)
+
+
+async def place_form(ctx: RunContext[AgentDependencies], template: str, title: str, parent_id: str) -> dict[str, object]:
+    """Place the built-in intake form.
+
+    Args:
+        template: The available form template, currently ``intake``.
+        title: Short heading shown above the form.
+        parent_id: Existing container node where the form should be placed.
+    """
+    return _call(workbench_tools.place_form, ctx, template=template, title=title, parent_id=parent_id)
+
+
+async def show_chart(ctx: RunContext[AgentDependencies], title: str, kind: str, points: list[dict[str, object]], parent_id: str) -> dict[str, object]:
+    """Show a chart using the supplied data points.
+
+    Args:
+        title: Short chart heading.
+        kind: Chart style, either ``bar`` or ``line``.
+        points: Data points, each with a unique ``id``, display ``label``, and numeric ``value``.
+        parent_id: Existing container node where the chart should be placed.
+    """
+    return _call(workbench_tools.show_chart, ctx, title=title, kind=kind, points=points, parent_id=parent_id)
+
+
+async def run_python_client(ctx: RunContext[AgentDependencies], title: str, source: str, parent_id: str) -> dict[str, object]:
+    """Create an inert Python editor that runs only after the user presses Run.
+
+    Args:
+        title: Short heading shown above the editor.
+        source: Python source text to preload; it is not executed by this tool.
+        parent_id: Existing window node where the editor should be placed.
+    """
+    return _call(workbench_tools.run_python_client, ctx, title=title, source=source, parent_id=parent_id)
+
+
+async def run_python_server(ctx: RunContext[AgentDependencies], surface_id: str, source: str) -> dict[str, str]:
+    """Request server-side execution for a workbench Python surface.
+
+    Args:
+        surface_id: Identity of the Python surface to execute.
+        source: Python source text requested for execution.
+    """
+    return _call(workbench_tools.run_python_server, ctx, surface_id=surface_id, source=source)
+
+
+async def create_container(ctx: RunContext[AgentDependencies], parent_id: str, kind: str, title: str) -> dict[str, object]:
+    """Create an empty workbench container.
+
+    Args:
+        parent_id: Existing container node that will contain the new node.
+        kind: Container style: ``split``, ``tabs``, ``panel``, or ``window``.
+        title: Short label for the new container.
+    """
+    return _call(workbench_tools.create_container, ctx, parent_id=parent_id, kind=kind, title=title)
+
+
+async def move_panel(ctx: RunContext[AgentDependencies], node_id: str, parent_id: str, order: int, size: str) -> dict[str, object]:
+    """Move a workbench panel and set its placement.
+
+    Args:
+        node_id: Identity of the panel to move.
+        parent_id: Existing container node that will receive the panel.
+        order: Zero-based position among the container's children.
+        size: Requested panel size: ``small``, ``medium``, or ``large``.
+    """
+    return _call(workbench_tools.move_panel, ctx, node_id=node_id, parent_id=parent_id, order=order, size=size)
+
+
+async def close_panel(ctx: RunContext[AgentDependencies], node_id: str) -> dict[str, object]:
+    """Close a workbench panel.
+
+    Args:
+        node_id: Identity of the panel to close.
+    """
+    return _call(workbench_tools.close_panel, ctx, node_id=node_id)
+
+
+async def repair_program(ctx: RunContext[AgentDependencies], node_id: str, source: str) -> dict[str, object]:
+    """Replace the source text of a workbench Python program.
+
+    Args:
+        node_id: Identity of the program surface node to repair.
+        source: Updated Python source text to show in the editor.
+    """
+    return _call(workbench_tools.repair_program, ctx, node_id=node_id, source=source)
+
+
+def _call(function, ctx: RunContext[AgentDependencies], **kwargs):
+    try:
+        return function(_context(ctx), **kwargs)
+    except PermissionError as exc:
+        return {"error": str(exc)}
