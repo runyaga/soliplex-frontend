@@ -1,0 +1,212 @@
+[
+  {
+    "title": "The workbench",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "Stop walkthrough",
+        "role": "button",
+        "region": "tray"
+      }
+    ]
+  },
+  {
+    "title": "A line chart",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "line chart: Weekly visits; Mon: 12, Tue: 18, Wed: 9, Thu: 22, Fri: 30",
+        "role": "img",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "title": "A bar chart",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "bar chart: Regions; North: 80, South: 76",
+        "role": "img",
+        "region": "right"
+      }
+    ]
+  },
+  {
+    "title": "Move beside the line",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "bar chart: Regions; North: 80, South: 76",
+        "role": "img",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "title": "Move back",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "bar chart: Regions; North: 80, South: 76",
+        "role": "img",
+        "region": "right"
+      }
+    ]
+  },
+  {
+    "title": "A custom form",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "Name",
+        "role": "textbox",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "name": "Submit",
+        "role": "button",
+        "region": "left"
+      }
+    ]
+  },
+  {
+    "title": "Fill sample values",
+    "assertions": [
+      {
+        "kind": "source",
+        "name": "Name",
+        "includes": "Sample visitor",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "name": "Subscribe",
+        "role": "checkbox",
+        "region": "left"
+      }
+    ]
+  },
+  {
+    "title": "Submit the sample",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "walkthrough-team-survey.csv",
+        "region": "tray"
+      }
+    ]
+  },
+  {
+    "title": "A curated Python program",
+    "assertions": [
+      {
+        "kind": "role",
+        "name": "Run",
+        "role": "button",
+        "region": "canvas",
+        "window": "Monty GUI demo"
+      }
+    ]
+  },
+  {
+    "title": "Python drives the GUI",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Count: 0",
+        "region": "canvas",
+        "window": "Monty GUI demo app"
+      }
+    ]
+  },
+  {
+    "title": "Press +1 once",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Count: 1",
+        "region": "canvas",
+        "window": "Monty GUI demo app"
+      }
+    ]
+  },
+  {
+    "title": "Press +1 twice",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Count: 2",
+        "region": "canvas",
+        "window": "Monty GUI demo app"
+      }
+    ]
+  },
+  {
+    "title": "Press +1 three times",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Count: 3",
+        "region": "canvas",
+        "window": "Monty GUI demo app"
+      }
+    ]
+  },
+  {
+    "title": "Add a point",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "last event: add_point, count 3",
+        "region": "canvas",
+        "window": "Monty GUI demo app"
+      }
+    ]
+  },
+  {
+    "title": "Open the log",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "last event: open_log, count 3",
+        "region": "canvas",
+        "window": "Monty event log"
+      }
+    ]
+  },
+  {
+    "title": "AI Fix: skipped on this branch",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "this tour skips it",
+        "region": "tray"
+      }
+    ]
+  },
+  {
+    "title": "Try it yourself",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "The tour is complete",
+        "region": "tray"
+      },
+      {
+        "kind": "role",
+        "name": "Run",
+        "role": "button",
+        "region": "canvas",
+        "absent": true
+      },
+      {
+        "kind": "text",
+        "name": "Weekly visits",
+        "region": "canvas",
+        "absent": true
+      }
+    ]
+  }
+]

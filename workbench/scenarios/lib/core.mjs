@@ -76,6 +76,7 @@ export function validateCases(data, { prompts = false } = {}) {
     if (item.expectFail !== undefined && (!prompts || typeof item.expectFail !== 'string' || !item.expectFail.trim())) throw new Error('Invalid expected failure reason');
     if (!Array.isArray(item.assertions) || item.assertions.length === 0) throw new Error('Missing canvas assertions');
     if (item.assertions.every(a => a?.absent)) throw new Error('A case must require visible content');
+    if (item.walkthrough !== undefined && (!prompts || typeof item.walkthrough !== 'boolean')) throw new Error('Invalid walkthrough flag');
     if (item.reload !== undefined && typeof item.reload !== 'boolean') throw new Error('Invalid reload flag');
     for (const a of item.assertions) {
       if (a?.kind === 'reply') {

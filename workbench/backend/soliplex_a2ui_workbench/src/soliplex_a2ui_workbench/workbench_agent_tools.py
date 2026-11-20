@@ -53,6 +53,11 @@ async def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
         return deps._workbench_context
 
 
+async def start_walkthrough(ctx: RunContext[AgentDependencies]) -> ToolReturn:
+    """Start the scripted walkthrough. Do nothing else for this suggestion."""
+    return await _call(workbench_tools.start_walkthrough, ctx)
+
+
 async def get_workbench(ctx: RunContext[AgentDependencies]) -> dict[str, object]:
     """Return the current workbench structure, catalogs, templates, and revision."""
     return await _call(workbench_tools.get_workbench, ctx)

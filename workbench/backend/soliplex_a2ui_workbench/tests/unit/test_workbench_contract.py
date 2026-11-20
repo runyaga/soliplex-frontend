@@ -357,7 +357,7 @@ def test_malformed_split_axis_is_a_pydantic_validation_error() -> None:
 def test_minimum_tool_manifest_is_authoritative_and_closed() -> None:
     manifest = workbench_schemas.MINIMUM_ROOM_TOOL_MANIFEST
     expected = {
-        "get_workbench", "open_panel", "place_form", "show_chart",
+        "start_walkthrough", "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
         "move_panel", "close_panel", "repair_program", "read_form_results", "open_demo",
     }
@@ -573,7 +573,7 @@ def test_layout_rejects_depth_nine_after_nested_reparenting() -> None:
 def test_tool_schemas_are_closed_and_minimum_only() -> None:
     manifest = workbench_schemas.MINIMUM_ROOM_TOOL_MANIFEST
     assert set(manifest) == {
-        "get_workbench", "open_panel", "place_form", "show_chart",
+        "start_walkthrough", "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
         "move_panel", "close_panel", "repair_program", "read_form_results", "open_demo",
     }

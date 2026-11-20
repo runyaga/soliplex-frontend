@@ -16,6 +16,7 @@ import 'package:soliplex_frontend/src/modules/room/workbench/layout_tree.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/panel_chrome.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/surface_mount_registry.dart';
 import 'package:soliplex_frontend/src/modules/room/workbench/workbench_host.dart';
+import 'package:soliplex_frontend/src/modules/room/workbench/walkthrough_player.dart';
 
 import '../../../fixtures/workbench/workbench_fixtures.g.dart';
 import '../../../fixtures/workbench_activity_events.dart';
@@ -281,6 +282,32 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+      'narrow walkthrough pins Stop and narration outside workspace scrolling',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(600, 1200);
+    addTearDown(tester.view.reset);
+    final player = WalkthroughPlayer()..authorize();
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+        _app(WalkthroughScope(player: player, child: _regionHost(tour: true))));
+    await tester.pumpAndSettle();
+    expect(find.text('protected chat').hitTestable(), findsNothing);
+    expect(find.text('Stop walkthrough').first.hitTestable(), findsOneWidget);
+    expect(find.text('tray content').hitTestable(), findsOneWidget);
+    final trayBefore = tester.getRect(find.text('tray content'));
+    await tester.drag(find.byKey(const ValueKey('workbench-workspace-scroll')),
+        const Offset(0, -600));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('tray content')), trayBefore);
+    expect(find.text('Stop walkthrough').first.hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Stop walkthrough').first);
+    await tester.pump();
+    expect(player.active, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('narrow width keeps Chat and Workspace tabs', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(600, 1200);
@@ -389,9 +416,12 @@ Widget _app(Widget child) => ProviderScope(
           MaterialApp(theme: soliplexLightTheme(), home: Scaffold(body: child)),
     );
 
-Widget _regionHost() {
+Widget _regionHost({bool tour = false}) {
   final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
       as Map<String, dynamic>;
+  if (tour) {
+    (layout['shared'] as Map)['walkthrough'] = {'narrationNode': 'leaf_tray'};
+  }
   final nodes = (layout['nodes'] as List).cast<Map<String, dynamic>>();
   final registrations = <WorkbenchRegistration>[];
   for (final role in ['left', 'canvas', 'right', 'tray']) {

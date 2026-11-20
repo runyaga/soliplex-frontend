@@ -125,6 +125,47 @@ void main() {
     expect(replay.surfaces.single.dataModel.get('/values/name'), '');
   });
 
+  testWidgets('walkthrough sample values appear in fields before Submit',
+      (tester) async {
+    final actions = <Map<String, Object?>>[];
+    final semantics = tester.ensureSemantics();
+    final controller = _controller(actions.add);
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: ChatSurfaceView(controller: controller)))));
+    await tester.pumpAndSettle();
+    final surface = controller.surfaces.single;
+    final values =
+        Map<String, Object?>.from(surface.dataModel.get('/values') as Map)
+          ..addAll({
+            'name': 'Sample visitor',
+            'color': ['Blue'],
+            'subscribe': true
+          });
+    surface.dataModel.set('/values', values);
+    await tester.pumpAndSettle();
+    final name =
+        tester.widget<TextField>(find.widgetWithText(TextField, 'Name'));
+    expect(name.controller!.text, 'Sample visitor');
+    expect(
+        tester
+            .getSemantics(find
+                .ancestor(
+                    of: find.text('Subscribe'),
+                    matching: find.byType(MergeSemantics))
+                .first)
+            .getSemanticsData()
+            .flagsCollection
+            .isChecked,
+        CheckedState.isTrue);
+    expect(controller.surfaces.single.dataModel.get('/values/color'), ['Blue']);
+    expect(actions, isEmpty,
+        reason: 'Filling fields must be visible before a separate submission');
+    semantics.dispose();
+  });
+
   for (final parent in ['region', 'window', 'split', 'tabs']) {
     testWidgets('custom form has finite bounds inside $parent', (tester) async {
       tester.view.devicePixelRatio = 1;

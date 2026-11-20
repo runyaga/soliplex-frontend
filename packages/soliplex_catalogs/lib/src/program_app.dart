@@ -4,6 +4,14 @@ import 'package:flutter/widgets.dart';
 class ProgramApps extends ChangeNotifier {
   final _views = <String, Widget>{};
   bool _closed = false;
+  final _controls = <String, ProgramControls>{};
+
+  ProgramControls? controls(String program) => _controls[program];
+  void bind(String program, ProgramControls controls) =>
+      _controls[program] = controls;
+  void unbind(String program, ProgramControls controls) {
+    if (identical(_controls[program], controls)) _controls.remove(program);
+  }
 
   Widget? view(String program) => _views[program];
 
@@ -30,6 +38,7 @@ class ProgramApps extends ChangeNotifier {
   void dispose() {
     _closed = true;
     _views.clear();
+    _controls.clear();
     super.dispose();
   }
 }
@@ -60,4 +69,16 @@ class ProgramAppView extends StatelessWidget {
     builder: (context, _) =>
         apps.view(program) ?? const Text('Press Run to open this app.'),
   );
+}
+
+/// Live controls owned by a mounted interpreter. Registration alone never runs it.
+class ProgramControls {
+  const ProgramControls({
+    required this.source,
+    required this.run,
+    required this.event,
+  });
+  final String Function() source;
+  final Future<void> Function() run;
+  final Future<void> Function(String name) event;
 }

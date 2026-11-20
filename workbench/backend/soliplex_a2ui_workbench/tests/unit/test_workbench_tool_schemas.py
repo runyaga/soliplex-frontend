@@ -7,7 +7,7 @@ def test_manifest_schemas_are_closed_and_have_no_more_than_five_fields():
         assert len(schema.get("properties", {})) <= 5
         assert all(child.get("additionalProperties") is False for child in schema.get("$defs", {}).values() if isinstance(child, dict))
 def test_manifest_is_the_minimum_room_callable_surface():
-    assert set(MINIMUM_ROOM_TOOL_MANIFEST) == {"get_workbench", "open_panel", "place_form", "show_chart", "run_python_client", "run_python_server", "create_container", "move_panel", "close_panel", "repair_program", "read_form_results", "open_demo"}
+    assert set(MINIMUM_ROOM_TOOL_MANIFEST) == {"start_walkthrough", "get_workbench", "open_panel", "place_form", "show_chart", "run_python_client", "run_python_server", "create_container", "move_panel", "close_panel", "repair_program", "read_form_results", "open_demo"}
     assert "show_table" not in MINIMUM_ROOM_TOOL_MANIFEST
 
 

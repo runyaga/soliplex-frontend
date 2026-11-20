@@ -3,7 +3,7 @@
 | Suite | Coverage |
 | --- | --- |
 | Deterministic | Ten real threads seeded through public persistence APIs and actual workbench tool wrappers, with no inference |
-| Models | Fifteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including the curated Monty GUI demo, form submissions, credential rejection and REPL result follow-up |
+| Models | Eighteen cases each for `workbench` (Glimmer) and `workbench-e4b` (Gemma 4 E4B), including the curated Monty GUI demo, form submissions, credential rejection and REPL result follow-up |
 | Motivation | [Workbench lessons](../docs/LESSONS.md) |
 
 | Run from the worktree root | Command |
@@ -54,6 +54,7 @@
 
 | Added model case | Sequence |
 | --- | --- |
+| `walkthrough` | Click the first room suggestion and observe all 17 scripted narrations and key surfaces in order within a generous timeout, ending with the wrap-up. Start grants consent only to the curated GUI source; AI Fix is honestly skipped. See [walkthrough mechanism and checks](../docs/WALKTHROUGH.md) |
 | `monty_demo` | Send Open the Monty GUI demo. Press Run and require its heading, zero counter, chart, six buttons and initial log window. Close the initial log, click +1 twice and check each counter and last-event line. Open the log, require it, close it and require its absence. Layout gestures must finish their captured streams. The deterministic seeder publishes the same demo with open_demo and verifies inert reload before the same clicks |
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
 | `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values, walrus and scenario-survey.csv in the reply, and matching values in the downloaded CSV |

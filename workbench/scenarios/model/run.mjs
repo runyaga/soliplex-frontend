@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { watchWalkthrough } from '../lib/walkthrough.mjs';
 import { assertCanvas, freshThread, performActions, screenshot, sendPrompt, timelineTools, visibleErrors } from '../lib/browser.mjs';
 import { assertTurn, failedAssertions } from '../lib/core.mjs';
 
@@ -27,7 +29,11 @@ export async function checkModels({ page, base, alias, cases, directory, credent
         result.threadId = await freshThread(page, base, alias, model.room, recordThread);
         if (createdThreads.has(result.threadId)) throw new Error('A prompt reused an earlier case thread');
         createdThreads.add(result.threadId);
-        for (const [index, prompt] of [...(item.setup ?? []), item.prompt].entries()) {
+        if (item.walkthrough) {
+          const checkpoints = JSON.parse(await readFile(new URL('./walkthrough.json', import.meta.url), 'utf8'));
+          result.assertions.push(...await watchWalkthrough(page, { room: model.room, threadId: result.threadId, timeoutMs }, checkpoints, assertCanvas, turn => remember(turn, 'walkthrough')));
+        }
+        for (const [index, prompt] of [...(item.setup ?? []), ...(item.walkthrough ? [] : [item.prompt])].entries()) {
           const turn = await sendPrompt(page, model.room, prompt, timeoutMs, result.threadId);
           remember(turn, index < (item.setup?.length ?? 0) ? 'setup' : 'prompt');
           if (index === (item.setup?.length ?? 0) - 1 && item.setup_assertions) {

@@ -7,6 +7,8 @@ import '../a2ui/surface_scope.dart';
 import 'layout_tree.dart';
 import 'panel_chrome.dart';
 import 'surface_mount_registry.dart';
+import 'walkthrough_player.dart';
+import 'walkthrough_programs.dart';
 
 /// Room presentation driven by accepted thread activity publications.
 class ClientWorkbenchPresentation implements WorkbenchPresentation {
@@ -39,9 +41,41 @@ class _ActivityHost extends StatefulWidget {
 class _ActivityHostState extends State<_ActivityHost> {
   final _mounts = SurfaceMountRegistry();
   final _apps = ProgramApps();
+  WalkthroughPlayer? _player;
+  ChatSurfaceStore? _store;
+
+  Future<void> _perform(Map<String, dynamic> step) async {
+    if (_player?.active != true) return;
+    final effect = step['effect'];
+    if (effect == 'none') return;
+    final nodes = step['nodes'] as Map;
+    if (effect == 'fill') {
+      final form = nodes['form'] as Map;
+      final controller = _store?[form['activityMessageId'] as String];
+      final surface = controller?.surfaces.single;
+      if (surface == null) throw StateError('Tour form is not mounted');
+      surface.dataModel.set('/values', {
+        'name': 'Sample visitor',
+        'color': ['Blue'],
+        'subscribe': true,
+      });
+      return;
+    }
+    final program = nodes['program'] as Map;
+    final controls = _apps.controls(program['surfaceId'] as String);
+    if (controls == null) throw StateError('Tour program is not mounted');
+    await WalkthroughPrograms.perform(controls, effect as String);
+    if (_apps.view(program['surfaceId'] as String) == null) {
+      throw StateError('Curated program did not open its app');
+    }
+  }
 
   @override
   void dispose() {
+    if (_player?.perform == _perform) {
+      _player?.send = null;
+      _player?.perform = null;
+    }
     _apps.dispose();
     super.dispose();
   }
@@ -50,6 +84,20 @@ class _ActivityHostState extends State<_ActivityHost> {
   Widget build(BuildContext context) {
     final store = ChatSurfaceScope.maybeOf(context)!;
     final scope = ChatSurfaceScope.scopeOf(context)!;
+    _store = store;
+    _player = WalkthroughScope.of(context);
+    _player?.perform = _perform;
+    _player?.send = (name, values) {
+      final activity = store.layoutActivityId;
+      final surface = store.layoutSurfaceId;
+      if (activity == null || surface == null) return;
+      store.onAction?.call(activity, {
+        'name': 'workbench.walkthrough.$name',
+        'surfaceId': surface,
+        'sourceComponentId': 'root',
+        'context': values,
+      });
+    };
     return ProgramAppScope(
         apps: _apps,
         child: ChatSurfaceScope(
@@ -60,6 +108,14 @@ class _ActivityHostState extends State<_ActivityHost> {
               listenable: store,
               builder: (context, _) {
                 final tree = store.layout;
+                final tour = tree?.layout['shared'] is Map
+                    ? (tree!.layout['shared'] as Map)['walkthrough']
+                    : null;
+                if (tour is Map<String, dynamic>) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _player?.observe(tour);
+                  });
+                }
                 if (tree == null) {
                   return Column(children: [
                     if (store.layoutError case final error?) Text(error),
@@ -156,14 +212,22 @@ class WorkbenchHost extends StatelessWidget {
                 ),
         );
     if (width < SoliplexBreakpoints.desktop) {
+      final player = WalkthroughScope.of(context);
+      final tourTray = player != null &&
+          hasContent('tray') &&
+          (tree.layout['shared'] as Map)['walkthrough'] is Map;
       return DefaultTabController(
+        key: ValueKey(WalkthroughScope.of(context)?.active == true),
+        initialIndex: WalkthroughScope.of(context)?.active == true ? 1 : 0,
         length: 2,
         child: Column(
           children: [
+            if (tourTray) WalkthroughControls(player: player),
             const TabBar(
               tabs: [Tab(text: 'Chat'), Tab(text: 'Workspace')],
             ),
             Expanded(
+              flex: tourTray ? 3 : 1,
               child: TabBarView(children: [
                 chatPane,
                 SingleChildScrollView(
@@ -172,7 +236,12 @@ class WorkbenchHost extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final role in ['left', 'canvas', 'right', 'tray'])
+                      for (final role in [
+                        'left',
+                        'canvas',
+                        'right',
+                        if (!tourTray) 'tray'
+                      ])
                         if (regions[role] case final LayoutNode node)
                           Semantics(
                             container: true,
@@ -185,6 +254,7 @@ class WorkbenchHost extends StatelessWidget {
                 ),
               ]),
             ),
+            if (tourTray) Expanded(flex: 2, child: region('tray')),
           ],
         ),
       );
@@ -382,10 +452,20 @@ class WorkbenchHost extends StatelessWidget {
                   child: Text('No open content.'),
                 )
               : _render(context, children.first);
+      final tour = (tree.layout['shared'] as Map)['walkthrough'];
+      final player = WalkthroughScope.of(context);
+      final isNarration =
+          tour is Map && node.children.contains(tour['narrationNode']);
+      final narratedContent = isNarration && player != null
+          ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              WalkthroughControls(player: player),
+              content,
+            ])
+          : content;
       final chrome = PanelChrome(
         key: ValueKey(node.id),
         node: node,
-        child: content,
+        child: narratedContent,
       );
       return node.kind == 'window'
           ? Semantics(
