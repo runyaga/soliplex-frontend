@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 from typing import Protocol, TypedDict, runtime_checkable
 
@@ -15,7 +16,8 @@ GRAPHICS_CATALOG = "urn:soliplex:catalog:graphics:2"
 LAB_CATALOG = "urn:soliplex:catalog:lab:1"
 WORKBENCH_CATALOG = "urn:soliplex:catalog:workbench:1"
 
-BASIC_COMPONENTS = frozenset({"Text", "Card", "Column", "Row", "List", "CheckBox", "TextField", "Slider", "Button"})
+BASIC_COMPONENTS = frozenset({"Text", "Card", "Column", "Row", "List", "CheckBox", "TextField", "ChoicePicker", "Slider", "Button"})
+_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 BUILTIN_CATALOG_MANIFESTS: dict[str, frozenset[str]] = {
     BASIC_CATALOG: BASIC_COMPONENTS,
     GRAPHICS_CATALOG: frozenset({"Chart"}),
@@ -81,6 +83,10 @@ class WorkbenchCatalogValidator:
         allowed_record_keys = record_shapes.get((catalog_id, component), common | {"properties"})
         if set(record) - allowed_record_keys:
             raise ValueError("content record contains fields the emitter does not use")
+        for key in ("activityMessageId", "surfaceId"):
+            value = record.get(key)
+            if not isinstance(value, str) or not _IDENTIFIER.fullmatch(value):
+                raise ValueError(f"{key} must be a valid identifier")
         if catalog_id == GRAPHICS_CATALOG and component == "Chart":
             spec = record.get("spec")
             if not isinstance(spec, dict) or set(spec) != {"kind", "series"} or spec.get("kind") not in {"bar", "line"}:
@@ -99,11 +105,17 @@ class WorkbenchCatalogValidator:
                 if not isinstance(point, dict) or set(point) != {"id", "label", "value"}:
                     raise ValueError("invalid Chart point")
                 value = point["value"]
-                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+                if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or abs(value) > 1e9:
                     raise ValueError("Chart point value must be finite numeric data")
-                if not isinstance(point["id"], str) or point["id"] in point_ids:
-                    raise ValueError("Chart point IDs must be unique strings")
+                if not isinstance(point["id"], str) or not _IDENTIFIER.fullmatch(point["id"]) or point["id"] in point_ids:
+                    raise ValueError("Chart point IDs must be unique identifiers")
+                if not isinstance(point["label"], str) or not point["label"] or len(point["label"]) > 80:
+                    raise ValueError("Chart point labels must be short strings")
                 point_ids.add(point["id"])
+            if not isinstance(item["id"], str) or not _IDENTIFIER.fullmatch(item["id"]):
+                raise ValueError("Chart series ID must be an identifier")
+            if not isinstance(item["label"], str) or not item["label"] or len(item["label"]) > 80:
+                raise ValueError("Chart series label must be a short string")
         elif catalog_id == LAB_CATALOG and component == "PythonRepl":
             source = record.get("source")
             if not isinstance(source, str) or not source or len(source.encode("utf-8")) > 12_000:
@@ -115,8 +127,6 @@ class WorkbenchCatalogValidator:
             props = record.get("properties", {})
             if not isinstance(props, dict):
                 raise ValueError("basic component properties must be an object")
-            if set(record) - {"activityMessageId", "surfaceId", "catalogId", "component", "surfaceRevision", "properties"}:
-                raise ValueError("basic component fields must be provided in properties")
             allowed = {
                 "Text": {"text"},
                 "Card": {"children"},
@@ -125,6 +135,7 @@ class WorkbenchCatalogValidator:
                 "List": {"children"},
                 "CheckBox": {"label", "value"},
                 "TextField": {"label", "value"},
+                "ChoicePicker": {"label", "variant", "options", "value", "displayStyle", "filterable"},
                 "Slider": {"min", "max", "value", "label"},
                 "Button": {"label", "action"},
             }
@@ -151,6 +162,12 @@ class WorkbenchCatalogValidator:
                 low, high = props.get("min"), props.get("max")
                 if not all(isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) for value in (low, high)) or low >= high:
                     raise ValueError("invalid basic Slider range")
+            if component == "ChoicePicker":
+                options, value = props.get("options"), props.get("value")
+                if (not isinstance(props.get("label"), str) or props.get("variant") != "multipleSelection"
+                    or not isinstance(options, list) or not options or any(not isinstance(option, str) or not option for option in options)
+                    or not isinstance(value, dict) or set(value) != {"@path"} or not isinstance(value["@path"], str)):
+                    raise ValueError("invalid basic ChoicePicker properties")
             if component == "Button":
                 label, action = props.get("label"), props.get("action")
                 if not isinstance(label, str) or not isinstance(action, dict) or not isinstance(action.get("name"), str) or not action["name"] or set(action) - {"name", "context"} or ("context" in action and not isinstance(action["context"], dict)):
@@ -169,11 +186,12 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "List": common | {"children"},
         "CheckBox": common | {"label", "value"},
         "TextField": common | {"label", "value"},
+        "ChoicePicker": common | {"label", "variant", "options", "value", "displayStyle", "filterable"},
         "Slider": common | {"min", "max", "value", "label"},
         "Button": common | {"label", "action"},
     }
     allowed = shapes.get(component)
-    if allowed is None or set(item) - allowed or not isinstance(item.get("id"), str) or not item.get("id"):
+    if allowed is None or set(item) - allowed or not isinstance(item.get("id"), str) or not _IDENTIFIER.fullmatch(item["id"]):
         raise ValueError("invalid emitted basic component shape")
     required = {
         "Text": {"text"},
@@ -183,6 +201,7 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "List": {"children"},
         "CheckBox": {"label", "value"},
         "TextField": {"label", "value"},
+        "ChoicePicker": {"label", "variant", "options", "value"},
         "Slider": {"min", "max", "value"},
         "Button": {"label", "action"},
     }[component]
@@ -207,6 +226,14 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         value = item["value"]
         if not isinstance(item["label"], str) or not isinstance(value, (str, dict)) or (isinstance(value, dict) and (set(value) != {"@path"} or not isinstance(value["@path"], str))):
             raise ValueError("invalid emitted TextField properties")
+    if component == "ChoicePicker":
+        options, value = item["options"], item["value"]
+        if (not isinstance(item["label"], str) or item["variant"] != "multipleSelection"
+            or not isinstance(options, list) or not options or any(not isinstance(option, str) or not option for option in options)
+            or not isinstance(value, dict) or set(value) != {"@path"} or not isinstance(value["@path"], str)
+            or ("displayStyle" in item and item["displayStyle"] not in {"chips", "list"})
+            or ("filterable" in item and not isinstance(item["filterable"], bool))):
+            raise ValueError("invalid emitted ChoicePicker properties")
     if component == "Slider":
         low, high, value = item["min"], item["max"], item["value"]
         if not all(isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number) for number in (low, high, value)) or low >= high or not low <= value <= high:
@@ -240,15 +267,16 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}}
     elif component == "PlaceForm":
         catalog_id = BASIC_CATALOG
-        data = {"title": record["title"], "district": "north", "acknowledged": False}
+        data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}
         component_def = {
-            "id": "root", "component": "Card", "children": ["title", "district", "ack", "submit"],
+            "id": "root", "component": "Card", "children": ["title", "question", "districts", "acknowledged", "submit"],
         }
         extra = [
             {"id": "title", "component": "Text", "text": str(record["title"])},
-            {"id": "district", "component": "TextField", "label": "District", "value": {"@path": "/district"}},
-            {"id": "ack", "component": "CheckBox", "label": "Acknowledge", "value": {"@path": "/acknowledged"}},
-            {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake"}},
+            {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}},
+            {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": ["north", "south"], "value": {"@path": "/districts"}, "displayStyle": "chips"},
+            {"id": "acknowledged", "component": "CheckBox", "label": "Acknowledged", "value": {"@path": "/acknowledged"}},
+            {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}},
         ]
         return [
             _operation(sid, "createSurface", {"catalogId": catalog_id}),

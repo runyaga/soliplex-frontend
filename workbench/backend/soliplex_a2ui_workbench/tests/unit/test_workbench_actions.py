@@ -57,6 +57,14 @@ def test_synthetic_intake_tool_pair_ids_are_stable_for_reservation():
     second = synthetic_intake_messages(envelope)
     assert first == second
     assert first[0]["toolCalls"][0]["id"] == first[1]["toolCallId"]
+    changed = synthetic_intake_messages(envelope | {
+        "submissionId": "stable-submit-2",
+        "userAction": envelope["userAction"] | {"question": "Different question"},
+    })
+    assert changed[0]["toolCalls"][0]["id"] != first[0]["toolCalls"][0]["id"]
+    assert changed[1]["id"] != first[1]["id"]
+    assert changed[1]["content"] != first[1]["content"]
+    assert "Different question" in changed[1]["content"]
 
 
 def test_changed_duplicate_conflicts_and_unreserved_dispatch_rejects(tmp_path):

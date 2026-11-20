@@ -100,7 +100,11 @@ def test_scopes_are_isolated(tmp_path):
     repo = fixture_repo(tmp_path / "db.sqlite")
     one = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t1")
     two = WorkbenchScope(actor_id="a", server_id="s", room_id="r", thread_id="t2")
-    repo.publish(one, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
+    published = repo.publish(one, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=mounts())
+    assert repo.load(one) == published.snapshot
+    loaded = repo.load_content(one)
+    assert [record["activityMessageId"] for record in loaded] == [record["activityMessageId"] for record in content()]
+    assert all(record["workbenchCommit"]["recordId"] == "one" and record["workbenchCommit"]["sequence"] == 1 for record in loaded)
     assert repo.load(two) is None
     repo.close()
 
@@ -111,4 +115,26 @@ def test_unregistered_mount_rejects_before_writing(tmp_path):
     with pytest.raises(ValueError, match="not registered"):
         repo.publish(scope, "one", 0, snapshot(), content(), registered_program_surfaces={"surface_python"}, registered_mounts=set())
     assert repo.load(scope) is None
+    repo.close()
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda spec: spec["series"][0].update(id={"bad": "series-id"}),
+    lambda spec: spec["series"][0]["points"][0].update(label={"bad": "point-label"}),
+])
+def test_default_catalog_validator_rejects_malformed_chart_before_commit(tmp_path, mutate):
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    repo = SQLiteWorkbenchRepository(tmp_path / "chart.sqlite")
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    layout["nodes"][2]["children"] = ["panel-chart"]
+    layout["nodes"].extend([
+        {"id": "panel-chart", "parentId": "r_left", "children": ["surface-chart"], "kind": "panel", "title": "Chart", "size": "medium", "visibility": "open", "payload": {}},
+        {"id": "surface-chart", "parentId": "panel-chart", "children": [], "kind": "surface", "title": "Chart", "size": "medium", "visibility": "open", "payload": {"activityMessageId": "activity_chart", "surfaceId": "surface_chart"}},
+    ])
+    record = json.loads((FIXTURES / "content_v1.json").read_text())
+    mutate(record["spec"])
+    with pytest.raises(ValueError):
+        repo.publish(scope, "malformed", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity_chart", "surface_chart")})
+    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.get_receipt(scope, "malformed") is None
     repo.close()

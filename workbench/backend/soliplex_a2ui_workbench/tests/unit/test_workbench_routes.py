@@ -9,10 +9,12 @@ from fastapi.testclient import TestClient
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelRequest, ModelResponse, SystemPromptPart, TextPart, ToolReturnPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
+from pydantic_ai.models.test import TestModel
 from pydantic_ai.ui.ag_ui import AGUIAdapter
 from soliplex import agui, authz, installation, views
 
 from soliplex_a2ui_workbench.workbench_actions import WorkbenchActionService
+from soliplex_a2ui_workbench.a2ui_action import action_message
 from soliplex_a2ui_workbench.workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope
 from soliplex_a2ui_workbench.workbench_routes import build_router, create_guarded_agui_router
 
@@ -200,7 +202,45 @@ def test_client_cannot_call_or_supply_workbench_intake_tool(tmp_path, messages, 
     assert called == []
 
 
-def test_guard_authenticates_valid_reconnect_and_checks_run_exists(tmp_path):
+def test_legacy_lab_action_reader_is_room_scoped_and_workbench_ignores_legacy_action():
+    action = {"name": "python_failed", "surfaceId": "surface-1", "context": {"output": "failed"}}
+    legacy_payload = {
+        "threadId": "thread-a", "runId": "run-a", "state": {},
+        "messages": [{"id": "anchor", "role": "user", "content": "Earlier"}],
+        "tools": [], "context": [],
+        "forwardedProps": {"a2uiAction": {"afterMessageId": "anchor", "userAction": action}},
+    }
+    upstream = APIRouter()
+
+    @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
+    async def handler(request: Request):
+        adapter = await AGUIAdapter.from_request(request, agent=Agent(TestModel()))
+        model_text = [
+            part.content
+            for message in adapter.messages if isinstance(message, ModelRequest)
+            for part in message.parts if isinstance(part, UserPromptPart)
+        ]
+        return {"wire_messages": [message.model_dump(mode="json", by_alias=True) for message in adapter.run_input.messages], "model_text": model_text}
+
+    app = FastAPI()
+    # Workbench room is deliberately separate. The legacy labs are the package defaults.
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=lambda _request: None, workbench_rooms={"workbench-room"}))
+    client = TestClient(app)
+    lab = client.post("/v1/rooms/a2ui-lab/agui/thread-a/run-a", json=legacy_payload)
+    assert lab.status_code == 200
+    action_wire = action_message(action)
+    assert lab.json()["wire_messages"][-1]["id"] == action_wire.id
+    assert lab.json()["wire_messages"][-1]["content"] == action_wire.content
+    assert lab.json()["model_text"] == ["Earlier", action_wire.content]
+
+    workbench_payload = legacy_payload | {"threadId": "thread-wb", "runId": "run-wb"}
+    workbench = client.post("/v1/rooms/workbench-room/agui/thread-wb/run-wb", json=workbench_payload)
+    assert workbench.status_code == 200
+    assert [message["id"] for message in workbench.json()["wire_messages"]] == ["anchor"]
+    assert workbench.json()["model_text"] == ["Earlier"]
+
+
+def test_reconnect_post_requires_write_and_checks_run_exists(tmp_path):
     repo = SQLiteWorkbenchRepository(tmp_path / "workbench.sqlite")
     upstream = APIRouter()
 
@@ -215,10 +255,10 @@ def test_guard_authenticates_valid_reconnect_and_checks_run_exists(tmp_path):
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")}, {("alice", "room-a", "thread-a", "run-a")})
     client = _test_client(app, repo, policy, threads)
     response = client.post("/v1/rooms/room-a/agui/thread-a/run-a", json={"threadId": "thread-a", "runId": "run-a", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {}}, headers={"Last-Event-ID": "run-a:0"})
-    assert response.status_code == 200
-    assert threads.thread_checks == [("alice", "room-a", "thread-a")]
-    assert threads.run_checks == [("alice", "room-a", "thread-a", "run-a")]
-    assert policy.checks == [("room-a", "alice", authz.Permission.READ)]
+    assert response.status_code == 403
+    assert threads.thread_checks == []
+    assert threads.run_checks == []
+    assert policy.checks == [("room-a", "alice", authz.Permission.WRITE)]
 
 
 def test_stale_action_revision_is_http_409(tmp_path):
@@ -239,13 +279,41 @@ def test_stale_action_revision_is_http_409(tmp_path):
 
 def test_non_run_stock_agui_routes_and_legacy_room_payload_pass_through_unchanged():
     from soliplex.views.agui import router as stock_router
-    # The installed router is included, so these POSTs exercise the actual /meta and
-    # /labels routes. A guard-level malformed-run response would be 400.
+    class Logger:
+        def debug(self, *_args, **_kwargs): pass
+        def info(self, *_args, **_kwargs): pass
+        def error(self, *_args, **_kwargs): pass
+
+    class StockInstallation(MemoryInstallation):
+        async def get_room_config(self, **_kwargs): return object()
+
+    class StockThreads:
+        def __init__(self): self.calls = []
+        async def update_thread_metadata(self, **kwargs): self.calls.append(("metadata", kwargs))
+        async def new_run(self, **kwargs):
+            self.calls.append(("new_run", kwargs))
+            raise agui.UnknownThread(kwargs["user_name"], kwargs["thread_id"])
+        async def set_thread_labels(self, **kwargs):
+            self.calls.append(("labels", kwargs))
+            raise agui.UnknownThread(kwargs["user_name"], kwargs["thread_id"])
+
     app = FastAPI()
     app.include_router(create_guarded_agui_router(stock_router, workbench_rooms={"workbench-room"}))
-    client = TestClient(app, raise_server_exceptions=False)
-    for path in ("/v1/rooms/workbench-room/agui/thread-a", "/v1/rooms/workbench-room/agui/thread-a/meta", "/v1/rooms/workbench-room/agui/thread-a/labels"):
-        assert client.post(path, json={}).status_code != 400
+    threads = StockThreads()
+    app.dependency_overrides[installation.depend_the_installation.dependency] = lambda: StockInstallation()
+    app.dependency_overrides[agui.depend_the_threads.dependency] = lambda: threads
+    app.dependency_overrides[views.depend_the_room_authz_policy.dependency] = lambda: object()
+    app.dependency_overrides[views.depend_the_user_claims.dependency] = lambda: {"preferred_username": "alice"}
+    app.dependency_overrides[views.depend_the_logger.dependency] = lambda: Logger()
+    client = TestClient(app)
+    thread_id = "11111111-1111-4111-8111-111111111111"
+    run = client.post(f"/v1/rooms/workbench-room/agui/{thread_id}", json={})
+    metadata = client.post(f"/v1/rooms/workbench-room/agui/{thread_id}/meta", json={})
+    labels = client.post(f"/v1/rooms/workbench-room/agui/{thread_id}/labels", json={"label_ids": [1]})
+    assert run.status_code == 404
+    assert metadata.status_code == 205
+    assert labels.status_code == 404
+    assert [kind for kind, _ in threads.calls] == ["new_run", "metadata", "labels"]
 
     legacy = {"threadId": "legacy-thread", "runId": "legacy-run", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": {"actionSchemaVersion": "python_failed@1", "afterMessageId": "old-message", "userAction": {"name": "python_failed", "output": "failed"}}}}
     upstream = APIRouter()
@@ -259,6 +327,7 @@ def test_non_run_stock_agui_routes_and_legacy_room_payload_pass_through_unchange
 
     legacy_app = FastAPI()
     legacy_app.include_router(create_guarded_agui_router(upstream, scope_provider=lambda _request: None, workbench_rooms={"workbench-room"}))
-    response = TestClient(legacy_app, raise_server_exceptions=False).post("/v1/rooms/a2ui-lab/agui/legacy-thread/legacy-run", json=legacy)
+    raw_legacy = json.dumps(legacy, separators=(",", ":")).encode()
+    response = TestClient(legacy_app).post("/v1/rooms/a2ui-lab/agui/legacy-thread/legacy-run", content=raw_legacy, headers={"content-type": "application/json"})
     assert response.status_code == 200
-    assert seen == [response.json()["body"].encode()]
+    assert seen == [raw_legacy]

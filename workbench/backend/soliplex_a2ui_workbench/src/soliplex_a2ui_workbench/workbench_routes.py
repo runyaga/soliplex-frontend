@@ -9,7 +9,10 @@ from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, ValidationError
+from ag_ui.core import Message
+from pydantic import TypeAdapter
 
+from .a2ui_action import user_action, with_user_action
 from .strict_json import DuplicateJSONKey, parse_json_no_duplicates
 from .workbench_actions import WORKBENCH_INTAKE_TOOL_NAME, WorkbenchActionService, synthetic_intake_messages
 from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope
@@ -162,7 +165,7 @@ def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_s
     return router
 
 
-def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | None = None, workbench_rooms: set[str] | None = None):
+def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | None = None, workbench_rooms: set[str] | None = None, lab_rooms: set[str] | None = None):
     """Guard only configured workbench execution runs; pass all other routes through."""
     from soliplex import agui, authz, installation, views
     from soliplex.views import agui as agui_views
@@ -179,6 +182,9 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 scope_value = scope_provider
             if scope_value is not None:
                 workbench_rooms.add(scope_value.room_id)
+    if lab_rooms is None:
+        configured_labs = os.environ.get("SOLIPLEX_A2UI_LAB_ROOMS", "a2ui-lab,a2ui-lab-e4b")
+        lab_rooms = {room.strip() for room in configured_labs.split(",") if room.strip()}
 
     def is_workbench_run(request: Request) -> bool:
         route = request.scope.get("route")
@@ -189,6 +195,16 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             and "thread_id" in request.path_params
             and "run_id" in request.path_params
             and route_path.endswith("/{run_id}")
+        )
+
+    def is_execution_run(request: Request) -> bool:
+        route = request.scope.get("route")
+        return (
+            request.method == "POST"
+            and "room_id" in request.path_params
+            and "thread_id" in request.path_params
+            and "run_id" in request.path_params
+            and getattr(route, "path", "").endswith("/{run_id}")
         )
 
     async def authenticated_scope(
@@ -213,7 +229,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         if replay:
             if run_id is None or parsed_replay[0] != run_id or parsed_replay[1] < 0:
                 raise HTTPException(400, "Last-Event-ID does not identify this run")
-        permission = authz.Permission.READ if replay else authz.Permission.WRITE
+        permission = authz.Permission.WRITE
         if not await policy.check_room_access(room_id, claims, permission=permission):
             raise HTTPException(403, "room access denied")
         try:
@@ -243,7 +259,33 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
     guarded = APIRouter()
 
     async def validate_before_dispatch(request: Request, scope=Depends(scope_dependency)):
+        if not is_execution_run(request):
+            return
         if not is_workbench_run(request):
+            room_id = request.path_params.get("room_id")
+            if room_id not in lab_rooms:
+                return
+            try:
+                legacy_payload = json.loads(await request.body())
+            except (ValueError, UnicodeDecodeError):
+                return
+            if not isinstance(legacy_payload, dict):
+                return
+            forwarded_props = legacy_payload.get("forwardedProps")
+            if user_action(forwarded_props) is None:
+                return
+            messages = legacy_payload.get("messages")
+            if not isinstance(messages, list):
+                return
+            try:
+                message_adapter = TypeAdapter(Message)
+                parsed_messages = [message_adapter.validate_python(item) for item in messages]
+                projected_messages = with_user_action(parsed_messages, forwarded_props)
+            except (TypeError, ValueError, ValidationError):
+                return
+            if len(projected_messages) != len(parsed_messages) or any(a != b for a, b in zip(projected_messages, parsed_messages)):
+                legacy_payload["messages"] = [message.model_dump(mode="json", by_alias=True, exclude_none=True) for message in projected_messages]
+                request._body = json.dumps(legacy_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
             return
         header = request.headers.get("last-event-id")
         parsed_replay = agui_views.parse_last_event_id(header)
@@ -274,6 +316,14 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             raise HTTPException(422, "workbenchAction is server-owned")
         props = payload.get("forwardedProps")
         if not isinstance(props, dict) or "a2uiAction" not in props:
+            return
+        legacy_action = props.get("a2uiAction")
+        if (
+            isinstance(legacy_action, dict)
+            and "actionSchemaVersion" not in legacy_action
+            and isinstance(legacy_action.get("afterMessageId"), str)
+            and user_action(props) is not None
+        ):
             return
         if scope is None:
             raise HTTPException(403, "authenticated workbench scope required")

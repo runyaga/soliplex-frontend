@@ -78,3 +78,39 @@ def test_basic_emitter_rejects_top_level_properties_it_does_not_copy():
     record = {"activityMessageId": "a", "surfaceId": "s", "catalogId": basic, "component": "Text", "text": "Hello"}
     with pytest.raises(ValueError):
         build_publication([record], validator, {basic: {"Text"}}, layout=layout)
+
+
+def test_place_form_emits_bound_intake_controls_and_submit_context():
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG, BASIC_COMPONENTS, WORKBENCH_CATALOG
+
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    record = {"activityMessageId": "activity_form", "surfaceId": "surface_form", "catalogId": WORKBENCH_CATALOG, "component": "PlaceForm", "title": "Intake", "template": "intake"}
+    plan = build_publication(
+        [record], WorkbenchCatalogValidator(),
+        {BASIC_CATALOG: BASIC_COMPONENTS, WORKBENCH_CATALOG: {"PlaceForm"}}, layout=layout,
+    )
+    operations = plan["events"][0]["event"]["content"]["a2ui_operations"]
+    data = operations[1]["updateDataModel"]["value"]
+    components = operations[2]["updateComponents"]["components"]
+    by_id = {item["id"]: item for item in components}
+    assert data == {"title": "Intake", "question": "", "districts": [], "acknowledged": False}
+    assert by_id["question"] == {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}}
+    assert by_id["districts"] == {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": ["north", "south"], "value": {"@path": "/districts"}, "displayStyle": "chips"}
+    assert by_id["acknowledged"]["value"] == {"@path": "/acknowledged"}
+    assert by_id["submit"]["action"]["context"] == {
+        "question": {"@path": "/question"},
+        "districts": {"@path": "/districts"},
+        "acknowledged": {"@path": "/acknowledged"},
+    }
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda spec: spec["series"][0].update(id={"bad": "id"}),
+    lambda spec: spec["series"][0]["points"][0].update(label={"bad": "label"}),
+])
+def test_chart_validator_rejects_object_ids_and_labels(mutate):
+    record = json.loads((FIXTURES / "content_v1.json").read_text())
+    mutate(record["spec"])
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    with pytest.raises(ValueError):
+        build_publication([record], WorkbenchCatalogValidator(), {record["catalogId"]: {"Chart"}}, layout=layout)
