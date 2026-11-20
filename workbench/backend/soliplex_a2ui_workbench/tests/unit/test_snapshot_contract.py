@@ -64,3 +64,22 @@ def test_content_snapshot_has_the_fixture_shape_and_consistent_parts(tmp_path) -
         parts = [r for r in body["records"] if r["recordId"] == record_id]
         assert sorted(p["partIndex"] for p in parts) == list(range(parts[0]["partCount"]))
         assert len({p["sequence"] for p in parts}) == 1
+
+
+def test_snapshot_ids_satisfy_the_frozen_id_rule_for_uuid_run_ids(tmp_path) -> None:
+    import re
+
+    from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
+    from soliplex_a2ui_workbench.workbench_repository import WorkbenchScope
+    from soliplex_a2ui_workbench.workbench_templates import MINIMUM_ROOM_TOOLS
+
+    client, repo = _client(tmp_path)
+    # Soliplex run ids are UUIDs and may start with a digit.
+    ctx = WorkbenchToolContext(WorkbenchScope("alice", "server", "workbench", "t1"), repo,
+                               "3cd5384b-c7b9-47e2-aa0a-517e20bec4e5", allowed_rooms=frozenset({"workbench"}))
+    MINIMUM_ROOM_TOOLS["place_form"].function(ctx, title="Intake", template="intake", parent_id="r_left")
+    body = client.get("/v1/rooms/workbench/threads/t1/workbench").json()
+    frozen_id = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
+    ids = [r["recordId"] for r in body["records"]]
+    ids += [x for r in body["registrations"] for x in (r["activityMessageId"], r["surfaceId"])]
+    assert ids and all(frozen_id.match(i) for i in ids), ids

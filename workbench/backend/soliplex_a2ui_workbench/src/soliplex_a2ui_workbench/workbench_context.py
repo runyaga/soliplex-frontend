@@ -1,6 +1,7 @@
 """Authenticated, turn-scoped dependencies for deterministic workbench tools."""
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from dataclasses import dataclass, field
@@ -46,5 +47,7 @@ class WorkbenchToolContext:
 
     def publication_key(self) -> str:
         self._mutation_index += 1
-        safe_run = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in self.run_id)[:48] or "run"
-        return f"{safe_run}-{self._mutation_index}-{uuid.uuid4().hex[:12]}"
+        # Ids in the frozen contract start with a letter. Soliplex run ids are
+        # UUIDs, which can start with a digit, so the run is hashed under a prefix.
+        run_hash = hashlib.sha256(self.run_id.encode()).hexdigest()[:16]
+        return f"pub-{run_hash}-{self._mutation_index}-{uuid.uuid4().hex[:12]}"
