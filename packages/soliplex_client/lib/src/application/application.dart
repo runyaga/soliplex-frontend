@@ -14,3 +14,4 @@ export 'state_bus.dart';
 export 'streaming_state.dart';
 export 'thread_state_warnings.dart';
 export 'transcript_events.dart' show appendToolResult;
+export 'workbench_client.dart';

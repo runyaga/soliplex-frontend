@@ -17,6 +17,7 @@ import 'package:soliplex_client/src/domain/run_usage.dart';
 import 'package:soliplex_client/src/domain/thread_history.dart';
 import 'package:soliplex_client/src/domain/thread_state_warning.dart';
 import 'package:soliplex_client/src/domain/transcript.dart';
+import 'package:soliplex_client/src/domain/workbench_snapshot.dart';
 import 'package:soliplex_client/src/errors/exceptions.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
 
@@ -107,6 +108,7 @@ Future<ThreadHistory> assembleThreadHistory(
   String threadId,
   Future<FetchedRun> Function(String runId) fetchRun, {
   required RunFoldObserver? observer,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) async {
   // Envelope-level shape drift (`runs` arrives as a list/scalar instead
   // of a map) is a backend bug — retry can't fix it. Throw so the UI
@@ -271,6 +273,7 @@ Future<ThreadHistory> assembleThreadHistory(
     latestUsage,
     runInProgress,
     observer: observer,
+    registeredWorkbenchActivities: registeredWorkbenchActivities,
   );
 }
 
@@ -288,6 +291,7 @@ ThreadHistory replayThreadHistory(
   RunUsage? latestUsage,
   RunInProgress? runInProgress, {
   required RunFoldObserver? observer,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) {
   final told = observer == null
       ? null
@@ -437,6 +441,7 @@ ThreadHistory replayThreadHistory(
         turnCitations:
             resumedFrom?.turnCitations ?? const TurnCitations.empty(),
         runCreated: created,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       );
       if (untoldEnding != null) {
         told?.runEnded(

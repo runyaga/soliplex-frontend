@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:soliplex_client/src/domain/activity_record.dart';
 import 'package:soliplex_client/src/domain/chat_message.dart';
 import 'package:soliplex_client/src/domain/conversation.dart';
+import 'package:soliplex_client/src/domain/workbench_snapshot.dart';
 import 'package:soliplex_client/src/errors/exceptions.dart';
 
 /// The activity discriminator used by AG-UI's A2UI middleware.
@@ -14,6 +15,7 @@ Conversation projectA2uiActivity(
   Conversation conversation,
   ActivityRecord activity, {
   required DateTime? createdAt,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) {
   final Map<String, dynamic> content;
   try {
@@ -53,6 +55,16 @@ Conversation projectA2uiActivity(
     ],
   );
 
+  final workbenchMetadata = content['workbench'];
+  final metadata = workbenchMetadata == null
+      ? null
+      : _workbenchMetadata(
+          workbenchMetadata,
+          activity.messageId,
+          messages,
+          registeredWorkbenchActivities,
+        );
+
   final surfaces = <String>{};
   for (final message in messages) {
     for (final key in _operations) {
@@ -87,6 +99,7 @@ Conversation projectA2uiActivity(
   }
   final data = <String, dynamic>{
     'messages': messages,
+    if (metadata != null) 'workbench': metadata.toJson(),
     if (!content.containsKey('a2ui_operations')) 'status': status,
     if (updatedByRunIds.isNotEmpty)
       'updatedByRunIds': updatedByRunIds.toList(growable: false),
@@ -107,6 +120,44 @@ Conversation projectA2uiActivity(
       : ownedConversation.copyWith(
           messages: [...conversation.messages]..[index] = message,
         );
+}
+
+WorkbenchActivityMetadata? _workbenchMetadata(
+  Object? raw,
+  String messageId,
+  List<Map<String, dynamic>> messages,
+  List<WorkbenchRegistration> registeredWorkbenchActivities,
+) {
+  if (raw is! Map<String, dynamic>) {
+    return null;
+  }
+  final WorkbenchActivityMetadata metadata;
+  try {
+    metadata = WorkbenchActivityMetadata.fromJson(raw);
+  } on Object {
+    return null;
+  }
+  if (metadata.registration.activityMessageId != messageId) {
+    return null;
+  }
+  if (!registeredWorkbenchActivities.any(
+    (registration) =>
+        registration.role == metadata.registration.role &&
+        registration.activityMessageId == messageId &&
+        registration.surfaceId == metadata.registration.surfaceId,
+  )) {
+    return null;
+  }
+  final surfaceId = metadata.registration.surfaceId;
+  for (final message in messages) {
+    for (final operationKey in _operations) {
+      final operation = message[operationKey];
+      if (operation is Map && operation['surfaceId'] is String) {
+        if (operation['surfaceId'] != surfaceId) return null;
+      }
+    }
+  }
+  return metadata;
 }
 
 const _operations = [

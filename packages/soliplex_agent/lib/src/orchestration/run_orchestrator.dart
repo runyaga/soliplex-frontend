@@ -72,11 +72,16 @@ class RunOrchestrator {
     required Logger logger,
     int maxToolDepth = defaultMaxToolDepth,
     ForwardedPropsResolver? forwardedProps,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   })  : _llmProvider = llmProvider,
         _toolRegistry = toolRegistry,
         _logger = logger,
         _maxToolDepth = maxToolDepth,
-        _forwardedProps = forwardedProps;
+        _forwardedProps = forwardedProps,
+        _registeredWorkbenchActivities =
+            List<WorkbenchRegistration>.unmodifiable(
+          registeredWorkbenchActivities,
+        );
 
   /// Default maximum tool-call depth before the orchestrator aborts.
   static const defaultMaxToolDepth = 10;
@@ -86,6 +91,7 @@ class RunOrchestrator {
   final Logger _logger;
   final int _maxToolDepth;
   final ForwardedPropsResolver? _forwardedProps;
+  final List<WorkbenchRegistration> _registeredWorkbenchActivities;
 
   /// What [_forwardedProps] gave when the current turn opened, sent by every
   /// run of the turn, so a resume after a client tool asks for what the turn
@@ -173,9 +179,8 @@ class RunOrchestrator {
         toolExecutor,
         onReconnectStatus,
         observer: observer,
-        a2uiAction: a2uiAction == null
-            ? null
-            : _anchored(a2uiAction, cachedHistory),
+        a2uiAction:
+            a2uiAction == null ? null : _anchored(a2uiAction, cachedHistory),
         open: () {
           if (a2uiAction != null) _checkActionOnlyTurn(userMessage, a2uiAction);
           return _initializeStream(
@@ -1076,6 +1081,7 @@ class RunOrchestrator {
       userMessageId: _userMessageId,
       turnCitations: _fold?.turnCitations ?? const TurnCitations.empty(),
       runCreated: null,
+      registeredWorkbenchActivities: _registeredWorkbenchActivities,
     );
     final started = _fold!;
     _observer?.runStarted(started, continuesTurn: continuesTurn);

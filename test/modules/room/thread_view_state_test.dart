@@ -53,6 +53,7 @@ class _PendingHistoryApi extends FakeSoliplexApi {
     String threadId, {
     CancelToken? cancelToken,
     RunFoldObserver? observer,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) {
     capturedToken = cancelToken;
     _observer = observer;

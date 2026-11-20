@@ -22,6 +22,7 @@ import 'package:soliplex_client/src/application/streaming_state.dart';
 import 'package:soliplex_client/src/application/transcript_events.dart';
 import 'package:soliplex_client/src/domain/chat_message.dart';
 import 'package:soliplex_client/src/domain/conversation.dart';
+import 'package:soliplex_client/src/domain/workbench_snapshot.dart';
 import 'package:soliplex_client/src/errors/exceptions.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
 
@@ -69,12 +70,14 @@ EventProcessingResult processEvent(
   StreamingState streaming,
   BaseEvent event, {
   required DateTime? createdAt,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) {
   final result = _processForDisplay(
     conversation,
     streaming,
     event,
     createdAt: createdAt,
+    registeredWorkbenchActivities: registeredWorkbenchActivities,
   );
   return EventProcessingResult(
     conversation: result.conversation.copyWith(
@@ -89,6 +92,7 @@ EventProcessingResult _processForDisplay(
   StreamingState streaming,
   BaseEvent event, {
   required DateTime? createdAt,
+  required List<WorkbenchRegistration> registeredWorkbenchActivities,
 }) {
   return switch (event) {
     // Run lifecycle events
@@ -197,6 +201,7 @@ EventProcessingResult _processForDisplay(
         streaming,
         event,
         createdAt: createdAt,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       ),
 
     // JSON Patch against the prior ActivitySnapshot's content,
@@ -206,6 +211,7 @@ EventProcessingResult _processForDisplay(
         streaming,
         event,
         createdAt: createdAt,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       ),
 
     // Unhandled event types — pass through unchanged.
@@ -532,6 +538,7 @@ EventProcessingResult _processActivitySnapshot(
   StreamingState streaming,
   ActivitySnapshotEvent event, {
   required DateTime? createdAt,
+  required List<WorkbenchRegistration> registeredWorkbenchActivities,
 }) {
   // `content` is `Object?` upstream, but `ActivityRecord.content` is a
   // `Map<String, dynamic>`, so a non-object payload has nowhere to go. Thrown
@@ -565,6 +572,7 @@ EventProcessingResult _processActivitySnapshot(
       updatedActivities
           .singleWhere((record) => record.messageId == event.messageId),
       createdAt: createdAt,
+      registeredWorkbenchActivities: registeredWorkbenchActivities,
     );
   }
 
@@ -817,6 +825,7 @@ EventProcessingResult _processActivityDelta(
   StreamingState streaming,
   ActivityDeltaEvent event, {
   required DateTime? createdAt,
+  required List<WorkbenchRegistration> registeredWorkbenchActivities,
 }) {
   if (event.activityType == a2uiActivityType) {
     final index = conversation.activities.indexWhere(
@@ -849,6 +858,7 @@ EventProcessingResult _processActivityDelta(
         ),
         activity,
         createdAt: createdAt,
+        registeredWorkbenchActivities: registeredWorkbenchActivities,
       ),
       streaming: streaming,
     );

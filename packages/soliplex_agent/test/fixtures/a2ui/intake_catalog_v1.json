@@ -1,0 +1,17 @@
+{
+  "catalogId": "urn:soliplex:catalog:intake:1",
+  "protocolVersion": "1.0",
+  "components": {
+    "IntakeForm": {
+      "type": "object",
+      "properties": {
+        "component": {"const": "IntakeForm"},
+        "title": {"type": "string"},
+        "question": {"type": "string"},
+        "districts": {"type": "array", "items": {"enum": ["north", "south"]}},
+        "acknowledged": {"const": true}
+      },
+      "required": ["component", "title", "question", "districts", "acknowledged"]
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "catalogId": "urn:soliplex:catalog:data:1",
+  "protocolVersion": "1.0",
+  "components": {
+    "DataTable": {
+      "type": "object",
+      "properties": {
+        "component": {"const": "DataTable"},
+        "columns": {"type": "array", "items": {"type": "string"}},
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "label": {"type": "string"},
+              "value": {"type": "number"}
+            },
+            "required": ["id", "label", "value"]
+          }
+        }
+      },
+      "required": ["component", "columns", "rows"]
+    }
+  }
+}

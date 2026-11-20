@@ -164,6 +164,7 @@ class StaticSoliplexApi extends SoliplexApi {
     String threadId, {
     CancelToken? cancelToken,
     RunFoldObserver? observer,
+    List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) async =>
       histories[threadId] ?? ThreadHistory(messages: const []);
 

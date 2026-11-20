@@ -1,0 +1,43 @@
+{
+  "catalogId": "urn:soliplex:catalog:graphics:2",
+  "protocolVersion": "1.0",
+  "components": {
+    "Chart": {
+      "type": "object",
+      "properties": {
+        "component": {"const": "Chart"},
+        "spec": {
+          "type": "object",
+          "properties": {
+            "kind": {"enum": ["bar", "line"]},
+            "series": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "string"},
+                  "label": {"type": "string"},
+                  "points": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {"type": "string"},
+                        "label": {"type": "string"},
+                        "value": {"type": "number"}
+                      },
+                      "required": ["id", "label", "value"]
+                    }
+                  }
+                },
+                "required": ["id", "label", "points"]
+              }
+            }
+          },
+          "required": ["kind", "series"]
+        }
+      },
+      "required": ["component", "spec"]
+    }
+  }
+}
