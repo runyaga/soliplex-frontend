@@ -41,6 +41,7 @@ export 'package:soliplex_logging/soliplex_logging.dart'
         LoggerFactory,
         MemorySink,
         StdoutSink;
+
 export 'src/core/app_module.dart' show AppModule, ModuleRoutes;
 
 // A module author declares routes with go_router's own types and navigates
@@ -73,6 +74,7 @@ export 'package:go_router/go_router.dart'
         GoRouterState,
         NoTransitionPage,
         RouteBase;
+
 // Builds the router the shell itself runs on, public paths and module
 // redirects included — this is the composition `shell.dart` boots. A test that
 // assembles a GoRouter by hand from ModuleRoutes reproduces it, and a
@@ -88,6 +90,8 @@ export 'src/core/shell_config.dart' show ShellConfig;
 export 'src/core/status_message_config.dart' show StatusMessageConfig;
 export 'src/core/uncaught_errors.dart' show installUncaughtErrorLogging;
 export 'src/flavors/standard.dart' show standard, standardFlavor;
+export 'src/flavors/workbench.dart' show workbenchFlavor;
+export 'src/interfaces/workbench_presentation.dart' show WorkbenchPresentation;
 export 'src/flavors/standard_kit.dart' show buildStandardKit, StandardKit;
 export 'src/modules/room/a2ui/surface_scope.dart' show ChatSurfaceOrigin;
 // The resolver type for `standard(documentBrowserUrl: ...)`; the provider that

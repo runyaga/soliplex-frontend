@@ -18,6 +18,7 @@ import 'ui/room_info_screen.dart';
 import 'ui/room_screen.dart';
 import 'file_downloads_registry.dart';
 import 'upload_tracker_registry.dart';
+import '../../interfaces/workbench_presentation.dart';
 import 'user_switch_teardown.dart';
 
 class RoomAppModule extends AppModule {
@@ -34,10 +35,12 @@ class RoomAppModule extends AppModule {
     this.logo,
     this.enableDocumentFilter = false,
     this.surfaceCatalogs = const [],
+    this.workbenchPresentation,
   })  : _messageExpansions = MessageExpansions(),
         _uploadRegistry = UploadTrackerRegistry(servers: serverManager.servers),
-        _downloadRegistry =
-            FileDownloadsRegistry(servers: serverManager.servers) {
+        _downloadRegistry = FileDownloadsRegistry(
+          servers: serverManager.servers,
+        ) {
     _userSwitchTeardown = UserSwitchTeardown(
       servers: serverManager.servers,
       runtimeManager: runtimeManager,
@@ -81,6 +84,7 @@ class RoomAppModule extends AppModule {
 
   /// A2UI catalogs that chat surfaces render beside the basic catalog.
   final List<CatalogImplementation> surfaceCatalogs;
+  final WorkbenchPresentation? workbenchPresentation;
 
   final MessageExpansions _messageExpansions;
   final UploadTrackerRegistry _uploadRegistry;
@@ -146,6 +150,7 @@ class RoomAppModule extends AppModule {
             fileSort: fileSort,
             enableDocumentFilter: enableDocumentFilter,
             surfaceCatalogs: surfaceCatalogs,
+            workbenchPresentation: workbenchPresentation,
             documentSelections: documentSelections,
             databaseSelections: databaseSelections,
             roomReadMarkers: roomReadMarkers,

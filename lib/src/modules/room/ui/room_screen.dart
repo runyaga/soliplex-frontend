@@ -1,4 +1,5 @@
 import 'package:a2ui_flutter/a2ui_flutter.dart' show CatalogImplementation;
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -54,6 +55,8 @@ import '../file_sort.dart';
 import '../file_sort_preference.dart';
 import '../pick_file.dart';
 import '../agent_runtime_manager.dart';
+import '../../../interfaces/workbench_presentation.dart';
+import '../a2ui/surface_scope.dart' show ChatSurfaceScope, ChatSurfaceStore;
 import '../room_state.dart';
 import '../../../stores/run_registry.dart';
 import '../thread_list_state.dart';
@@ -88,10 +91,12 @@ import '../file_downloads_registry.dart';
 import '../upload_tracker_registry.dart';
 import '../../../shared/selectable_content.dart';
 import '../../../shared/type_to_focus.dart';
+
 import 'package:soliplex_design/soliplex_design.dart';
 
-final Logger _logger =
-    LogManager.instance.getLogger('soliplex_frontend.room_screen');
+final Logger _logger = LogManager.instance.getLogger(
+  'soliplex_frontend.room_screen',
+);
 
 /// Whether a key press is [platform]'s paste chord: `V` under the command
 /// modifier that platform pastes with — meta on Apple, control elsewhere — and
@@ -206,6 +211,7 @@ class RoomScreen extends StatefulWidget {
     required this.fileSort,
     this.enableDocumentFilter = false,
     this.surfaceCatalogs = const [],
+    this.workbenchPresentation,
     required this.documentSelections,
     this.databaseSelections,
     this.roomReadMarkers,
@@ -232,6 +238,7 @@ class RoomScreen extends StatefulWidget {
 
   /// A2UI catalogs that chat surfaces render beside the basic catalog.
   final List<CatalogImplementation> surfaceCatalogs;
+  final WorkbenchPresentation? workbenchPresentation;
   final DocumentSelections documentSelections;
 
   /// Shared per-thread RAG database selections. Null in tests, where each
@@ -253,6 +260,24 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
+  final Map<String, ChatSurfaceStore> _workbenchSurfaceStores = {};
+
+  ChatSurfaceStore _surfaceStoreForThread(String threadId) =>
+      _workbenchSurfaceStores.putIfAbsent(
+        threadId,
+        () => ChatSurfaceStore(
+          catalogs: widget.surfaceCatalogs,
+          onAction: (_, action) {
+            final threadView = _state.activeThreadView;
+            if (threadView?.threadId != threadId) return;
+            threadView!.sendAction(
+              action,
+              _state.runtime,
+              stateOverlay: _buildStateOverlay(),
+            );
+          },
+        ),
+      );
   late RoomState _state;
   late WorkdirController _workdirs;
   void Function()? _autoSelectUnsub;
@@ -330,8 +355,9 @@ class _RoomScreenState extends State<RoomScreen> {
   void Function()? _serverActivityUnsub;
 
   /// Coalesces bursts of run completions into a single room-activity refetch.
-  final Debouncer _roomActivityRefresh =
-      Debouncer(const Duration(milliseconds: 300));
+  final Debouncer _roomActivityRefresh = Debouncer(
+    const Duration(milliseconds: 300),
+  );
 
   bool get _filterEnabled => widget.enableDocumentFilter;
 
@@ -528,7 +554,9 @@ class _RoomScreenState extends State<RoomScreen> {
   /// re-evaluates the room read state in case the thread list arrived first.
   Future<void> _loadRoomReadMarkers() async {
     await _roomReadMarkers.ensureLoaded(
-        serverId: widget.serverEntry.serverId, userId: _userId);
+      serverId: widget.serverEntry.serverId,
+      userId: _userId,
+    );
     if (mounted) _recomputeRoomRead();
   }
 
@@ -536,7 +564,9 @@ class _RoomScreenState extends State<RoomScreen> {
   /// re-evaluates the room read state in case the thread list arrived first.
   Future<void> _loadServerReadMarkers() async {
     await _serverReadMarkers.ensureLoaded(
-        serverId: widget.serverEntry.serverId, userId: _userId);
+      serverId: widget.serverEntry.serverId,
+      userId: _userId,
+    );
     if (mounted) _recomputeRoomRead();
   }
 
@@ -670,12 +700,21 @@ class _RoomScreenState extends State<RoomScreen> {
       _threadReadTracker.clearThread(threadId);
       _anchorTracker.clearThread(threadId);
       _documentSelections.clearThread(
-          serverId: serverId, roomId: roomId, threadId: threadId);
+        serverId: serverId,
+        roomId: roomId,
+        threadId: threadId,
+      );
       _databaseSelections.clearThread(
-          serverId: serverId, roomId: roomId, threadId: threadId);
+        serverId: serverId,
+        roomId: roomId,
+        threadId: threadId,
+      );
       unawaited(
-        ThreadReadMarkerStorage.clearThread(serverId, roomId, threadId)
-            .catchError((Object error, StackTrace st) {
+        ThreadReadMarkerStorage.clearThread(
+          serverId,
+          roomId,
+          threadId,
+        ).catchError((Object error, StackTrace st) {
           _logger.error(
             'Failed to clear thread read markers for removed thread',
             error: error,
@@ -689,8 +728,10 @@ class _RoomScreenState extends State<RoomScreen> {
         }),
       );
       unawaited(
-        ThreadAnchorStorage.clearThread(serverId, roomId, threadId)
-            .catchError((Object error, StackTrace st) {
+        ThreadAnchorStorage.clearThread(serverId, roomId, threadId).catchError((
+          Object error,
+          StackTrace st,
+        ) {
           _logger.warning(
             'Failed to clear thread anchors for removed thread',
             error: error,
@@ -803,14 +844,11 @@ class _RoomScreenState extends State<RoomScreen> {
     // A just-deleted thread has already left the list; re-stamping it would
     // write an orphan read marker for a thread that no longer exists.
     if (!_threadStillListed(threadId)) return;
-    _stampThreadRead(
-      (
-        serverId: oldWidget.serverEntry.serverId,
-        roomId: oldWidget.roomId,
-        threadId: threadId,
-      ),
-      recompute: false,
-    );
+    _stampThreadRead((
+      serverId: oldWidget.serverEntry.serverId,
+      roomId: oldWidget.roomId,
+      threadId: threadId,
+    ), recompute: false);
   }
 
   /// Snapshots the previous anchor for [threadId] (frozen for the divider) and
@@ -896,7 +934,10 @@ class _RoomScreenState extends State<RoomScreen> {
       fetchDocuments: () =>
           widget.serverEntry.connection.api.getDocuments(roomId),
       selected: _documentSelections.get(
-          serverId: _serverId, roomId: roomId, threadId: threadId),
+        serverId: _serverId,
+        roomId: roomId,
+        threadId: threadId,
+      ),
     );
     if (result != null && mounted) {
       setState(() {
@@ -986,8 +1027,9 @@ class _RoomScreenState extends State<RoomScreen> {
     _serverReadMarkers = widget.serverReadMarkers ?? ServerReadMarkers();
     _userId = widget.serverEntry.auth.currentUserId.value;
     _state = _createRoomState();
-    _filterHydrator =
-        DocumentFilterHydrator(onResolved: _applyHydratedSelection);
+    _filterHydrator = DocumentFilterHydrator(
+      onResolved: _applyHydratedSelection,
+    );
     _workdirs = _createWorkdirController();
     _refreshFilterableDocuments();
     _fetchServerRooms();
@@ -1107,8 +1149,9 @@ class _RoomScreenState extends State<RoomScreen> {
       _threadReadTracker = _createThreadReadTracker();
       _hasFilterableDocuments = false;
       _filterDocsLoadFailed = false;
-      _filterHydrator =
-          DocumentFilterHydrator(onResolved: _applyHydratedSelection);
+      _filterHydrator = DocumentFilterHydrator(
+        onResolved: _applyHydratedSelection,
+      );
       _refreshFilterableDocuments();
       _watchRoomRead();
       _markThreadRead(widget.threadId);
@@ -1141,14 +1184,16 @@ class _RoomScreenState extends State<RoomScreen> {
         if (oldWidget.threadId == null) {
           if (_filterEnabled) {
             _documentSelections.migrateToThread(
-                serverId: _serverId,
-                roomId: widget.roomId,
-                threadId: widget.threadId!);
-          }
-          _databaseSelections.migrateToThread(
               serverId: _serverId,
               roomId: widget.roomId,
-              threadId: widget.threadId!);
+              threadId: widget.threadId!,
+            );
+          }
+          _databaseSelections.migrateToThread(
+            serverId: _serverId,
+            roomId: widget.roomId,
+            threadId: widget.threadId!,
+          );
         }
         _state.selectThread(widget.threadId!);
         _beginUnreadTracking(widget.threadId!);
@@ -1222,14 +1267,16 @@ class _RoomScreenState extends State<RoomScreen> {
         markers: {for (final e in markers.entries) e.key.threadId: e.value},
       ),
     );
-    unawaited(tracker.loadFromDisk().then((_) {
-      // Markers just loaded; re-evaluate the room read state in case the thread
-      // list arrived before them.
-      if (mounted) {
-        setState(() {});
-        _recomputeRoomRead();
-      }
-    }));
+    unawaited(
+      tracker.loadFromDisk().then((_) {
+        // Markers just loaded; re-evaluate the room read state in case the thread
+        // list arrived before them.
+        if (mounted) {
+          setState(() {});
+          _recomputeRoomRead();
+        }
+      }),
+    );
     return tracker;
   }
 
@@ -1259,9 +1306,11 @@ class _RoomScreenState extends State<RoomScreen> {
         anchors: {for (final e in anchors.entries) e.key.threadId: e.value},
       ),
     );
-    unawaited(tracker.loadFromDisk().then((_) {
-      if (mounted) setState(() {});
-    }));
+    unawaited(
+      tracker.loadFromDisk().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
     return tracker;
   }
 
@@ -1292,14 +1341,11 @@ class _RoomScreenState extends State<RoomScreen> {
     // Skip a just-deleted thread: stamping it would write an orphan marker.
     final threadId = widget.threadId;
     if (threadId != null && _threadStillListed(threadId)) {
-      _threadReadTracker.stamp(
-        (
-          serverId: widget.serverEntry.serverId,
-          roomId: widget.roomId,
-          threadId: threadId,
-        ),
-        clock.now().toUtc(),
-      );
+      _threadReadTracker.stamp((
+        serverId: widget.serverEntry.serverId,
+        roomId: widget.roomId,
+        threadId: threadId,
+      ), clock.now().toUtc());
     }
     // Bring the room-level marker up to now too, so the lobby reflects that the
     // user caught up here. Reads _state before it is disposed below.
@@ -1320,6 +1366,10 @@ class _RoomScreenState extends State<RoomScreen> {
     _roomsCancelToken?.cancel('disposed');
     _activityCancelToken?.cancel('disposed');
     HardwareKeyboard.instance.removeHandler(_handleKey);
+    for (final surfaceStore in _workbenchSurfaceStores.values) {
+      surfaceStore.dispose();
+    }
+    _workbenchSurfaceStores.clear();
     _state.dispose();
     _workdirs.dispose();
     unawaited(_anchorTracker.dispose());
@@ -1583,9 +1633,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void _onPreferences() => context.push(AppRoutes.preferences);
 
   void _onRoomInfo() {
-    context.push(
-      AppRoutes.roomInfo(widget.serverEntry.alias, widget.roomId),
-    );
+    context.push(AppRoutes.roomInfo(widget.serverEntry.alias, widget.roomId));
   }
 
   Future<List<PickedFile>> _pickWithErrorSurfacing(
@@ -1598,11 +1646,7 @@ class _RoomScreenState extends State<RoomScreen> {
     } on PickFilePickerException catch (e, st) {
       // Logged before the guard: a pick that fails after the screen has gone
       // still leaves a record, though there is nowhere left to show it.
-      _logger.error(
-        'Pick failed',
-        error: e.cause,
-        stackTrace: st,
-      );
+      _logger.error('Pick failed', error: e.cause, stackTrace: st);
       if (!mounted) return const [];
       _state.uploadTracker.recordClientError(
         roomId: widget.roomId,
@@ -1675,9 +1719,7 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _onQuizTapped(String quizId) {
-    context.go(
-      AppRoutes.quiz(widget.serverEntry.alias, widget.roomId, quizId),
-    );
+    context.go(AppRoutes.quiz(widget.serverEntry.alias, widget.roomId, quizId));
   }
 
   /// Opens the note on file for [runId] so the user can read it, add to it, or
@@ -1722,11 +1764,7 @@ class _RoomScreenState extends State<RoomScreen> {
       builder: (_) => ThreadPropertiesDialog(
         thread: thread,
         labels: _labelsState.catalogue,
-        onSave: ({
-          required name,
-          required description,
-          required labelIds,
-        }) =>
+        onSave: ({required name, required description, required labelIds}) =>
             _state.threadList.saveThreadProperties(
           thread,
           name: name,
@@ -1761,8 +1799,10 @@ class _RoomScreenState extends State<RoomScreen> {
     _serverReadMarkers.markers.watch(context);
     final threadListStatus = _state.threadList.threads.watch(context);
     final selectedThreadId = _state.activeThreadView?.threadId;
-    final unreadThreadIds =
-        _unreadThreadIds(threadListStatus, selectedThreadId);
+    final unreadThreadIds = _unreadThreadIds(
+      threadListStatus,
+      selectedThreadId,
+    );
     final roomStatus = _state.room.watch(context);
     final room = roomStatus is RoomLoaded ? roomStatus.room : null;
     final roomName = room?.name ?? widget.roomId;
@@ -2001,34 +2041,77 @@ class _RoomScreenState extends State<RoomScreen> {
         : _buildThreadBody(threadView, room, messagesStatus);
 
     return (
-      content: Column(
-        children: [
-          StatusMessageBanner(
-            key: ValueKey(widget.serverEntry.serverUrl),
-            baseUrl: widget.serverEntry.serverUrl,
-            client: widget.serverEntry.httpClient,
-            serverLabel: widget.serverEntry.displayName,
-          ),
-          if (showHeader)
-            _buildRoomHeader(room, roomStatus, threadStatus, workspaceStatus),
-          // Below the header slot, so the band lands under the app bar on
-          // narrow layouts and under the in-page header on wide ones.
-          const ChatClassificationBand(),
-          if (_filesExpanded)
-            _buildFilePanel(
-              room,
-              roomStatus,
-              threadStatus,
-              workspaceStatus,
-              threadId,
+      content: widget.workbenchPresentation != null && threadId != null
+          ? ChatSurfaceScope(
+              store: _surfaceStoreForThread(threadId),
+              child: Column(
+                children: [
+                  StatusMessageBanner(
+                    key: ValueKey(widget.serverEntry.serverUrl),
+                    baseUrl: widget.serverEntry.serverUrl,
+                    client: widget.serverEntry.httpClient,
+                    serverLabel: widget.serverEntry.displayName,
+                  ),
+                  if (showHeader)
+                    _buildRoomHeader(
+                        room, roomStatus, threadStatus, workspaceStatus),
+                  const ChatClassificationBand(),
+                  if (_filesExpanded)
+                    _buildFilePanel(room, roomStatus, threadStatus,
+                        workspaceStatus, threadId),
+                  Expanded(
+                    child: _capWidth(
+                      widget.workbenchPresentation!.buildHost(
+                        roomId: widget.roomId,
+                        threadId: threadId,
+                        chat: body,
+                      ),
+                    ),
+                  ),
+                  _capWidth(_buildChatInput(threadView, room, messagesStatus)),
+                  _capWidth(ChatAiDisclaimer(appName: widget.appName)),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                StatusMessageBanner(
+                  key: ValueKey(widget.serverEntry.serverUrl),
+                  baseUrl: widget.serverEntry.serverUrl,
+                  client: widget.serverEntry.httpClient,
+                  serverLabel: widget.serverEntry.displayName,
+                ),
+                if (showHeader)
+                  _buildRoomHeader(
+                      room, roomStatus, threadStatus, workspaceStatus),
+                // Below the header slot, so the band lands under the app bar on
+                // narrow layouts and under the in-page header on wide ones.
+                const ChatClassificationBand(),
+                if (_filesExpanded)
+                  _buildFilePanel(
+                    room,
+                    roomStatus,
+                    threadStatus,
+                    workspaceStatus,
+                    threadId,
+                  ),
+                Expanded(
+                  child: _capWidth(
+                    widget.workbenchPresentation != null && threadId != null
+                        ? widget.workbenchPresentation!.buildHost(
+                            roomId: widget.roomId,
+                            threadId: threadId,
+                            chat: body,
+                          )
+                        : body,
+                  ),
+                ),
+                _capWidth(_buildChatInput(threadView, room, messagesStatus)),
+                // Last in the column so the caveat is the last thing read before
+                // sending.
+                _capWidth(ChatAiDisclaimer(appName: widget.appName)),
+              ],
             ),
-          Expanded(child: _capWidth(body)),
-          _capWidth(_buildChatInput(threadView, room, messagesStatus)),
-          // Last in the column so the caveat is the last thing read before
-          // sending.
-          _capWidth(ChatAiDisclaimer(appName: widget.appName)),
-        ],
-      ),
       // Shown only in the narrow layout's AppBar, narrower than
       // SoliplexBreakpoints.tablet and so always compact.
       headerActions: _buildRoomHeaderActions(
@@ -2066,7 +2149,9 @@ class _RoomScreenState extends State<RoomScreen> {
     return LayoutBuilder(
       builder: (context, constraints) => Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: SoliplexSpacing.s4, vertical: SoliplexSpacing.s2),
+          horizontal: SoliplexSpacing.s4,
+          vertical: SoliplexSpacing.s2,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
@@ -2427,18 +2512,14 @@ class _RoomScreenState extends State<RoomScreen> {
           onDelete: (room?.acceptsRoomUploads ?? false) &&
                   _state.mayWriteRoom.watch(context)
               ? (filename) => unawaited(
-                  tracker.deleteRoomUpload(roomId: roomId, filename: filename))
+                    tracker.deleteRoomUpload(
+                        roomId: roomId, filename: filename),
+                  )
               : null,
         ),
       // SoliplexApi has no delete for a thread's uploads.
       if (_scopeRendersContent(threadStatus))
-        _buildScopeSection(
-          'Thread',
-          threadStatus,
-          theme,
-          sort,
-          onDelete: null,
-        ),
+        _buildScopeSection('Thread', threadStatus, theme, sort, onDelete: null),
       if (threadId != null && _workspaceRendersContent(workspaceStatus))
         // The section and the collapse button read the toggles in scopes of
         // their own, so a folder tap rebuilds them rather than the whole room.
@@ -2623,19 +2704,15 @@ class _RoomScreenState extends State<RoomScreen> {
             room: room,
             onSuggestionTapped: sessionState != null
                 ? null
-                : (suggestion) => _state.sendToNewThread(
-                      [TextPart(suggestion)],
-                      stateOverlay: _buildStateOverlay(),
-                    ),
+                : (suggestion) => _state.sendToNewThread([
+                      TextPart(suggestion),
+                    ], stateOverlay: _buildStateOverlay()),
             onQuizTapped: _onQuizTapped,
             fallback: const Center(child: Text('Select a thread')),
           ),
         ),
         if (roomError != null)
-          SendErrorBanner(
-            error: roomError,
-            onDismiss: _state.clearError,
-          ),
+          SendErrorBanner(error: roomError, onDismiss: _state.clearError),
         // Its own capability, not [_roomScopeRenders]: this banner reports
         // transitions of uploads it saw start, so a scope with no upload path
         // can never give it anything to say.
@@ -2765,16 +2842,17 @@ class _RoomScreenState extends State<RoomScreen> {
                     // subscription: the screen does not rebuild while someone
                     // types, and `Watch` re-runs a changed builder without
                     // tracking what it reads.
-                    child:
-                        Watch(key: ObjectKey(threadView.contextUsage.warning),
-                            (context) {
-                      final warning = threadView.contextUsage.warning.value;
-                      if (warning == null) return const SizedBox.shrink();
-                      return _ContextWarningBanner(
-                        usage: warning,
-                        onDismiss: threadView.contextUsage.dismissWarning,
-                      );
-                    }),
+                    child: Watch(
+                      key: ObjectKey(threadView.contextUsage.warning),
+                      (context) {
+                        final warning = threadView.contextUsage.warning.value;
+                        if (warning == null) return const SizedBox.shrink();
+                        return _ContextWarningBanner(
+                          usage: warning,
+                          onDismiss: threadView.contextUsage.dismissWarning,
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -2859,8 +2937,10 @@ class _RoomScreenState extends State<RoomScreen> {
     // signal, and the composer should follow the manifest reactively.
     final databaseScope =
         room == null ? RagDatabaseScope.none : RagDatabaseScope.of(room);
-    final selectedDatabases =
-        selectedDatabasesIn(_storedDatabases, databaseScope);
+    final selectedDatabases = selectedDatabasesIn(
+      _storedDatabases,
+      databaseScope,
+    );
     // The set is the conversation's, not the turn's: it is chosen before the
     // first message and frozen by it. The chips stay, disabled, so the thread
     // still says what it searches.
@@ -2925,9 +3005,11 @@ class _RoomScreenState extends State<RoomScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.chat_bubble_outline,
-              size: 48,
-              color: theme.colorScheme.outline.withValues(alpha: 0.3)),
+          Icon(
+            Icons.chat_bubble_outline,
+            size: 48,
+            color: theme.colorScheme.outline.withValues(alpha: 0.3),
+          ),
           const SizedBox(height: SoliplexSpacing.s3),
           Text(
             'Type a message to get started',
@@ -3050,13 +3132,10 @@ class _ReconnectBannerState extends State<_ReconnectBanner> {
 
   void _scheduleAutoDismissIfNeeded() {
     if (widget.status is Reconnected) {
-      _autoDismiss = Timer(
-        const Duration(seconds: 4),
-        () {
-          if (!mounted) return;
-          widget.onDismiss();
-        },
-      );
+      _autoDismiss = Timer(const Duration(seconds: 4), () {
+        if (!mounted) return;
+        widget.onDismiss();
+      });
     }
   }
 
@@ -3087,7 +3166,9 @@ class _ReconnectBannerState extends State<_ReconnectBanner> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
-          horizontal: SoliplexSpacing.s3, vertical: SoliplexSpacing.s2),
+        horizontal: SoliplexSpacing.s3,
+        vertical: SoliplexSpacing.s2,
+      ),
       color: scheme.secondaryContainer,
       child: Row(
         children: [
