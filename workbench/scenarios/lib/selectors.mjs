@@ -20,6 +20,8 @@ export async function workspaceMatches(page, a) {
   const matches = [];
   for (let i = 0; i < await locator.count(); i++) {
     const target = locator.nth(i);
+    // A user scrolls a window to reach its content. Absence checks never scroll.
+    if (!a.absent) await target.scrollIntoViewIfNeeded?.({ timeout: 2000 }).catch(() => {});
     const box = await target.boundingBox();
     if (!await target.isVisible() || !box || box.width <= 0 || box.height <= 0) continue;
     if (a.kind === 'source') {
