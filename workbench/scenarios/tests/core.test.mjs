@@ -11,6 +11,23 @@ const valid = () => [{ id: 'intake', prompt: 'Make a form', assertions: [{ kind:
 
 const AT = '@';
 
+test('repair examples explicitly enable checking and can run again after repair', async () => {
+  const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
+  const nameError = prompts.find(p => p.id === 'name_error_ai_fix');
+  const runs = nameError.actions.filter(a => a.kind === 'run_program');
+  assert.equal(runs.length, 2);
+  assert.equal(runs[0].expectRepair, true);
+  assert.equal(runs[1].expectRepair, false);
+  assert.ok(runs.every(a => a.expectedOutput === '766228'));
+  const typeCheck = prompts.find(p => p.id === 'type_check_ai_fix');
+  assert.ok(typeCheck.actions.some(a => a.kind === 'check' && a.name === 'Type check'));
+  for (const item of [nameError, typeCheck]) {
+    assert.ok(item.actions.some(a => a.kind === 'check' && a.name === 'AI Fix'));
+    assert.ok(item.actions.find(a => a.kind === 'run_program').assertions.some(a => a.name === 'Run 2'));
+    assert.ok(item.assertions.some(a => a.name === 'ok'));
+  }
+});
+
 test('prompt corpus has twenty-two independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
   assert.equal(prompts.length, 22);
