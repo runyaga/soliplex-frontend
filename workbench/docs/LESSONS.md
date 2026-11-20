@@ -6,6 +6,7 @@ Newest first. Each entry: what happened, the evidence, what changed.
 
 | Lesson | Evidence | What changed |
 | --- | --- | --- |
+| Flutter web merges labels and hides field values | A textbox was named "Scenario intake Question Districts". Chart text sat in one node. A window title was only a group label. A text area's value was empty until focused | Harness matches whole words inside a labelled region and focuses a field before reading it. The merged textbox name is an accessibility bug to fix in the form |
 | Locate regions by label, not by geometry | The first live harness run reported 0 matches for widgets visible in the screenshot. It placed regions relative to the composer, which is centred on the page while the chat column sits to its left | Each workbench region carries a semantics label and the harness scopes its lookups to it |
 | Click Flutter's semantics placeholder from JavaScript | A pointer click on `flt-semantics-placeholder` throws because Flutter keeps it off-screen. The harness sign-in failed on its first step and hid the error | The harness dispatches `element.click()`. Sign-in failures name the step and error class |
 | A pixel check catches what the accessibility tree hides | The form's Submit button was in the semantics tree at y=333 but clipped by its card, and the pixel check found it blank | Keep pixel checks on every canvas assertion |
