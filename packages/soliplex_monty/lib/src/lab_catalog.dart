@@ -127,6 +127,32 @@ Future<void> _disposeRuntime(MontyRuntime runtime) async {
 /// JSON Pointer accepted for `outputPath`.
 const _pointerPattern = r'^(/([^~/]|~[01])*)+$';
 
+// Layout children need boundaries even inside a Card, which otherwise merges
+// their text. Keep control internals together so a button retains its label.
+CatalogImplementation _pythonBasicCatalog() {
+  final basic = basicCatalog();
+  return basic.copyWith(
+    components: [
+      for (final component in basic.components.values)
+        if (const {'Row', 'Column', 'List', 'Card'}.contains(component.name))
+          ComponentImplementation(
+            name: component.name,
+            schema: component.schema,
+            allowedParents: component.allowedParents,
+            allowedChildren: component.allowedChildren,
+            builder: (context, node, props, buildChild) => component.builder(
+              context,
+              node,
+              props,
+              (child) => Semantics(container: true, child: buildChild(child)),
+            ),
+          )
+        else
+          component,
+    ],
+  );
+}
+
 /// Registers experimental components that run code only on a user gesture.
 ///
 /// [isLive] says whether the surface around a component arrived from a run
@@ -671,7 +697,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   String? _commit(StagedSurface? staged) {
     if (staged == null) return null;
     final next = MessageProcessor<ComponentImplementation>(
-      catalogs: [basicCatalog(), labChartCatalog()],
+      catalogs: [_pythonBasicCatalog(), labChartCatalog()],
       validationConfig: ValidationConfig.strict,
     );
     final errors = <String>[
@@ -865,96 +891,104 @@ class _PythonReplViewState extends State<PythonReplView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mono = context.monospaceOn(theme.textTheme.bodyMedium);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Python (Monty sandbox)', style: theme.textTheme.labelMedium),
-        const SizedBox(height: SoliplexSpacing.s2),
-        if (widget.examples.isNotEmpty && !_runMode) ...[
-          Wrap(
-            spacing: SoliplexSpacing.s2,
-            runSpacing: SoliplexSpacing.s2,
-            children: [
-              for (final example in widget.examples)
-                SoliplexChip.action(
-                  key: ValueKey('python-repl-example:${example.label}'),
-                  label: Text(example.label),
-                  onPressed: () => load(example),
-                ),
-            ],
-          ),
+    // Keep static text and output out of the editor's accessible name.
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Python (Monty sandbox)', style: theme.textTheme.labelMedium),
           const SizedBox(height: SoliplexSpacing.s2),
-        ],
-        if (_runMode)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SoliplexButton.text(
-              key: const ValueKey('python-repl-edit'),
-              onPressed: () => setState(() => _editorOpen = !_editorOpen),
-              icon: Icon(_editorOpen ? Icons.expand_less : Icons.edit),
-              child: Text(_editorOpen ? 'Hide code' : 'Edit code'),
-            ),
-          ),
-        if (!_runMode || _editorOpen)
-          TextField(
-            key: const ValueKey('python-repl-editor'),
-            controller: _editor,
-            onChanged: _onEdit,
-            style: mono,
-            minLines: 3,
-            // Keep Run and output near the top of a workbench window;
-            // longer source scrolls inside the editor.
-            maxLines: 8,
-            keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(
-              labelText: 'Python source',
-              border: OutlineInputBorder(),
-            ),
-          ),
-        const SizedBox(height: SoliplexSpacing.s2),
-        _controls(),
-        ..._repairStatus(theme),
-        const SizedBox(height: SoliplexSpacing.s3),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 420),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(context.radii.sm),
-            ),
-            child: ListView(
-              controller: _scroll,
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(SoliplexSpacing.s3),
+          if (widget.examples.isNotEmpty && !_runMode) ...[
+            Wrap(
+              spacing: SoliplexSpacing.s2,
+              runSpacing: SoliplexSpacing.s2,
               children: [
-                if (_entries.isEmpty)
-                  const Text('Press Run to execute the code.'),
-                for (final entry in _entries)
-                  _EntryView(
-                    key: ObjectKey(entry),
-                    entry: entry,
-                    showSource: widget.showSource,
+                for (final example in widget.examples)
+                  SoliplexChip.action(
+                    key: ValueKey('python-repl-example:${example.label}'),
+                    label: Text(example.label),
+                    onPressed: () => load(example),
                   ),
               ],
             ),
-          ),
-        ),
-        if (_ui?.model.allSurfaces.firstOrNull case final surface?) ...[
-          const SizedBox(height: SoliplexSpacing.s3),
-          Text('Surface built by Python', style: theme.textTheme.labelMedium),
+            const SizedBox(height: SoliplexSpacing.s2),
+          ],
+          if (_runMode)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SoliplexButton.text(
+                key: const ValueKey('python-repl-edit'),
+                onPressed: () => setState(() => _editorOpen = !_editorOpen),
+                icon: Icon(_editorOpen ? Icons.expand_less : Icons.edit),
+                child: Text(_editorOpen ? 'Hide code' : 'Edit code'),
+              ),
+            ),
+          if (!_runMode || _editorOpen)
+            Semantics(
+              container: true,
+              child: TextField(
+                key: const ValueKey('python-repl-editor'),
+                controller: _editor,
+                onChanged: _onEdit,
+                style: mono,
+                minLines: 3,
+                // Keep Run and output near the top of a workbench window;
+                // longer source scrolls inside the editor.
+                maxLines: 8,
+                keyboardType: TextInputType.multiline,
+                decoration: const InputDecoration(
+                  labelText: 'Python source',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
           const SizedBox(height: SoliplexSpacing.s2),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              borderRadius: BorderRadius.circular(context.radii.sm),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(SoliplexSpacing.s3),
-              child: A2uiSurface(key: ObjectKey(surface), surface: surface),
+          _controls(),
+          ..._repairStatus(theme),
+          const SizedBox(height: SoliplexSpacing.s3),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(context.radii.sm),
+              ),
+              child: ListView(
+                controller: _scroll,
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(SoliplexSpacing.s3),
+                children: [
+                  if (_entries.isEmpty)
+                    const Text('Press Run to execute the code.'),
+                  for (final entry in _entries)
+                    _EntryView(
+                      key: ObjectKey(entry),
+                      entry: entry,
+                      showSource: widget.showSource,
+                    ),
+                ],
+              ),
             ),
           ),
+          if (_ui?.model.allSurfaces.firstOrNull case final surface?) ...[
+            const SizedBox(height: SoliplexSpacing.s3),
+            Text('Surface built by Python', style: theme.textTheme.labelMedium),
+            const SizedBox(height: SoliplexSpacing.s2),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(context.radii.sm),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(SoliplexSpacing.s3),
+                child: A2uiSurface(key: ObjectKey(surface), surface: surface),
+              ),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -1069,41 +1103,52 @@ class _EntryViewState extends State<_EntryView> {
     final mono = context.monospaceOn(theme.textTheme.bodyMedium);
     final entry = widget.entry;
     final status = entry.ok ? 'ok' : 'failed';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: SoliplexSpacing.s2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${entry.header} · $status',
-                  key: const ValueKey('python-repl-entry-header'),
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: entry.ok ? null : theme.colorScheme.error,
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: SoliplexSpacing.s2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${entry.header} · $status',
+                    key: const ValueKey('python-repl-entry-header'),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: entry.ok ? null : theme.colorScheme.error,
+                    ),
+                  ),
+                ),
+                if (!widget.showSource)
+                  SoliplexButton.text(
+                    key: const ValueKey('python-repl-show-code'),
+                    onPressed: () => setState(() => _open = !_open),
+                    child: Text(_open ? 'Hide code' : 'Show code'),
+                  ),
+              ],
+            ),
+            if (_open)
+              Semantics(
+                container: true,
+                child: SelectableText(_prompt(entry.input), style: mono),
+              ),
+            if (entry.output.isNotEmpty)
+              Semantics(
+                container: true,
+                child: SelectableText(
+                  entry.output,
+                  style: mono.copyWith(
+                    color: entry.ok
+                        ? theme.colorScheme.onSurface
+                        : theme.colorScheme.error,
                   ),
                 ),
               ),
-              if (!widget.showSource)
-                SoliplexButton.text(
-                  key: const ValueKey('python-repl-show-code'),
-                  onPressed: () => setState(() => _open = !_open),
-                  child: Text(_open ? 'Hide code' : 'Show code'),
-                ),
-            ],
-          ),
-          if (_open) SelectableText(_prompt(entry.input), style: mono),
-          if (entry.output.isNotEmpty)
-            SelectableText(
-              entry.output,
-              style: mono.copyWith(
-                color: entry.ok
-                    ? theme.colorScheme.onSurface
-                    : theme.colorScheme.error,
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

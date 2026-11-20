@@ -176,6 +176,69 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('source semantics stay separate from surrounding text', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    create();
+    await mount(tester);
+
+    void expectLabels() {
+      final field = tester.getSemantics(editor);
+      expect(field.label, 'Python source');
+      expect(field.getSemanticsData().flagsCollection.isTextField, isTrue);
+      for (final label in [
+        'Try Python locally',
+        'Python (Monty sandbox)',
+        '0 runs shown',
+        'Press Run to execute the code.',
+      ]) {
+        expect(tester.getSemantics(find.text(label)).label, label);
+      }
+    }
+
+    expectLabels();
+    await typeSource(tester, 'print("edited")');
+    expectLabels();
+    expect(tester.getSemantics(editor).value, 'print("edited")');
+    semantics.dispose();
+    await unmount(tester);
+  });
+
+  testWidgets('run results have semantics separate from the source field', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    create();
+    await mount(tester);
+    await tapRun(tester);
+    await waitFor(
+      tester,
+      () => idle(tester) && model('/repl/result') != null,
+    );
+
+    expect(tester.getSemantics(editor).label, 'Python source');
+    final nodes = [
+      for (final label in [
+        'Python (Monty sandbox)',
+        '1 run shown',
+        'Run 1 · ok',
+      ])
+        tester.getSemantics(find.text(label)),
+      tester.getSemantics(find.text('45\n90')),
+    ];
+    expect(nodes.take(3).map((node) => node.label), [
+      'Python (Monty sandbox)',
+      '1 run shown',
+      'Run 1 · ok',
+    ]);
+    expect(nodes.last.value, '45\n90');
+    expect(nodes.last.label, isEmpty);
+    expect(nodes.map((node) => node.id).toSet(), hasLength(nodes.length));
+    semantics.dispose();
+    await unmount(tester);
+  }, skip: skipWithoutMonty != false);
+
   testWidgets(
     'Run shows printed output and the value, keeps state, and reports',
     (tester) async {
@@ -268,18 +331,44 @@ void main() {
   testWidgets('Python builds a surface and handles clicks on it', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     create();
     await mount(tester);
     await runExample(tester, 'Counter');
     expect(find.text('Surface built by Python'), findsOneWidget);
     expect(find.text('Count: 0'), findsOneWidget);
+    void expectSurfaceText(int count, String history) {
+      expect(tester.getSemantics(editor).label, 'Python source');
+      final labels = [
+        'Surface built by Python',
+        'Count: $count',
+        if (count == 0) '(empty)',
+        'history: $history',
+      ];
+      for (final label in labels) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      final nodes = [
+        for (final label in labels) tester.getSemantics(find.text(label)),
+      ];
+      expect(nodes.map((node) => node.label), labels);
+      expect(nodes.map((node) => node.id).toSet(), hasLength(nodes.length));
+      final button = tester.getSemantics(find.text('+1'));
+      expect(button.label, '+1');
+      expect(button.getSemanticsData().flagsCollection.isButton, isTrue);
+    }
+
+    expectSurfaceText(0, '');
     for (var i = 1; i <= 2; i++) {
       await tester.runAsync(() => tester.tap(find.text('+1')));
       await waitFor(tester, () => find.text('Count: $i').evaluate().isNotEmpty);
+      expectSurfaceText(i, List.filled(i, 'inc').join(', '));
     }
     await tester.runAsync(() => tester.tap(find.text('x2')));
     await waitFor(tester, () => find.text('Count: 4').evaluate().isNotEmpty);
+    expectSurfaceText(4, 'inc, inc, double');
     expect(starter.starts, 1);
+    semantics.dispose();
     await unmount(tester);
   }, skip: skipWithoutMonty != false);
 
