@@ -45,6 +45,23 @@ Conversation projectA2uiActivity(
       (existing is! GenUiMessage || existing.widgetName != 'a2ui')) {
     _malformed(activity.messageId, 'message identity');
   }
+  final boundRegistrations = registeredWorkbenchActivities
+      .where(
+        (registration) => registration.activityMessageId == activity.messageId,
+      )
+      .toList(growable: false);
+  if (boundRegistrations.isNotEmpty) {
+    for (final message in messages) {
+      for (final key in _operations) {
+        final operation = message[key];
+        if (operation is! Map || operation['surfaceId'] is! String) continue;
+        final surfaceId = operation['surfaceId'] as String;
+        if (!boundRegistrations.any((r) => r.surfaceId == surfaceId)) {
+          _malformed(activity.messageId, 'foreign surface registration');
+        }
+      }
+    }
+  }
   final ownedConversation = conversation.copyWith(
     activities: [
       for (final record in conversation.activities)

@@ -270,14 +270,13 @@ void _validateAncestry(
   }
   final programs = {
     for (final entry in registrations)
-      if (entry.role == WorkbenchRole.program)
-        '${entry.activityMessageId}\u0000${entry.surfaceId}',
+      if (entry.role == WorkbenchRole.program) entry.surfaceId,
   };
   for (final node in nodes.values.where((n) => n['kind'] == 'surface')) {
     final payload = node['payload'] as Map;
-    final mount =
-        '${payload['activityMessageId']}\u0000${payload['surfaceId']}';
-    if (programs.contains(mount)) _requireWindowAncestor(node, nodes);
+    if (programs.contains(payload['surfaceId'])) {
+      _requireWindowAncestor(node, nodes);
+    }
   }
 }
 

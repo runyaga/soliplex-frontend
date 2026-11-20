@@ -81,6 +81,16 @@ void _registerSyntheticScanTest() {
         "import 'package:flutter_test/flutter_test.dart';\n",
       ),
       _SourceFile(
+          'packages/soliplex_client/lib/ui.dart', "import 'dart:ui';\n"),
+      _SourceFile(
+        'packages/soliplex_agent/lib/conditional.dart',
+        "import 'stub.dart' if (dart.library.ui) 'package:flutter/widgets.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_client/lib/conditional_export.dart',
+        "export 'stub.dart' if (dart.library.ui) 'dart:ui';\n",
+      ),
+      _SourceFile(
         'packages/soliplex_client/pubspec.yaml',
         'dependencies:\n  flutter:\n    sdk: flutter\n',
       ),
@@ -98,7 +108,7 @@ void _registerSyntheticScanTest() {
       ),
     ];
     final violations = _scanForbiddenEdges(synthetic);
-    expect(violations, hasLength(16));
+    expect(violations, hasLength(18));
     expect(
       violations.map((edge) => edge.to),
       containsAll([
@@ -106,8 +116,9 @@ void _registerSyntheticScanTest() {
         'package:flutter_test/flutter_test.dart',
         'package:sky_engine/ui/ui.dart',
         'dependency:flutter',
-        'dependency:flutter_test',
         'dependency:sky_engine',
+        'dart:ui',
+        'package:flutter/widgets.dart',
       ]),
     );
     expect(
@@ -121,6 +132,9 @@ void _registerSyntheticScanTest() {
           'packages/soliplex_client/pubspec.yaml',
           'packages/soliplex_client/lib/client.dart',
           'packages/soliplex_agent/pubspec.yaml',
+          'packages/soliplex_client/lib/ui.dart',
+          'packages/soliplex_agent/lib/conditional.dart',
+          'packages/soliplex_client/lib/conditional_export.dart',
           'packages/soliplex_client/lib/sky.dart',
           'packages/soliplex_agent/lib/agent.dart',
           'packages/soliplex_client/lib/probe.dart',
@@ -176,22 +190,56 @@ List<_DependencyEdge> _scanForbiddenEdges(Iterable<_SourceFile> sources) =>
     sources.expand(_edgesFromSource).where(_isForbiddenEdge).toList();
 
 Iterable<_DependencyEdge> _edgesFromSource(_SourceFile source) sync* {
-  final imports = RegExp(
-    r'''(?:import|export|part\s+of)\s+['"]package:((?:dart_monty|soliplex_monty|flutter|flutter_test|sky_engine)/[^'"]+)['"]''',
-  );
-  for (final match in imports.allMatches(source.contents)) {
-    yield _DependencyEdge(source.path, 'package:${match[1]}');
+  final directives = RegExp(r'''(?:import|export)\s+([^;]*);''', dotAll: true);
+  final uri = RegExp(r'''['"]([^'"]+)['"]''');
+  for (final directive in directives.allMatches(source.contents)) {
+    for (final match in uri.allMatches(directive[1]!)) {
+      final target = match[1]!;
+      if (target.startsWith('package:')) {
+        final packagePath = target.substring('package:'.length);
+        if (_isForbiddenPackagePath(packagePath)) {
+          yield _DependencyEdge(source.path, target);
+        }
+      } else if (target == 'dart:ui') {
+        yield _DependencyEdge(source.path, target);
+      }
+    }
+  }
+  final partOf = RegExp(r'''part\s+of\s+['"]package:([^'"]+)['"]''');
+  for (final match in partOf.allMatches(source.contents)) {
+    final target = match[1]!;
+    if (_isForbiddenPackagePath(target)) {
+      yield _DependencyEdge(source.path, 'package:$target');
+    }
   }
   if (source.path.endsWith('pubspec.yaml')) {
     final dependencies = RegExp(
       r'^\s*(dart_monty|soliplex_monty|flutter|flutter_test|sky_engine)\s*:',
       multiLine: true,
     );
+    final sections = RegExp(r'^([a-z_]+):\s*$', multiLine: true);
     for (final match in dependencies.allMatches(source.contents)) {
+      var section = '';
+      for (final prior in sections.allMatches(
+        source.contents.substring(0, match.start),
+      )) {
+        section = prior[1]!;
+      }
+      if (match[1] == 'flutter_test' && section == 'dev_dependencies') {
+        continue;
+      }
       yield _DependencyEdge(source.path, 'dependency:${match[1]}');
     }
   }
 }
+
+bool _isForbiddenPackagePath(String path) => const [
+      'dart_monty/',
+      'soliplex_monty/',
+      'flutter/',
+      'flutter_test/',
+      'sky_engine/',
+    ].any(path.startsWith);
 
 bool _isForbiddenEdge(_DependencyEdge edge) {
   const directCoreRoots = [
@@ -217,6 +265,7 @@ bool _isForbiddenEdge(_DependencyEdge edge) {
       (edge.to.startsWith('package:flutter/') ||
           edge.to.startsWith('package:flutter_test/') ||
           edge.to.startsWith('package:sky_engine/') ||
+          edge.to == 'dart:ui' ||
           edge.to == 'dependency:flutter' ||
           edge.to == 'dependency:flutter_test' ||
           edge.to == 'dependency:sky_engine');

@@ -41,7 +41,7 @@ EXPECTED = {
     "nested_tree_v1.json": "c9f314806e63ad08debdfaf961ae054c7c26e0001e79fa320000454cdffe9e0c",
     "python_sides_v1.json": "e02f91610459c62479b6c78981a952e51353994577afd537469ef97a3308e8c0",
 }
-_REGISTERED_PROGRAM_MOUNTS = {("activity_python", "surface_python")}
+_REGISTERED_PROGRAM_SURFACES = {"surface_python"}
 
 
 def fixture(name: str) -> dict[str, object]:
@@ -50,11 +50,8 @@ def fixture(name: str) -> dict[str, object]:
 
 def validate_layout(data: dict[str, object]) -> LayoutSnapshot:
     nodes = data["nodes"]
-    mounted_pairs = {
-        (
-            node.get("payload", {}).get("activityMessageId"),
-            node.get("payload", {}).get("surfaceId"),
-        )
+    mounted_surfaces = {
+        node.get("payload", {}).get("surfaceId")
         for node in nodes
         if node.get("kind") == "surface"
         and isinstance(node.get("payload", {}).get("activityMessageId"), str)
@@ -63,8 +60,8 @@ def validate_layout(data: dict[str, object]) -> LayoutSnapshot:
     return LayoutSnapshot.model_validate(
         data,
         context={
-            "authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS
-            & mounted_pairs
+            "authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES
+            & mounted_surfaces
         },
     )
 
@@ -81,7 +78,7 @@ def test_layout_fixtures_round_trip(name: str) -> None:
     snapshot = validate_layout(fixture(name))
     assert LayoutSnapshot.model_validate_json(
         snapshot.model_dump_json(),
-        context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS},
+        context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES},
     ) == snapshot
     assert isinstance(snapshot.layoutRevision, int)
 
@@ -93,26 +90,17 @@ def test_nested_fixture_carries_required_surfaces() -> None:
     assert _max_depth(snapshot) == 8
 
 
-def test_program_ancestry_matches_authenticated_activity_surface_pair() -> None:
+def test_program_ancestry_uses_authenticated_surface_id_contract() -> None:
     candidate = fixture("nested_tree_v1.json")
     by_id = {node["id"]: node for node in candidate["nodes"]}
     by_id["chart_surface"]["payload"]["surfaceId"] = "surface_python"
     by_id["program_surface"]["payload"]["surfaceId"] = "mounted_program"
 
-    snapshot = LayoutSnapshot.model_validate(
-        candidate,
-        context={
-            "authenticated_program_mounts": {
-                ("activity_program_registration", "surface_python")
-            }
-        },
-    )
-
-    chart = next(
-        node for node in snapshot.nodes if node.id == "chart_surface"
-    )
-    assert chart.payload["activityMessageId"] == "activity_chart"
-    assert chart.payload["surfaceId"] == "surface_python"
+    with pytest.raises(ValidationError, match="program surface requires window ancestry"):
+        LayoutSnapshot.model_validate(
+            candidate,
+            context={"authenticated_program_surfaces": {"surface_python"}},
+        )
 
 
 def test_rejection_fixture_catalog_records_contract_cases() -> None:
@@ -196,8 +184,8 @@ def _validate_disconnected_cycle(candidate: dict[str, object]) -> None:
         LayoutSnapshot.model_validate(
             candidate,
             context={
-                "authenticated_program_mounts": {
-                    ("activity_program", "program_surface")
+                "authenticated_program_surfaces": {
+                    "program_surface"
                 }
             },
         )
@@ -233,8 +221,8 @@ def test_disconnected_program_cycle_rejects_without_hanging() -> None:
             LayoutSnapshot.model_validate(
                 candidate,
                 context={
-                    "authenticated_program_mounts": {
-                        ("activity_program", "program_surface")
+                    "authenticated_program_surfaces": {
+                        "program_surface"
                     }
                 },
             )
@@ -338,7 +326,7 @@ def test_layout_budget_counts_utf8_bytes_not_ascii_escapes() -> None:
     assert len(encoded) == 36_880
     accepted = LayoutSnapshot.model_validate(
         candidate,
-        context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS},
+        context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES},
     )
     assert len(json.dumps(accepted.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")).encode("utf-8")) < 65_536
 
@@ -471,7 +459,7 @@ def test_registered_program_surface_requires_window_ancestry() -> None:
     by_id["program_panel"]["parentId"] = "r_right"
     with pytest.raises(ValidationError, match="program surface requires window ancestry"):
         LayoutSnapshot.model_validate(
-            candidate, context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS}
+            candidate, context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES}
         )
 
 
@@ -506,22 +494,22 @@ def _add_windows(snapshot: dict[str, object], target_count: int) -> dict[str, ob
 def test_open_mount_capacity_counts_effective_visibility() -> None:
     source = fixture("nested_tree_v1.json")
     twelve_mounts = _add_surfaces(source, 12)
-    LayoutSnapshot.model_validate(twelve_mounts, context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+    LayoutSnapshot.model_validate(twelve_mounts, context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
     with pytest.raises(ValidationError, match="open content mount capacity"):
-        LayoutSnapshot.model_validate(_add_surfaces(source, 13), context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+        LayoutSnapshot.model_validate(_add_surfaces(source, 13), context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
     hidden_mounts = _add_surfaces(source, 13)
     next(node for node in hidden_mounts["nodes"] if node["id"] == "capacity_panel_0")["visibility"] = "closed"
-    LayoutSnapshot.model_validate(hidden_mounts, context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+    LayoutSnapshot.model_validate(hidden_mounts, context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
 
 
 def test_expanded_window_capacity_counts_effective_visibility() -> None:
     source = fixture("nested_tree_v1.json")
-    LayoutSnapshot.model_validate(_add_windows(source, 2), context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+    LayoutSnapshot.model_validate(_add_windows(source, 2), context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
     with pytest.raises(ValidationError, match="expanded window capacity"):
-        LayoutSnapshot.model_validate(_add_windows(source, 3), context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+        LayoutSnapshot.model_validate(_add_windows(source, 3), context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
     hidden_window = _add_windows(source, 3)
     next(node for node in hidden_window["nodes"] if node["id"] == "capacity_window_1")["visibility"] = "closed"
-    LayoutSnapshot.model_validate(hidden_window, context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+    LayoutSnapshot.model_validate(hidden_window, context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
 
 
 def test_surface_payload_identifiers_are_validated_as_ids() -> None:
@@ -529,7 +517,7 @@ def test_surface_payload_identifiers_are_validated_as_ids() -> None:
     surface = next(node for node in candidate["nodes"] if node["id"] == "form_surface")
     surface["payload"] = {"activityMessageId": {"bad": "object"}, "surfaceId": 42}
     with pytest.raises(ValidationError):
-        LayoutSnapshot.model_validate(candidate, context={"authenticated_program_mounts": _REGISTERED_PROGRAM_MOUNTS})
+        LayoutSnapshot.model_validate(candidate, context={"authenticated_program_surfaces": _REGISTERED_PROGRAM_SURFACES})
 
 
 def test_run_result_is_client_only_and_requires_versioned_engine() -> None:

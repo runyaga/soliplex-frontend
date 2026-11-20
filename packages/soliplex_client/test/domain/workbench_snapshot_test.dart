@@ -65,6 +65,7 @@ void main() {
           );
       final expectedReason = switch (name) {
         'cycle' => 'cycle',
+        'duplicate_mount' => 'duplicate mount',
         'wrong_parent_kind' => 'wrong parent kind',
         'protected_chat_mutation' => 'chat and tray cannot have children',
         _ => null,
@@ -203,7 +204,7 @@ void main() {
     );
   });
 
-  test('surfaces require content mounts and program ancestry matches both ids',
+  test('surfaces require content mounts and program ancestry match surface ids',
       () {
     final nested = jsonDecode(workbenchFixtures['nested_tree_v1.json']!)
         as Map<String, dynamic>;
@@ -253,7 +254,7 @@ void main() {
         programLayout,
         registrations: explicitRegistrations,
       ),
-      returnsNormally,
+      throwsFormatException,
     );
   });
 
@@ -422,7 +423,16 @@ WorkbenchSnapshot _parseSnapshot(
                 'activityMessageId': node['payload']['activityMessageId'],
                 'surfaceId': node['payload']['surfaceId'],
               },
-      ];
+      ].fold<List<Map<String, dynamic>>>([], (unique, registration) {
+        if (!unique.any((existing) =>
+            existing['role'] == registration['role'] &&
+            existing['activityMessageId'] ==
+                registration['activityMessageId'] &&
+            existing['surfaceId'] == registration['surfaceId'])) {
+          unique.add(registration);
+        }
+        return unique;
+      });
   return WorkbenchSnapshot.fromJson({
     'revision': 1,
     'layout': layout,

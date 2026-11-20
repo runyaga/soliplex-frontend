@@ -175,6 +175,81 @@ void main() {
       );
     });
 
+    test('foreign operation surfaces fail without workbench metadata', () {
+      final operations = [
+        ..._operations(),
+        {
+          'version': '1.0',
+          'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
+        },
+      ];
+      expect(
+        () => projectA2uiActivity(
+          _conversation(),
+          ActivityRecord(
+            messageId: _id,
+            activityType: a2uiActivityType,
+            content: {'a2ui_operations': operations},
+            timestamp: _painted.millisecondsSinceEpoch,
+          ),
+          createdAt: _painted,
+          registeredWorkbenchActivities: [
+            const WorkbenchRegistration(
+              role: WorkbenchRole.content,
+              activityMessageId: _id,
+              surfaceId: 'chart',
+            ),
+          ],
+        ),
+        throwsA(isA<MalformedResponseException>()),
+      );
+    });
+
+    test('foreign operation surfaces fail when metadata names another surface',
+        () {
+      final operations = [
+        ..._operations(),
+        {
+          'version': '1.0',
+          'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
+        },
+      ];
+      expect(
+        () => projectA2uiActivity(
+          _conversation(),
+          ActivityRecord(
+            messageId: _id,
+            activityType: a2uiActivityType,
+            content: {
+              'a2ui_operations': operations,
+              'workbench': const {
+                'role': 'content',
+                'registration': {
+                  'activityMessageId': _id,
+                  'surfaceId': 'unregistered',
+                },
+                'sequence': 1,
+                'revision': 1,
+                'publicationId': 'publication_1',
+                'partIndex': 0,
+                'partCount': 1,
+              },
+            },
+            timestamp: _painted.millisecondsSinceEpoch,
+          ),
+          createdAt: _painted,
+          registeredWorkbenchActivities: [
+            const WorkbenchRegistration(
+              role: WorkbenchRole.content,
+              activityMessageId: _id,
+              surfaceId: 'chart',
+            ),
+          ],
+        ),
+        throwsA(isA<MalformedResponseException>()),
+      );
+    });
+
     test('unregistered metadata stays on the standard projection path', () {
       final metadata = {
         'role': 'content',

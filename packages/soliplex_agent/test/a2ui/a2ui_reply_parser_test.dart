@@ -3,6 +3,8 @@
 
 import 'dart:convert';
 
+import 'package:a2ui_agent/a2ui_agent.dart' show A2uiPart, ResponsePart;
+import 'package:a2ui_core/a2ui_core.dart' show BasicCatalog;
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:test/test.dart';
 
@@ -222,11 +224,13 @@ void main() {
       ),
     );
     const response = '<a2ui>surface("s"); root = Text("Hello")</a2ui>';
+    final progressiveParts = <ResponsePart>[];
     final streamed = await textParser.parseStream(
       Stream<String>.fromIterable([
         '<a2ui>surface("s"); root = Text("Hel',
         'lo")</a2ui>',
       ]),
+      onPart: progressiveParts.add,
     );
     final complete = textParser.parse(response);
     expect(_messageJson(streamed), _messageJson(complete));
@@ -243,6 +247,31 @@ void main() {
         },
       },
     ]);
+    expect(
+      progressiveParts.whereType<A2uiPart>().expand((part) => part.a2ui),
+      isNotEmpty,
+    );
+  });
+
+  test('JSON stream validates topology completed by a later block', () async {
+    final catalog = BasicCatalog.v0_9();
+    final jsonParser = A2uiReplyParser(
+      catalogs: [CatalogConfig(catalog)],
+      format: A2uiReplyFormat.json,
+    ).negotiate(A2uiRendererCapabilities.forCatalogIds(
+      [BasicCatalog.v0_9Id],
+    ));
+    const response =
+        '<a2ui-json>[{"version":"v0.9","createSurface":{"surfaceId":"s",'
+        '"catalogId":"${BasicCatalog.v0_9Id}","sendDataModel":false}}]</a2ui-json>'
+        '<a2ui-json>[{"version":"v0.9","updateComponents":{"surfaceId":"s",'
+        '"components":[{"id":"root","component":"Column","children":["a"]}]}}]</a2ui-json>'
+        '<a2ui-json>[{"version":"v0.9","updateComponents":{"surfaceId":"s",'
+        '"components":[{"id":"a","component":"Text","text":"Ready"}]}}]</a2ui-json>';
+    final complete = jsonParser.parse(response);
+    final streamed = await jsonParser.parseStream(Stream.value(response));
+    expect(_messageJson(streamed), _messageJson(complete));
+    expect(streamed, hasLength(3));
   });
 }
 
