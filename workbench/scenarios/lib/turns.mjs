@@ -16,7 +16,10 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
       const response = await route.fetch({ timeout: timeoutMs });
       const body = await response.text();
       await route.fulfill({ response, body });
-      settle.resolve({ status: response.status(), ok: response.ok(), url: request.url(), body, input: request.postDataJSON() });
+      // The app authenticates with a bearer header, not cookies. Keep it in
+      // memory for the stored-run read and never record it.
+      const authorization = (await request.allHeaders()).authorization;
+      settle.resolve({ status: response.status(), ok: response.ok(), url: request.url(), body, input: request.postDataJSON(), authorization });
     } catch (error) {
       settle.reject(error);
       await route.abort().catch(() => {});
@@ -37,7 +40,8 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
     if (summary.actionName === 'submit_intake') {
       // The synthetic tool pair is server-authored and absent from the POST.
       // This public read uses the same authenticated Playwright context.
-      const stored = await page.request.get(response.url, { timeout: timeoutMs });
+      const headers = response.authorization ? { authorization: response.authorization } : {};
+      const stored = await page.request.get(response.url, { timeout: timeoutMs, headers });
       if (!stored.ok()) throw new Error(`Stored run HTTP ${stored.status()}`);
       summary.submissions = intakeSubmissions((await stored.json()).run_input);
     }

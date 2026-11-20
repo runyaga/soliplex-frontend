@@ -44,8 +44,9 @@ function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
     },
     route: async (_pattern, callback) => { handler = callback; operations.push('route'); },
     unroute: async (_pattern, callback) => { assert.equal(callback, handler); operations.push('unroute'); },
-    request: { get: async address => {
+    request: { get: async (address, options) => {
       assert.equal(address, url);
+      assert.equal(options.headers.authorization, 'Bearer fake-token', 'the stored-run read carries the app bearer header');
       operations.push('read-input');
       return { ok: () => true, json: async () => ({ run_input: storedInput }) };
     } },
@@ -58,7 +59,7 @@ function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
         { type: 'RUN_FINISHED' },
       ]).map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
       await handler({
-        request: () => ({ method: () => 'POST', url: () => url, postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name: actionName } } } }) }),
+        request: () => ({ method: () => 'POST', url: () => url, allHeaders: async () => ({ authorization: 'Bearer fake-token' }), postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name: actionName } } } }) }),
         fetch: async () => ({ text: async () => body, status: () => httpOk ? 200 : 422, ok: () => httpOk }),
         fulfill: async response => { assert.equal(response.body, body); operations.push('fulfill'); },
         abort: async () => operations.push('abort'),
@@ -95,6 +96,7 @@ test('awaitTurn captures the action stream and server-authored intake input befo
   await performActions(page, [{ role: 'button', name: 'Submit', region: 'left', awaitTurn: true }], options, turn => turns.push(turn), noWait);
   assert.deepEqual(operations, ['route', 'click:Submit', 'fulfill', 'read-input', 'unroute']);
   assert.equal(turns.length, 1);
+  assert.ok(!JSON.stringify(turns).includes('fake-token'), 'the bearer header stays out of the turn record');
   assert.equal(turns[0].completed, true);
   assert.equal(assertTurn({ kind: 'reply', includes: 'zebra' }, turns[0]).pass, true);
   assert.equal(assertTurn({ kind: 'submission', name: 'workbench_intake', context }, turns[0]).pass, true);
