@@ -245,7 +245,7 @@ void main() {
     final explicitRegistrations = _registrationsFor(programLayout)
       ..add({
         'role': 'program',
-        'activityMessageId': 'unused_program',
+        'activityMessageId': 'activity_program_registration',
         'surfaceId': programSurfaceId,
       });
     expect(
@@ -267,6 +267,31 @@ void main() {
         as Map<String, dynamic>;
     (unsupported['shared'] as Map<String, dynamic>)['object'] = Object();
     expect(() => _parseSnapshot(unsupported), throwsFormatException);
+  });
+
+  test('non-string-key registration and record maps are format errors', () {
+    final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    for (final key in ['registrations', 'records']) {
+      expect(
+        () => WorkbenchSnapshot.fromJson({
+          'revision': 1,
+          'layout': layout,
+          'registrations': key == 'registrations'
+              ? [
+                  <Object, Object?>{1: 'x'}
+                ]
+              : <Object?>[],
+          'records': key == 'records'
+              ? [
+                  <Object, Object?>{1: 'x'}
+                ]
+              : <Object?>[],
+        }),
+        throwsFormatException,
+        reason: key,
+      );
+    }
   });
 
   test(

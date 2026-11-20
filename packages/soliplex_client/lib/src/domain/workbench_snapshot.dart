@@ -283,22 +283,21 @@ class WorkbenchSnapshot {
         (json['revision'] as int) < 0 ||
         json['layout'] is! Map<String, dynamic> ||
         json['registrations'] is! List ||
-        json['records'] is! List ||
-        (json['registrations']! as List).any((item) => item is! Map) ||
-        (json['records']! as List).any((item) => item is! Map)) {
+        json['records'] is! List) {
       throw const FormatException('Malformed workbench snapshot');
     }
+    final registrationItems = _requiredJsonMaps(json['registrations']);
+    final recordItems = _requiredJsonMaps(json['records']);
     final registrations = [
-      for (final item in json['registrations']! as List)
-        WorkbenchRegistration.fromJson(item as Map<String, dynamic>),
+      for (final item in registrationItems)
+        WorkbenchRegistration.fromJson(item),
     ];
     return WorkbenchSnapshot(
       revision: json['revision'] as int,
       layout: json['layout'] as Map<String, dynamic>,
       registrations: registrations,
       records: [
-        for (final item in json['records']! as List)
-          WorkbenchPublicationPart.fromJson(item as Map<String, dynamic>),
+        for (final item in recordItems) WorkbenchPublicationPart.fromJson(item),
       ],
     );
   }
@@ -330,6 +329,19 @@ Map<String, dynamic> _validatedLayout(
 
 bool _validId(Object? value) =>
     value is String && RegExp(r'^[A-Za-z][A-Za-z0-9_-]{0,63}$').hasMatch(value);
+
+List<Map<String, dynamic>> _requiredJsonMaps(Object? value) {
+  if (value is! List) {
+    throw const FormatException('Malformed workbench snapshot objects');
+  }
+  return [
+    for (final item in value)
+      if (item is Map<String, dynamic>)
+        item
+      else
+        throw const FormatException('Malformed workbench snapshot object'),
+  ];
+}
 
 List<WorkbenchPublicationPart> _orderedRecords(
   List<WorkbenchPublicationPart> records,

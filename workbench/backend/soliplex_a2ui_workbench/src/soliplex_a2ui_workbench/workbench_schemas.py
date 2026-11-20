@@ -64,13 +64,23 @@ class LayoutSnapshot(Closed):
 
     @model_validator(mode="after")
     def validate_tree(self, info: ValidationInfo) -> LayoutSnapshot:
-        if info.context is None or "authenticated_program_surfaces" not in info.context:
+        if (
+            info.context is None
+            or "authenticated_program_mounts" not in info.context
+        ):
             raise ValueError("authenticated program registration metadata is required")
-        program_surfaces = info.context["authenticated_program_surfaces"]
-        if not isinstance(program_surfaces, set):
-            raise ValueError("registered program surfaces must be a set of IDs")
-        for surface_id in program_surfaces:
-            _ID_ADAPTER.validate_python(surface_id, strict=True)
+        program_mounts = info.context["authenticated_program_mounts"]
+        if not isinstance(program_mounts, set):
+            raise ValueError(
+                "registered program mounts must be a set of identities"
+            )
+        for mount in program_mounts:
+            if not isinstance(mount, tuple) or len(mount) != 2:
+                raise ValueError(
+                    "registered program mounts must be activity/surface pairs"
+                )
+            _ID_ADAPTER.validate_python(mount[0], strict=True)
+            _ID_ADAPTER.validate_python(mount[1], strict=True)
         by_id = {node.id: node for node in self.nodes}
         if len(by_id) != len(self.nodes) or self.rootId not in by_id:
             raise ValueError("duplicate or missing root id")
@@ -162,7 +172,10 @@ class LayoutSnapshot(Closed):
                     raise ValueError("windows require canvas ancestry")
             if (
                 node.kind == "surface"
-                and node.payload["surfaceId"] in program_surfaces
+                and (
+                    node.payload["activityMessageId"],
+                    node.payload["surfaceId"],
+                ) in program_mounts
                 and not any(parent.kind == "window" for parent in ancestors)
             ):
                 raise ValueError("program surface requires window ancestry")

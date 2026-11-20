@@ -72,9 +72,44 @@ void _registerSyntheticScanTest() {
         'packages/soliplex_agent/lib/agent.dart',
         "import 'package:dart_monty/dart_monty.dart';\n",
       ),
+      _SourceFile(
+        'packages/soliplex_client/lib/probe.dart',
+        "import 'package:flutter/widgets.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_agent/lib/probe.dart',
+        "import 'package:flutter_test/flutter_test.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_client/pubspec.yaml',
+        'dependencies:\n  flutter:\n    sdk: flutter\n',
+      ),
+      _SourceFile(
+        'packages/soliplex_agent/pubspec.yaml',
+        'dev_dependencies:\n  flutter_test:\n    sdk: flutter\n',
+      ),
+      _SourceFile(
+        'packages/soliplex_client/lib/sky.dart',
+        "import 'package:sky_engine/ui/ui.dart';\n",
+      ),
+      _SourceFile(
+        'packages/soliplex_agent/pubspec.yaml',
+        'dependencies:\n  sky_engine: any\n',
+      ),
     ];
     final violations = _scanForbiddenEdges(synthetic);
-    expect(violations, hasLength(10));
+    expect(violations, hasLength(16));
+    expect(
+      violations.map((edge) => edge.to),
+      containsAll([
+        'package:flutter/widgets.dart',
+        'package:flutter_test/flutter_test.dart',
+        'package:sky_engine/ui/ui.dart',
+        'dependency:flutter',
+        'dependency:flutter_test',
+        'dependency:sky_engine',
+      ]),
+    );
     expect(
         violations.map((edge) => edge.from),
         containsAll([
@@ -86,7 +121,12 @@ void _registerSyntheticScanTest() {
           'packages/soliplex_client/pubspec.yaml',
           'packages/soliplex_client/lib/client.dart',
           'packages/soliplex_agent/pubspec.yaml',
+          'packages/soliplex_client/lib/sky.dart',
           'packages/soliplex_agent/lib/agent.dart',
+          'packages/soliplex_client/lib/probe.dart',
+          'packages/soliplex_agent/lib/probe.dart',
+          'packages/soliplex_client/pubspec.yaml',
+          'packages/soliplex_agent/pubspec.yaml',
         ]));
   });
 }
@@ -137,14 +177,14 @@ List<_DependencyEdge> _scanForbiddenEdges(Iterable<_SourceFile> sources) =>
 
 Iterable<_DependencyEdge> _edgesFromSource(_SourceFile source) sync* {
   final imports = RegExp(
-    r'''(?:import|export|part\s+of)\s+['"]package:((?:dart_monty|soliplex_monty)/[^'"]+)['"]''',
+    r'''(?:import|export|part\s+of)\s+['"]package:((?:dart_monty|soliplex_monty|flutter|flutter_test|sky_engine)/[^'"]+)['"]''',
   );
   for (final match in imports.allMatches(source.contents)) {
     yield _DependencyEdge(source.path, 'package:${match[1]}');
   }
   if (source.path.endsWith('pubspec.yaml')) {
     final dependencies = RegExp(
-      r'^\s*(dart_monty|soliplex_monty)\s*:',
+      r'^\s*(dart_monty|soliplex_monty|flutter|flutter_test|sky_engine)\s*:',
       multiLine: true,
     );
     for (final match in dependencies.allMatches(source.contents)) {
@@ -170,7 +210,17 @@ bool _isForbiddenEdge(_DependencyEdge edge) {
               edge.to.startsWith('package:soliplex_monty/') ||
               edge.to == 'dependency:dart_monty' ||
               edge.to == 'dependency:soliplex_monty');
-  return forbiddenCoreEdge || forbiddenCatalogEdge;
+  final isProtectedFlutterPackage =
+      edge.from.startsWith('packages/soliplex_client/') ||
+          edge.from.startsWith('packages/soliplex_agent/');
+  final forbiddenFlutterEdge = isProtectedFlutterPackage &&
+      (edge.to.startsWith('package:flutter/') ||
+          edge.to.startsWith('package:flutter_test/') ||
+          edge.to.startsWith('package:sky_engine/') ||
+          edge.to == 'dependency:flutter' ||
+          edge.to == 'dependency:flutter_test' ||
+          edge.to == 'dependency:sky_engine');
+  return forbiddenCoreEdge || forbiddenCatalogEdge || forbiddenFlutterEdge;
 }
 
 class _SourceFile {
