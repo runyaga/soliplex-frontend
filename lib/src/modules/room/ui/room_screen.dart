@@ -16,7 +16,7 @@ import 'package:soliplex_client/soliplex_client.dart'
         AuthException,
         CancelToken,
         FeedbackType,
-        HttpTransport,
+        GenUiMessage,
         MalformedResponseException,
         PermissionDeniedException,
         RagDatabaseScope,
@@ -28,9 +28,7 @@ import 'package:soliplex_client/soliplex_client.dart'
         Room,
         TextPart,
         ThreadHistory,
-        WorkbenchClient,
-        WorkdirFile,
-        UrlBuilder;
+        WorkdirFile;
 import 'package:soliplex_logging/soliplex_logging.dart';
 
 import '../../../core/activity_read.dart' show currentUserRoomMarkers;
@@ -61,6 +59,7 @@ import '../agent_runtime_manager.dart';
 import '../../../interfaces/workbench_presentation.dart';
 import '../a2ui/surface_scope.dart' show ChatSurfaceScope, ChatSurfaceStore;
 import '../a2ui/surface_view.dart' show ChatSurfaceView;
+import '../workbench/chart_placeholder_catalog.dart';
 import '../room_state.dart';
 import '../../../stores/run_registry.dart';
 import '../thread_list_state.dart';
@@ -270,7 +269,11 @@ class _RoomScreenState extends State<RoomScreen> {
       _workbenchSurfaceStores.putIfAbsent(
         threadId,
         () => ChatSurfaceStore(
-          catalogs: widget.surfaceCatalogs,
+          catalogs: [
+            ...widget.surfaceCatalogs,
+            if (!widget.surfaceCatalogs.any((c) => c.id == graphicsCatalogId))
+              chartPlaceholderCatalog(),
+          ],
           onAction: (_, action) {
             final threadView = _state.activeThreadView;
             if (threadView?.threadId != threadId) return;
@@ -287,20 +290,22 @@ class _RoomScreenState extends State<RoomScreen> {
     required String threadId,
     required Widget chat,
   }) {
-    final server = widget.serverEntry;
+    final view = _state.activeThreadView!;
+    final activeRunId = view.activeRunId.value;
+    final store = _surfaceStoreForThread(threadId);
+    if (view.messages.value case MessagesLoaded(:final messages)) {
+      store.ingest(messages.whereType<GenUiMessage>(),
+          activeRunId: activeRunId);
+    }
     return widget.workbenchPresentation!.buildHost(
       roomId: widget.roomId,
       threadId: threadId,
       chat: chat,
-      client: WorkbenchClient(
-        transport: HttpTransport(client: server.httpClient),
-        urlBuilder: UrlBuilder(server.serverUrl.resolve('/api/v1').toString()),
-      ),
-      surfaceBuilder: (activityMessageId, _) {
+      surfaceBuilder: (activityMessageId, surfaceId) {
         final controller = _surfaceStoreForThread(threadId)[activityMessageId];
         return controller == null
             ? const SizedBox.shrink()
-            : ChatSurfaceView(controller: controller);
+            : ChatSurfaceView(controller: controller, surfaceId: surfaceId);
       },
     );
   }
@@ -1160,6 +1165,13 @@ class _RoomScreenState extends State<RoomScreen> {
       _anchorAdvanceUnsub = null;
       _runEndUnsub?.call();
       _runEndUnsub = null;
+      final leavingStores = _workbenchSurfaceStores.values.toList();
+      _workbenchSurfaceStores.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final store in leavingStores) {
+          store.dispose();
+        }
+      });
       _state.dispose();
       unawaited(_anchorTracker.dispose());
       unawaited(_threadReadTracker.dispose());
@@ -2071,6 +2083,7 @@ class _RoomScreenState extends State<RoomScreen> {
       content: widget.workbenchPresentation != null && threadId != null
           ? ChatSurfaceScope(
               store: _surfaceStoreForThread(threadId),
+              activeRunId: threadView!.activeRunId.watch(context),
               child: Column(
                 children: [
                   StatusMessageBanner(
@@ -2087,9 +2100,7 @@ class _RoomScreenState extends State<RoomScreen> {
                     _buildFilePanel(room, roomStatus, threadStatus,
                         workspaceStatus, threadId),
                   Expanded(
-                    child: _capWidth(
-                      _buildWorkbenchHost(threadId: threadId, chat: body),
-                    ),
+                    child: _buildWorkbenchHost(threadId: threadId, chat: body),
                   ),
                   _capWidth(_buildChatInput(threadView, room, messagesStatus)),
                   _capWidth(ChatAiDisclaimer(appName: widget.appName)),

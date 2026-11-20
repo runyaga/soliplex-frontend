@@ -1,5 +1,4 @@
 import 'package:flutter/widgets.dart';
-import 'package:soliplex_client/soliplex_client.dart' show WorkbenchClient;
 
 import '../interfaces/workbench_presentation.dart';
 
@@ -18,7 +17,6 @@ class WorkbenchRoomAllowlistPresentation implements WorkbenchPresentation {
     required String roomId,
     required String threadId,
     required Widget chat,
-    required WorkbenchClient client,
     required Widget Function(String activityMessageId, String surfaceId)
         surfaceBuilder,
   }) {
@@ -27,7 +25,6 @@ class WorkbenchRoomAllowlistPresentation implements WorkbenchPresentation {
       roomId: roomId,
       threadId: threadId,
       chat: chat,
-      client: client,
       surfaceBuilder: surfaceBuilder,
     );
   }

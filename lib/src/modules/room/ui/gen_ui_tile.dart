@@ -14,6 +14,21 @@ class GenUiTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message.widgetName == 'a2ui') {
+      final scope = ChatSurfaceScope.scopeOf(context);
+      final registration = message.data['workbenchRegistration'];
+      if (scope?.hostsWorkbench == true &&
+          (scope!.hostedActivityIds.contains(message.id) ||
+              (registration is Map &&
+                  const ['content', 'program', 'layout']
+                      .contains(registration['role'])))) {
+        return Card(
+            child: Padding(
+          padding: const EdgeInsets.all(SoliplexSpacing.s2),
+          child: Text(registration is Map && registration['role'] == 'layout'
+              ? 'Workspace layout updated'
+              : 'Surface in workspace'),
+        ));
+      }
       return _A2uiTile(key: ValueKey(message.id), message: message);
     }
     final theme = Theme.of(context);

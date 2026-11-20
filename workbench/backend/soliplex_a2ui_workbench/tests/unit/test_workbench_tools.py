@@ -45,7 +45,7 @@ def test_python_client_is_inert_and_server_returns_disabled_without_mutation(ctx
     assert emitted[1]["updateDataModel"]["value"]["output"] == ""
     component = emitted[2]["updateComponents"]["components"][0]
     assert component["@catalogId"] == "urn:soliplex:catalog:lab:1"
-    assert component["source"] == {"@path":"/source"} and component["output"] == {"@path":"/output"}
+    assert component["source"] == {"@path":"/source"} and component["outputPath"] == "/output"
     before = ctx.repository.load_snapshot(ctx.scope)
     disabled = tools["run_python_server"].function(ctx, surface_id=result["surfaceId"], source="print(2)")
     assert disabled == {"status":"not_enabled","code":"server_runner_deferred","tool":"run_python_server","side":"server","execution":"disabled"}
@@ -91,3 +91,10 @@ def test_stale_turn_cannot_overwrite_a_successful_tool_mutation(tmp_path):
     with pytest.raises(Exception, match="stale"):
         MINIMUM_ROOM_TOOLS["create_container"].function(second, parent_id="r_right", kind="panel", title="Two")
     repo.close()
+
+
+def test_tray_accepts_published_content(ctx):
+    result = MINIMUM_ROOM_TOOLS["open_panel"].function(ctx, title="Tray note", text="Visible below the workspace", parent_id="r_tray")
+    layout = ctx.repository.load_snapshot(ctx.scope)["layout"]
+    assert next(node for node in layout["nodes"] if node["id"] == "r_tray")["children"]
+    assert result["events"][-1]["kind"] == "layout"

@@ -1,5 +1,4 @@
 import 'package:flutter/widgets.dart';
-import 'package:soliplex_client/soliplex_client.dart' show WorkbenchClient;
 
 /// Room-owned presentation hook supplied by an opt-in flavor.
 abstract interface class WorkbenchPresentation {
@@ -9,7 +8,6 @@ abstract interface class WorkbenchPresentation {
     required String roomId,
     required String threadId,
     required Widget chat,
-    required WorkbenchClient client,
     required Widget Function(String activityMessageId, String surfaceId)
         surfaceBuilder,
   });

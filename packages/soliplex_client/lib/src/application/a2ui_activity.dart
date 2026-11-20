@@ -65,6 +65,28 @@ Conversation projectA2uiActivity(
           registeredWorkbenchActivities,
         );
 
+  // This closed role binding is issued by the server's deterministic tools,
+  // on canonical activities only. Names and data-model keys grant no role.
+  WorkbenchRegistration? publication;
+  final rawPublication = content['workbenchPublication'];
+  if (rawPublication is Map<String, dynamic>) {
+    try {
+      final candidate = WorkbenchRegistration.fromJson(rawPublication);
+      if (candidate.activityMessageId == activity.messageId &&
+          messages.isNotEmpty &&
+          messages.every(
+            (message) => _operations.where(message.containsKey).every(
+                  (key) =>
+                      (message[key] as Map)['surfaceId'] == candidate.surfaceId,
+                ),
+          )) {
+        publication = candidate;
+      }
+    } on FormatException {
+      // Malformed role declarations remain ordinary A2UI activities.
+    }
+  }
+
   final surfaces = <String>{};
   for (final message in messages) {
     for (final key in _operations) {
@@ -99,6 +121,12 @@ Conversation projectA2uiActivity(
   }
   final data = <String, dynamic>{
     'messages': messages,
+    if (publication != null)
+      'workbenchRegistration': {
+        'role': publication.role.name,
+        'activityMessageId': publication.activityMessageId,
+        'surfaceId': publication.surfaceId,
+      },
     if (metadata != null) 'workbench': metadata.toJson(),
     if (!content.containsKey('a2ui_operations')) 'status': status,
     if (updatedByRunIds.isNotEmpty)

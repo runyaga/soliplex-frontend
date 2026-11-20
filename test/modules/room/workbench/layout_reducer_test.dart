@@ -1,19 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soliplex_client/soliplex_client.dart' show WorkbenchSnapshot;
 import 'package:soliplex_frontend/src/modules/room/workbench/layout_reducer.dart';
 
 void main() {
-  test('accepts a complete snapshot and retains it on missing input', () {
+  test('accepts a validated control tree and retains it on missing input', () {
     final reducer = LayoutReducer();
-    final snapshot = WorkbenchSnapshot(
-      revision: 0,
-      layout: _layout,
-      registrations: const [],
-      records: const [],
-    );
-    expect(reducer.acceptSnapshot(snapshot), isTrue);
+    expect(reducer.acceptLayout(_layout, const []), isTrue);
     final accepted = reducer.current;
-    expect(reducer.acceptSnapshot(null), isFalse);
+    expect(reducer.acceptLayout(null, const []), isFalse);
     expect(reducer.current, same(accepted));
   });
 }

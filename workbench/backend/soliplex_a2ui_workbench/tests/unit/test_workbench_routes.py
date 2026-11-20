@@ -433,3 +433,23 @@ def test_non_run_stock_agui_routes_and_legacy_room_payload_pass_through_unchange
     response = TestClient(legacy_app).post("/v1/rooms/a2ui-lab/agui/legacy-thread/legacy-run", content=raw_legacy, headers={"content-type": "application/json"})
     assert response.status_code == 200
     assert seen == [raw_legacy]
+
+
+@pytest.mark.parametrize("replay", [False, True])
+def test_activity_tool_turn_and_reconnect_never_open_legacy_repository(monkeypatch, replay):
+    from soliplex_a2ui_workbench import workbench_routes
+    monkeypatch.setattr(workbench_routes, "shared_repository", lambda: pytest.fail("legacy SQLite opened"))
+    upstream = APIRouter()
+    @upstream.post("/v1/rooms/{room_id}/agui/{thread_id}/{run_id}")
+    async def handler():
+        return {"ok": True}
+    app = FastAPI()
+    scope = WorkbenchScope("alice", "server", "room", "thread")
+    app.include_router(create_guarded_agui_router(upstream, scope_provider=scope, workbench_rooms={"room"}))
+    response = TestClient(app).post(
+        "/v1/rooms/room/agui/thread/run",
+        json={"threadId": "thread", "runId": "run", "state": {}, "messages": [{"id": "user", "role": "user", "content": "Place a form"}], "tools": [], "context": [], "forwardedProps": {}},
+        headers={"Last-Event-ID": "run:0"} if replay else {},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"ok": True}

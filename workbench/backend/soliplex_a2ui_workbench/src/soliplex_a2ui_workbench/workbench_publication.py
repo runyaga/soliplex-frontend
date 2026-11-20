@@ -9,7 +9,7 @@ from typing import Protocol, TypedDict, runtime_checkable
 
 from ag_ui.core import ActivitySnapshotEvent
 
-from .workbench_schemas import LayoutSnapshot
+from .workbench_schemas import LayoutSnapshot, validate_registered_mounts
 
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 GRAPHICS_CATALOG = "urn:soliplex:catalog:graphics:2"
@@ -84,6 +84,8 @@ class WorkbenchCatalogValidator:
                 if catalog_id == BASIC_CATALOG:
                     _validate_basic_component(item)
             for item in components:
+                if "child" in item and item["child"] not in component_ids:
+                    raise ValueError("emitted component reference does not resolve in its surface")
                 if item.get("component") in {"Card", "Column", "Row", "List"}:
                     children = item.get("children")
                     if not isinstance(children, list) or any(child not in component_ids for child in children):
@@ -212,7 +214,7 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "TextField": common | {"label", "value"},
         "ChoicePicker": common | {"label", "variant", "options", "value", "displayStyle", "filterable"},
         "Slider": common | {"min", "max", "value", "label"},
-        "Button": common | {"label", "action"},
+        "Button": common | {"label", "child", "action"},
     }
     allowed = shapes.get(component)
     if allowed is None or set(item) - allowed or not isinstance(item.get("id"), str) or not _IDENTIFIER.fullmatch(item["id"]):
@@ -227,13 +229,14 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "TextField": {"label", "value"},
         "ChoicePicker": {"label", "variant", "options", "value"},
         "Slider": {"min", "max", "value"},
-        "Button": {"label", "action"},
+        "Button": {"action"},
     }[component]
     if required - set(item):
         raise ValueError("emitted component is missing required properties")
     if component == "Button":
         action = item.get("action")
-        if not isinstance(item.get("label"), str) or not isinstance(action, dict) or not isinstance(action.get("name"), str) or not action["name"] or set(action) - {"name", "context"} or ("context" in action and not isinstance(action["context"], dict)):
+        event = action.get("event", action) if isinstance(action, dict) else None
+        if (not isinstance(item.get("label", item.get("child")), str) or not isinstance(event, dict) or not isinstance(event.get("name"), str) or not event["name"] or set(event) - {"name", "context"} or ("context" in event and not isinstance(event["context"], dict))):
             raise ValueError("invalid emitted Button action")
     if component == "Text":
         text = item["text"]
@@ -288,19 +291,20 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     if component == "Chart":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": {"@path": "/spec"}}
     elif component == "PythonRepl":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "output": {"@path": "/output"}}
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output"}
     elif component == "PlaceForm":
         catalog_id = BASIC_CATALOG
         data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}
         component_def = {
-            "id": "root", "component": "Card", "children": ["title", "question", "districts", "acknowledged", "submit"],
+            "id": "root", "component": "Column", "children": ["title", "question", "districts", "acknowledged", "submit"],
         }
         extra = [
             {"id": "title", "component": "Text", "text": str(record["title"])},
             {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}},
             {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"},
             {"id": "acknowledged", "component": "CheckBox", "label": "Acknowledged", "value": {"@path": "/acknowledged"}},
-            {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}},
+            {"id": "submit", "component": "Button", "child": "submit_label", "action": {"event": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}}},
+            {"id": "submit_label", "component": "Text", "text": "Submit"},
         ]
         return [
             _operation(sid, "createSurface", {"catalogId": catalog_id}),
@@ -339,6 +343,8 @@ def build_publication(
     layout_activity_message_id: str = "workbench-layout",
     layout_surface_id: str = "workbench-layout-surface",
     registered_program_surfaces: set[str] | None = None,
+    registered_mounts: set[tuple[str, str]] | None = None,
+    legacy_journal: bool = True,
 ) -> dict[str, object]:
     """Validate then build content-before-layout full replacement events."""
     if validator is None:
@@ -357,6 +363,8 @@ def build_publication(
     if len({record.get("surfaceId") for record in frozen}) != len(frozen):
         raise ValueError("surface IDs must be unique")
     validated_layout = LayoutSnapshot.model_validate(layout, context={"authenticated_program_surfaces": registered_program_surfaces or set()})
+    if registered_mounts is not None:
+        validate_registered_mounts(validated_layout, registered_mounts)
     count = len(frozen) + 1
     content_records: list[dict[str, object]] = []
     events: list[dict[str, object]] = []
@@ -366,9 +374,12 @@ def build_publication(
         if not isinstance(activity_id, str) or not isinstance(surface_id, str):
             raise ValueError("content requires stable activity and surface IDs")
         commit = {"recordId": publication_id, "sequence": sequence, "index": index, "count": count}
-        content_record = record | {"workbenchCommit": commit}
+        content_record = record | {"workbenchCommit": commit} if legacy_journal else dict(record)
         content_records.append(content_record)
-        events.append({"kind": "content", "record_id": activity_id, "event": _event(activity_id, _content_operations(record), {"workbenchCommit": commit})})
+        metadata = {"workbenchPublication": {"role": "program" if record["component"] == "PythonRepl" else "content", "activityMessageId": activity_id, "surfaceId": surface_id}}
+        if legacy_journal:
+            metadata["workbenchCommit"] = commit
+        events.append({"kind": "content", "record_id": activity_id, "event": _event(activity_id, _content_operations(record), metadata)})
     layout_index = len(frozen)
     layout_commit = {"recordId": publication_id, "sequence": sequence, "index": layout_index, "count": count}
     operations = [
@@ -379,5 +390,8 @@ def build_publication(
     for record in frozen:
         WorkbenchCatalogValidator._validate_emitted_components(_content_operations(record), negotiated_manifests)
     WorkbenchCatalogValidator._validate_emitted_components(operations, negotiated_manifests)
-    events.append({"kind": "layout", "record_id": publication_id, "event": _event(layout_activity_message_id, operations, {"workbenchCommit": layout_commit})})
+    metadata = {"workbenchPublication": {"role": "layout", "activityMessageId": layout_activity_message_id, "surfaceId": layout_surface_id}}
+    if legacy_journal:
+        metadata["workbenchCommit"] = layout_commit
+    events.append({"kind": "layout", "record_id": publication_id, "event": _event(layout_activity_message_id, operations, metadata)})
     return {"content_records": content_records, "events": events}

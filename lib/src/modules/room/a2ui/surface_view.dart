@@ -7,9 +7,12 @@ import 'surface_scope.dart';
 
 /// Renders the same surface in a chat tile or an embedded shell.
 class ChatSurfaceView extends StatelessWidget {
-  const ChatSurfaceView({super.key, required this.controller});
+  const ChatSurfaceView({super.key, required this.controller, this.surfaceId});
 
   final ChatSurfaceController controller;
+
+  /// When embedded in a workbench leaf, render only this surface.
+  final String? surfaceId;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -21,7 +24,8 @@ class ChatSurfaceView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (controller.error case final error?) Text(error),
-                for (final surface in controller.surfaces)
+                for (final surface in controller.surfaces.where(
+                    (surface) => surfaceId == null || surface.id == surfaceId))
                   ChatSurfaceOrigin(
                     live: controller.live,
                     child: A2uiSurface(

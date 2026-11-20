@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soliplex_client/soliplex_client.dart' show WorkbenchClient;
 import 'package:soliplex_frontend/soliplex_frontend.dart';
 
 void main() {
@@ -12,7 +11,6 @@ void main() {
       host: host,
     );
     const chat = SizedBox(key: ValueKey('standard-chat'));
-    final client = _UnusedWorkbenchClient();
 
     await tester.pumpWidget(
       Directionality(
@@ -21,7 +19,6 @@ void main() {
           roomId: 'workbench-e4b',
           threadId: 'thread-1',
           chat: chat,
-          client: client,
           surfaceBuilder: (_, __) => const SizedBox.shrink(),
         ),
       ),
@@ -36,7 +33,6 @@ void main() {
           roomId: 'a2ui-lab',
           threadId: 'thread-2',
           chat: chat,
-          client: client,
           surfaceBuilder: (_, __) => const SizedBox.shrink(),
         ),
       ),
@@ -55,16 +51,10 @@ class _TestWorkbenchHost implements WorkbenchPresentation {
     required String roomId,
     required String threadId,
     required Widget chat,
-    required WorkbenchClient client,
     required Widget Function(String activityMessageId, String surfaceId)
         surfaceBuilder,
   }) {
     calls++;
     return const SizedBox(key: ValueKey('workbench-host'));
   }
-}
-
-class _UnusedWorkbenchClient implements WorkbenchClient {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

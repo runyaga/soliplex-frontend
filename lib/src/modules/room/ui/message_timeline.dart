@@ -140,8 +140,8 @@ class _MessageTimelineState extends State<MessageTimeline> {
   ///
   /// One decision, taken in one place, so that what the timeline shows and
   /// what each tile renders cannot drift apart.
-  TimelineLayout _layOut() => layOutTimeline(
-        messages: widget.messages,
+  TimelineLayout _layOut(List<ChatMessage> messages) => layOutTimeline(
+        messages: messages,
         bands: widget.executionTrackers,
         outcomes: widget.runOutcomes,
         streaming: widget.streamingState,
@@ -473,7 +473,9 @@ class _MessageTimelineState extends State<MessageTimeline> {
 
   @override
   Widget build(BuildContext context) {
-    final (:tiles, :dropped) = _layOut();
+    final scope = ChatSurfaceScope.scopeOf(context);
+    final messages = widget.messages;
+    final (:tiles, :dropped) = _layOut(messages);
     _reportNewDrops(dropped);
     final displayMessages = [for (final tile in tiles) tile.message];
     // Pruned against the tiles shown rather than the committed messages: the
@@ -624,6 +626,8 @@ class _MessageTimelineState extends State<MessageTimeline> {
       store: ChatSurfaceScope.maybeOf(context) ??
           _storeFor(widget.surfaceCatalogs),
       activeRunId: widget.activeRunId,
+      hostedActivityIds: scope?.hostedActivityIds ?? const {},
+      hostsWorkbench: scope?.hostsWorkbench ?? false,
       child: content,
     );
   }

@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
-import 'package:soliplex_client/soliplex_client.dart' show WorkbenchClient;
 
 import '../../../interfaces/workbench_presentation.dart';
-import 'layout_reducer.dart';
+import '../a2ui/surface_scope.dart';
 import 'layout_tree.dart';
 import 'panel_chrome.dart';
 import 'surface_mount_registry.dart';
 
-/// Room presentation backed by the authenticated U05 snapshot client.
+/// Room presentation driven by accepted thread activity publications.
 class ClientWorkbenchPresentation implements WorkbenchPresentation {
-  /// Creates an opt-in host with a registered-surface renderer.
   const ClientWorkbenchPresentation();
 
   @override
@@ -18,93 +16,64 @@ class ClientWorkbenchPresentation implements WorkbenchPresentation {
     required String roomId,
     required String threadId,
     required Widget chat,
-    required WorkbenchClient client,
     required Widget Function(String activityMessageId, String surfaceId)
         surfaceBuilder,
   }) =>
       KeyedSubtree(
         key: ValueKey('$roomId\u0000$threadId'),
-        child: _SnapshotHost(
-          client: client,
-          roomId: roomId,
-          threadId: threadId,
-          chat: chat,
-          surfaceBuilder: surfaceBuilder,
-        ),
+        child: _ActivityHost(chat: chat, surfaceBuilder: surfaceBuilder),
       );
 }
 
-class _SnapshotHost extends StatefulWidget {
-  const _SnapshotHost({
-    required this.client,
-    required this.roomId,
-    required this.threadId,
-    required this.chat,
-    required this.surfaceBuilder,
-  });
-  final WorkbenchClient client;
-  final String roomId;
-  final String threadId;
+class _ActivityHost extends StatefulWidget {
+  const _ActivityHost({required this.chat, required this.surfaceBuilder});
   final Widget chat;
   final Widget Function(String activityMessageId, String surfaceId)
       surfaceBuilder;
+
   @override
-  State<_SnapshotHost> createState() => _SnapshotHostState();
+  State<_ActivityHost> createState() => _ActivityHostState();
 }
 
-class _SnapshotHostState extends State<_SnapshotHost> {
-  final _reducer = LayoutReducer();
+class _ActivityHostState extends State<_ActivityHost> {
   final _mounts = SurfaceMountRegistry();
-  late Future<void> _load;
 
   @override
-  void initState() {
-    super.initState();
-    _load = _hydrate();
+  Widget build(BuildContext context) {
+    final store = ChatSurfaceScope.maybeOf(context)!;
+    final scope = ChatSurfaceScope.scopeOf(context)!;
+    return ChatSurfaceScope(
+        store: store,
+        activeRunId: scope.activeRunId,
+        hostsWorkbench: true,
+        child: ListenableBuilder(
+          listenable: store,
+          builder: (context, _) {
+            final tree = store.layout;
+            if (tree == null) {
+              return Column(children: [
+                if (store.layoutError case final error?) Text(error),
+                Expanded(child: widget.chat),
+              ]);
+            }
+            _mounts.retain([
+              for (final node in tree.nodes.values)
+                if (node.kind == 'surface')
+                  '${node.payload['activityMessageId']}\u0000${node.payload['surfaceId']}',
+            ]);
+            return Column(children: [
+              if (store.layoutError case final error?) Text(error),
+              Expanded(
+                  child: WorkbenchHost(
+                tree: tree,
+                chat: widget.chat,
+                surfaceBuilder: widget.surfaceBuilder,
+                mounts: _mounts,
+              )),
+            ]);
+          },
+        ));
   }
-
-  @override
-  void didUpdateWidget(_SnapshotHost oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.client != widget.client ||
-        oldWidget.roomId != widget.roomId ||
-        oldWidget.threadId != widget.threadId) {
-      _load = _hydrate();
-    }
-  }
-
-  Future<void> _hydrate() async {
-    final snapshot = await widget.client.getSnapshot(
-      roomId: widget.roomId,
-      threadId: widget.threadId,
-    );
-    _reducer.acceptSnapshot(snapshot);
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<void>(
-        future: _load,
-        builder: (context, state) {
-          final tree = _reducer.current;
-          if (state.hasError && tree == null) {
-            return Center(
-              child: Text(
-                'Workbench is unavailable',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            );
-          }
-          if (tree == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return WorkbenchHost(
-            tree: tree,
-            chat: widget.chat,
-            surfaceBuilder: widget.surfaceBuilder,
-            mounts: _mounts,
-          );
-        },
-      );
 }
 
 /// Renders a validated nested layout without changing its accepted edges.
@@ -131,40 +100,87 @@ class WorkbenchHost extends StatelessWidget {
       );
 
   Widget _buildAtWidth(BuildContext context, double width) {
-    final root = tree.root;
-    final chatNode = tree.node('r_chat');
-    final contentNodes = root.children
-        .map(tree.node)
-        .whereType<LayoutNode>()
-        .where((node) => node.id != chatNode?.id)
-        .toList();
-    final workspace = SingleChildScrollView(
-      key: const ValueKey('workbench-workspace-scroll'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: contentNodes.map((node) => _render(context, node)).toList(),
-      ),
+    final scope = ChatSurfaceScope.scopeOf(context);
+    final hostedIds = {
+      for (final node in tree.nodes.values)
+        if (node.kind == 'surface')
+          node.payload['activityMessageId']! as String,
+    };
+    final chatPane = KeyedSubtree(
+      key: const ValueKey('workbench-region-chat'),
+      child: scope == null
+          ? chat
+          : ChatSurfaceScope(
+              store: scope.store,
+              activeRunId: scope.activeRunId,
+              hostedActivityIds: hostedIds,
+              hostsWorkbench: true,
+              child: chat,
+            ),
     );
+    final regions = {
+      for (final id in tree.root.children)
+        if (tree.node(id) case final LayoutNode node)
+          node.payload['role']: node,
+    };
+    bool hasContent(String role) =>
+        regions[role]?.children.any(
+              (id) => tree.node(id)?.visibility == 'open',
+            ) ??
+        false;
+    Widget region(String role) => SingleChildScrollView(
+          key: ValueKey('workbench-region-$role'),
+          padding: const EdgeInsets.all(SoliplexSpacing.s1),
+          child: regions[role] == null
+              ? const SizedBox.shrink()
+              : _render(context, regions[role]!),
+        );
     if (width < SoliplexBreakpoints.desktop) {
       return DefaultTabController(
         length: 2,
         child: Column(
           children: [
             const TabBar(
-              tabs: [
-                Tab(text: 'Chat'),
-                Tab(text: 'Workspace'),
-              ],
+              tabs: [Tab(text: 'Chat'), Tab(text: 'Workspace')],
             ),
-            Expanded(child: TabBarView(children: [chat, workspace])),
+            Expanded(
+              child: TabBarView(children: [
+                chatPane,
+                SingleChildScrollView(
+                  key: const ValueKey('workbench-workspace-scroll'),
+                  padding: const EdgeInsets.all(SoliplexSpacing.s1),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final role in ['left', 'canvas', 'right', 'tray'])
+                        if (regions[role] case final LayoutNode node)
+                          _render(context, node),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
           ],
         ),
       );
     }
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(width: 320, child: chat),
-        Expanded(child: workspace),
+        Expanded(
+          flex: 3,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (hasContent('left')) Expanded(flex: 2, child: region('left')),
+              Expanded(flex: 3, child: chatPane),
+              Expanded(flex: 5, child: region('canvas')),
+              if (hasContent('right'))
+                Expanded(flex: 2, child: region('right')),
+            ],
+          ),
+        ),
+        if (hasContent('tray')) Expanded(child: region('tray')),
       ],
     );
   }
@@ -195,13 +211,16 @@ class WorkbenchHost extends StatelessWidget {
               ],
             );
           }
-          return Flex(
-            direction: horizontal ? Axis.horizontal : Axis.vertical,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final child in children)
-                Expanded(child: _render(context, child)),
-            ],
+          return SizedBox(
+            height: SoliplexBreakpoints.tablet / 2,
+            child: Flex(
+              direction: horizontal ? Axis.horizontal : Axis.vertical,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final child in children)
+                  Expanded(child: _render(context, child)),
+              ],
+            ),
           );
         },
       );
@@ -233,7 +252,11 @@ class WorkbenchHost extends StatelessWidget {
       final content = children.isEmpty
           ? const SizedBox.shrink()
           : _render(context, children.first);
-      final chrome = PanelChrome(node: node, child: content);
+      final chrome = PanelChrome(
+        key: ValueKey(node.id),
+        node: node,
+        child: SingleChildScrollView(child: content),
+      );
       return node.kind == 'window'
           ? SizedBox(width: 640, height: 480, child: chrome)
           : SizedBox(height: 240, child: chrome);

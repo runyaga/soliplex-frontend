@@ -66,14 +66,9 @@ def _reject_client_workbench_intake_tool(payload: dict[str, object]) -> None:
                 raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
 
 
-def _reject_client_workbench_fields(payload: dict[str, object]) -> None:
-    state = payload.get("state")
-    if isinstance(state, dict) and "workbenchAction" in state:
-        raise HTTPException(422, "workbenchAction is server-owned")
-    _reject_client_workbench_intake_tool(payload)
-    messages = payload.get("messages")
+def _has_intake_history(messages: object) -> bool:
     if not isinstance(messages, list):
-        return
+        return False
     for message in messages:
         if not isinstance(message, dict):
             continue
@@ -91,7 +86,24 @@ def _reject_client_workbench_fields(payload: dict[str, object]) -> None:
             and isinstance(message.get("toolCallId", message.get("tool_call_id")), str)
             and message.get("toolCallId", message.get("tool_call_id")).startswith("workbench-intake-")
         ):
-            raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
+            return True
+    return False
+
+
+def _reject_client_workbench_fields(payload: dict[str, object]) -> None:
+    state = payload.get("state")
+    if isinstance(state, dict) and "workbenchAction" in state:
+        raise HTTPException(422, "workbenchAction is server-owned")
+    _reject_client_workbench_intake_tool(payload)
+    if _has_intake_history(payload.get("messages")):
+        raise HTTPException(422, "workbench_intake is a reserved synthetic tool")
+
+
+def _validate_request_history(request: Request, scope: WorkbenchScope, payload: dict[str, object]) -> None:
+    # The retained reservation subsystem is consulted only for legacy intake
+    # history. Ordinary tool turns and reconnects never open the SQLite store.
+    issued = _repository_for(request, None).issued_intake_submissions(scope) if _has_intake_history(payload.get("messages")) else []
+    _validate_issued_intake_history(payload, issued)
 
 
 def _validate_issued_intake_history(payload: dict[str, object], issued: list[dict[str, object]]) -> None:
@@ -222,7 +234,8 @@ def _snapshot_records(content: list[dict[str, object]]) -> list[dict[str, object
         items.sort(key=lambda item: item["workbenchCommit"]["index"])
         for index, item in enumerate(items):
             records.append({"recordId": record_id, "sequence": item["workbenchCommit"]["sequence"],
-                            "partIndex": index, "partCount": len(items), "content": item})
+                            "partIndex": index, "partCount": len(items),
+                            "content": item})
     return records
 
 
@@ -451,7 +464,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             if scope is None:
                 raise HTTPException(403, "authenticated workbench scope required")
             await _validate_full_agui_request(request)
-            _validate_issued_intake_history(payload, _repository_for(request, None).issued_intake_submissions(scope))
+            _validate_request_history(request, scope, payload)
             return
         payload = await _read_agui_json(request)
         path_thread_id = request.path_params.get("thread_id")
@@ -467,8 +480,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             raise HTTPException(403, "authenticated workbench scope required")
         _reject_client_workbench_intake_tool(payload)
         await _validate_full_agui_request(request)
-        repository = _repository_for(request, None)
-        _validate_issued_intake_history(payload, repository.issued_intake_submissions(scope))
+        _validate_request_history(request, scope, payload)
         props = payload.get("forwardedProps")
         if not isinstance(props, dict) or "a2uiAction" not in props:
             return
@@ -477,6 +489,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         messages = payload.get("messages")
         if not isinstance(messages, list):
             raise HTTPException(422, "AG-UI messages must be an array")
+        repository = _repository_for(request, None)
         context = WorkbenchActionService(repository).consume_dispatch(scope, {"forwardedProps": props})
         if context is None:
             raise HTTPException(409, "workbench action is not reserved or is not dispatchable")

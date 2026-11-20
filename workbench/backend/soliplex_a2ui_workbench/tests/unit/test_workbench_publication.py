@@ -120,8 +120,11 @@ def test_place_form_emits_bound_intake_controls_and_submit_context():
     assert data == {"title": "Intake", "question": "", "districts": [], "acknowledged": False}
     assert by_id["question"] == {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}}
     assert by_id["districts"] == {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"}
+    assert by_id["root"]["component"] == "Column"
+    assert by_id["submit"]["child"] == "submit_label"
+    assert by_id["submit_label"]["text"] == "Submit"
     assert by_id["acknowledged"]["value"] == {"@path": "/acknowledged"}
-    assert by_id["submit"]["action"]["context"] == {
+    assert by_id["submit"]["action"]["event"]["context"] == {
         "question": {"@path": "/question"},
         "districts": {"@path": "/districts"},
         "acknowledged": {"@path": "/acknowledged"},
@@ -162,3 +165,5 @@ def test_chart_validator_rejects_object_ids_and_labels(mutate):
     layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
     with pytest.raises(ValueError):
         build_publication([record], WorkbenchCatalogValidator(), {record["catalogId"]: {"Chart"}, BASIC_CATALOG: {"Text"}}, layout=layout)
+
+

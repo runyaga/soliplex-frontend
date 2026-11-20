@@ -256,9 +256,8 @@ void _validateReserved(
     'reserved nodes must remain open',
   );
   _need(
-    (nodes['r_chat']!['children'] as List).isNotEmpty ||
-        (nodes['r_tray']!['children'] as List).isNotEmpty,
-    'chat and tray cannot have children',
+    (nodes['r_chat']!['children'] as List).isNotEmpty,
+    'chat cannot have children',
   );
 }
 

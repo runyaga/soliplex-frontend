@@ -9,6 +9,7 @@ export 'src/application/application.dart';
 export 'src/application/workbench_client.dart';
 export 'src/auth/auth.dart';
 export 'src/domain/domain.dart';
+export 'src/domain/workbench_layout_validator.dart';
 export 'src/domain/workbench_snapshot.dart';
 export 'src/errors/errors.dart';
 export 'src/http/http.dart';

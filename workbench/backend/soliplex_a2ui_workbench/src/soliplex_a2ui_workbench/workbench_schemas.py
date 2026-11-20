@@ -233,8 +233,8 @@ class LayoutSnapshot(Closed):
             nodes[node_id].visibility != "open" for node_id in roles
         ):
             raise ValueError("reserved nodes must remain open")
-        if nodes["r_chat"].children or nodes["r_tray"].children:
-            raise ValueError("chat and tray cannot have children")
+        if nodes["r_chat"].children:
+            raise ValueError("chat cannot have children")
 
 
 class IntakeSubmit(Closed):

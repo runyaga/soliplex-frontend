@@ -1,34 +1,24 @@
 import 'package:soliplex_client/soliplex_client.dart'
-    show WorkbenchRegistration, WorkbenchSnapshot;
+    show WorkbenchRegistration, validateWorkbenchLayout;
 
 /// Immutable indexed view of the accepted server-authored layout tree.
 class LayoutTree {
   LayoutTree._(this.layout, this.nodes);
-
-  /// Builds an indexed tree from a validated snapshot from the workbench API.
-  factory LayoutTree.fromSnapshot(WorkbenchSnapshot snapshot) =>
-      LayoutTree.fromLayout(snapshot.layout, snapshot.registrations);
 
   /// Builds and validates a tree candidate.
   factory LayoutTree.fromLayout(
     Map<String, dynamic> layout, [
     List<WorkbenchRegistration> registrations = const [],
   ]) {
-    final validated = WorkbenchSnapshot(
-      revision: layout['layoutRevision'] is int
-          ? layout['layoutRevision'] as int
-          : -1,
-      layout: layout,
-      registrations: registrations,
-      records: const [],
-    );
+    validateWorkbenchLayout(layout, registrations);
+    final validated = _freeze(layout) as Map<String, dynamic>;
     final nodes = <String, LayoutNode>{};
     for (final value in layout['nodes']! as List) {
       final raw = Map<String, dynamic>.from(value as Map);
       final node = LayoutNode.fromJson(raw);
       nodes[node.id] = node;
     }
-    return LayoutTree._(validated.layout, Map.unmodifiable(nodes));
+    return LayoutTree._(validated, Map.unmodifiable(nodes));
   }
 
   /// Original accepted, closed layout document.
@@ -79,3 +69,11 @@ class LayoutNode {
   final String visibility;
   final Map<String, dynamic> payload;
 }
+
+Object? _freeze(Object? value) => switch (value) {
+      Map<String, dynamic>() => Map<String, dynamic>.unmodifiable({
+          for (final entry in value.entries) entry.key: _freeze(entry.value),
+        }),
+      List() => List<Object?>.unmodifiable(value.map(_freeze)),
+      _ => value,
+    };
