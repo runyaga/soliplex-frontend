@@ -100,7 +100,7 @@ void main() {
   group('canonical A2UI activity', () {
     test('retains authenticated workbench metadata in the projection', () {
       final registrations = [
-        const WorkbenchRegistration(
+        WorkbenchRegistration(
           role: WorkbenchRole.content,
           activityMessageId: _id,
           surfaceId: 'chart',
@@ -174,7 +174,7 @@ void main() {
         ),
         createdAt: _painted,
         registeredWorkbenchActivities: [
-          const WorkbenchRegistration(
+          WorkbenchRegistration(
             role: WorkbenchRole.content,
             activityMessageId: _id,
             surfaceId: 'chart',
@@ -202,7 +202,7 @@ void main() {
         ),
         createdAt: _painted,
         registeredWorkbenchActivities: [
-          const WorkbenchRegistration(
+          WorkbenchRegistration(
             role: WorkbenchRole.content,
             activityMessageId: _id,
             surfaceId: 'chart',
@@ -245,7 +245,7 @@ void main() {
         ),
         createdAt: _painted,
         registeredWorkbenchActivities: [
-          const WorkbenchRegistration(
+          WorkbenchRegistration(
             role: WorkbenchRole.content,
             activityMessageId: _id,
             surfaceId: 'chart',
@@ -711,7 +711,7 @@ void main() {
     test(
       'live and stored history use identical generated messages and dates',
       () {
-        const registrations = [
+        final registrations = [
           WorkbenchRegistration(
             role: WorkbenchRole.content,
             activityMessageId: _id,

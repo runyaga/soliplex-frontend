@@ -29,6 +29,7 @@ void _validateEnvelope(Map<String, dynamic> layout) {
           'nodes',
           'shared',
         }) ||
+        layout['schemaVersion'] is! int ||
         layout['schemaVersion'] != 1 ||
         layout['layoutRevision'] is! int ||
         (layout['layoutRevision'] as int) < 0 ||

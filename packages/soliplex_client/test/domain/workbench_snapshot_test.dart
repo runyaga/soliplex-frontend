@@ -36,6 +36,18 @@ void main() {
     );
   });
 
+  test(
+    'schemaVersion requires an integer value',
+    () {
+      final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+          as Map<String, dynamic>;
+      layout['schemaVersion'] = 1.0;
+      expect(() => _parseSnapshot(layout), throwsFormatException);
+    },
+    // dart2js represents 1.0 and 1 as the same JavaScript number.
+    testOn: 'vm',
+  );
+
   test('validates the frozen layout acceptance and rejection cases', () {
     final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
         as Map<String, dynamic>;
@@ -178,7 +190,7 @@ void main() {
       () => WorkbenchSnapshot(
         revision: 1,
         layout: validLayout,
-        registrations: const [
+        registrations: [
           WorkbenchRegistration(
             role: WorkbenchRole.content,
             activityMessageId: '',
@@ -367,6 +379,22 @@ void main() {
 
   test('rejects unknown roles and malformed registration metadata', () {
     expect(
+      () => WorkbenchRegistration(
+        role: WorkbenchRole.content,
+        activityMessageId: '',
+        surfaceId: 's1',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchRegistration(
+        role: WorkbenchRole.content,
+        activityMessageId: 'a1',
+        surfaceId: 'invalid id',
+      ),
+      throwsFormatException,
+    );
+    expect(
       () => WorkbenchRegistration.fromJson({
         'role': 'admin',
         'activityMessageId': 'a1',
@@ -432,7 +460,7 @@ void main() {
     );
     expect(
       () => WorkbenchActivityMetadata(
-        registration: const WorkbenchRegistration(
+        registration: WorkbenchRegistration(
           role: WorkbenchRole.content,
           activityMessageId: 'a1',
           surfaceId: 's1',

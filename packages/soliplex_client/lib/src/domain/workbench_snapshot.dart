@@ -17,11 +17,15 @@ enum WorkbenchRole {
 /// A server-issued identity binding for one A2UI activity.
 class WorkbenchRegistration {
   /// Creates an authenticated identity binding for one A2UI activity.
-  const WorkbenchRegistration({
+  WorkbenchRegistration({
     required this.role,
     required this.activityMessageId,
     required this.surfaceId,
-  });
+  }) {
+    if (!_validId(activityMessageId) || !_validId(surfaceId)) {
+      throw const FormatException('Invalid workbench registration identity');
+    }
+  }
 
   /// Parses a registration from its closed JSON representation.
   factory WorkbenchRegistration.fromJson(Map<String, dynamic> json) {

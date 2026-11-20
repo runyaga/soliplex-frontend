@@ -61,7 +61,7 @@ void main() {
 
   test('stored history passes authenticated registrations into run folding',
       () async {
-    const registration = WorkbenchRegistration(
+    final registration = WorkbenchRegistration(
       role: WorkbenchRole.content,
       activityMessageId: 'activity_1',
       surfaceId: 'surface_1',
@@ -69,7 +69,7 @@ void main() {
     final observer = _RecordingObserver();
     await storedHistoryFromJson(
       observer: observer,
-      registeredWorkbenchActivities: const [registration],
+      registeredWorkbenchActivities: [registration],
       [
         (
           runId: 'registered-run',

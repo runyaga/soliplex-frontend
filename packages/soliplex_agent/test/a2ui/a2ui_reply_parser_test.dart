@@ -253,6 +253,37 @@ void main() {
     );
   });
 
+  test('rejects an unfinished Text block in complete and streamed parsing',
+      () async {
+    final textParser = A2uiReplyParser(
+      catalogs: [
+        CatalogConfig(Catalog.fromJson({
+          'catalogId': 'test.catalog',
+          'protocolVersion': '1.0',
+          'components': {
+            'Text': {
+              'type': 'object',
+              'properties': {
+                'component': {'const': 'Text'},
+                'text': {'type': 'string'},
+              },
+              'required': ['component', 'text'],
+            },
+          },
+        }))
+      ],
+    ).negotiate(A2uiRendererCapabilities.forCatalogIds(
+      ['test.catalog'],
+      version: A2uiProtocolVersion.v1_0,
+    ));
+    const reply = '<a2ui>surface("s"); root = Text("Hello")';
+    expect(() => textParser.parse(reply), throwsA(isA<A2uiError>()));
+    await expectLater(
+      textParser.parseStream(Stream<String>.value(reply)),
+      throwsA(isA<A2uiError>()),
+    );
+  });
+
   test('JSON stream validates topology completed by a later block', () async {
     final catalog = BasicCatalog.v0_9();
     final jsonParser = A2uiReplyParser(
@@ -298,6 +329,19 @@ void main() {
         throwsA(isA<A2uiError>()),
       );
     }
+    const truncatedMissingChild =
+        '<a2ui-json>[{"version":"v0.9","createSurface":{"surfaceId":"s",'
+        '"catalogId":"${BasicCatalog.v0_9Id}"}},{"version":"v0.9",'
+        '"updateComponents":{"surfaceId":"s","components":[{"id":"root",'
+        '"component":"Column","children":["a"]}]}}]';
+    expect(
+      () => jsonParser.parse(truncatedMissingChild),
+      throwsA(isA<A2uiError>()),
+    );
+    await expectLater(
+      jsonParser.parseStream(Stream<String>.value(truncatedMissingChild)),
+      throwsA(isA<A2uiError>()),
+    );
   });
 
   test('stream preserves explicit updates across Express blocks', () async {
@@ -356,6 +400,9 @@ void main() {
     final complete = textParser.parse(reply);
     final streamed = await textParser.parseStream(Stream.value(reply));
     expect(_messageJson(streamed), _messageJson(complete));
+    final component =
+        _messageJson(streamed).single['createSurface']['components'] as List;
+    expect((component.single as Map)['text'], '</a2ui>');
   });
 }
 

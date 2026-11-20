@@ -30,10 +30,21 @@ class A2uiNegotiatedReply {
   final A2uiRequestProcessor _processor;
 
   /// Parses and validates a complete model reply, returning only A2UI messages.
-  List<AgentToRendererMessage> parse(String reply) => [
-        for (final ResponsePart part in _processor.parseResponse(reply))
-          if (part case A2uiPart(:final a2ui)) ...a2ui,
-      ];
+  List<AgentToRendererMessage> parse(String reply) {
+    if (_processor.parser
+        .unwrap(reply)
+        .whereType<RawA2uiPart>()
+        .any((part) => !part.isFinal)) {
+      throw A2uiParseError(
+        'A2UI response ended before its block was closed',
+        rawContent: reply,
+      );
+    }
+    return [
+      for (final ResponsePart part in _processor.parseResponse(reply))
+        if (part case A2uiPart(:final a2ui)) ...a2ui,
+    ];
+  }
 
   /// Streams progress to [onPart] and returns the complete validated result.
   Future<List<AgentToRendererMessage>> parseStream(
