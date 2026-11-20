@@ -61,12 +61,20 @@ class WorkbenchRegistration {
 /// Holds workbench ordering data beside opaque activity content.
 class WorkbenchPartMetadata {
   /// Creates ordering metadata for one publication part.
-  const WorkbenchPartMetadata({
+  WorkbenchPartMetadata({
     required this.sequence,
     required this.publicationId,
     required this.partIndex,
     required this.partCount,
-  });
+  }) {
+    if (sequence < 0 ||
+        !_validId(publicationId) ||
+        partCount < 1 ||
+        partIndex < 0 ||
+        partIndex >= partCount) {
+      throw const FormatException('Invalid workbench publication part');
+    }
+  }
 
   /// Identifies the publication sequence.
   final int sequence;
@@ -84,11 +92,17 @@ class WorkbenchPartMetadata {
 /// Holds trusted ordering data for one workbench activity.
 class WorkbenchActivityMetadata {
   /// Creates metadata for an authenticated workbench activity.
-  const WorkbenchActivityMetadata({
+  WorkbenchActivityMetadata({
     required this.registration,
     required this.revision,
     required this.part,
-  });
+  }) {
+    if (revision < 0 ||
+        !_validId(registration.activityMessageId) ||
+        !_validId(registration.surfaceId)) {
+      throw const FormatException('Malformed workbench activity metadata');
+    }
+  }
 
   /// Parses activity metadata from its closed JSON representation.
   factory WorkbenchActivityMetadata.fromJson(Map<String, dynamic> json) {

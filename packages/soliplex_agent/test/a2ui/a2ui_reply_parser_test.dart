@@ -31,7 +31,7 @@ void main() {
   final parser = A2uiReplyParser(catalogs: _catalogs);
 
   test('Chart Express and JSON parse the frozen bar chart with expected data',
-      () {
+      () async {
     final frozen = jsonDecode(workbenchFixtures['content_v1.json']!)
         as Map<String, dynamic>;
     final spec = frozen['spec'];
@@ -45,7 +45,7 @@ void main() {
       _chartId,
       {'component': 'Chart', 'spec': spec},
     );
-    _expectFormats(
+    await _expectFormats(
       parser,
       express,
       expected,
@@ -55,7 +55,7 @@ void main() {
     );
   });
 
-  test('DataTable Express and JSON parse fixed keyed rows', () {
+  test('DataTable Express and JSON parse fixed keyed rows', () async {
     const component = {
       'component': 'DataTable',
       'columns': ['ID', 'Label', 'Value'],
@@ -68,7 +68,7 @@ void main() {
         'root = DataTable(catalogId="$_dataId", columns=["ID", "Label", "Value"], rows= '
         '[{"id":"north","label":"North","value":80},'
         '{"id":"south","label":"South","value":60}])</a2ui>';
-    _expectFormats(
+    await _expectFormats(
       parser,
       express,
       _jsonReply('surface_data', _dataId, component),
@@ -78,7 +78,7 @@ void main() {
     );
   });
 
-  test('intake form Express and JSON parse frozen submission fields', () {
+  test('intake form Express and JSON parse frozen submission fields', () async {
     final submission = jsonDecode(workbenchFixtures['intake_action_v1.json']!)
         as Map<String, dynamic>;
     final action = submission['userAction'] as Map<String, dynamic>;
@@ -93,7 +93,7 @@ void main() {
         'root = IntakeForm(catalogId="$_intakeId", title="District intake", question= '
         '"Which district needs support?", districts=["north"], '
         'acknowledged=true)</a2ui>';
-    _expectFormats(
+    await _expectFormats(
       parser,
       express,
       _jsonReply('surface_intake', _intakeId, component),
@@ -273,6 +273,90 @@ void main() {
     expect(_messageJson(streamed), _messageJson(complete));
     expect(streamed, hasLength(3));
   });
+
+  test('streamed invalid JSON topologies match complete parsing', () async {
+    final jsonParser = A2uiReplyParser(
+      catalogs: [CatalogConfig(BasicCatalog.v0_9())],
+      format: A2uiReplyFormat.json,
+    ).negotiate(A2uiRendererCapabilities.forCatalogIds([
+      BasicCatalog.v0_9Id,
+    ]));
+    const missingChild =
+        '<a2ui-json>[{"version":"v0.9","createSurface":{"surfaceId":"s",'
+        '"catalogId":"${BasicCatalog.v0_9Id}"}},{"version":"v0.9",'
+        '"updateComponents":{"surfaceId":"s","components":[{"id":"root",'
+        '"component":"Column","children":["a"]}]}}]</a2ui-json>';
+    const missingRoot =
+        '<a2ui-json>[{"version":"v0.9","createSurface":{"surfaceId":"s",'
+        '"catalogId":"${BasicCatalog.v0_9Id}"}},{"version":"v0.9",'
+        '"updateComponents":{"surfaceId":"s","components":[{"id":"other",'
+        '"component":"Text","text":"No root"}]}}]</a2ui-json>';
+    for (final reply in [missingChild, missingRoot]) {
+      expect(() => jsonParser.parse(reply), throwsA(isA<A2uiError>()));
+      await expectLater(
+        jsonParser.parseStream(Stream.value(reply)),
+        throwsA(isA<A2uiError>()),
+      );
+    }
+  });
+
+  test('stream preserves explicit updates across Express blocks', () async {
+    final textParser = A2uiReplyParser(
+      catalogs: [
+        CatalogConfig(Catalog.fromJson({
+          'catalogId': 'test.catalog',
+          'protocolVersion': '1.0',
+          'components': {
+            'Text': {
+              'type': 'object',
+              'properties': {
+                'component': {'const': 'Text'},
+                'text': {'type': 'string'},
+              },
+              'required': ['component', 'text'],
+            },
+          },
+        }))
+      ],
+    ).negotiate(A2uiRendererCapabilities.forCatalogIds(
+      ['test.catalog'],
+      version: A2uiProtocolVersion.v1_0,
+    ));
+    const reply = '<a2ui>surface("s"); root = Text("A")</a2ui>'
+        '<a2ui>surface("s", update=true); root = Text("B")</a2ui>';
+    final complete = textParser.parse(reply);
+    final streamed = await textParser.parseStream(Stream.value(reply));
+    expect(_messageJson(complete), hasLength(2));
+    expect(_messageJson(streamed), _messageJson(complete));
+  });
+
+  test('literal closing tag text does not split streaming parsing', () async {
+    final textParser = A2uiReplyParser(
+      catalogs: [
+        CatalogConfig(Catalog.fromJson({
+          'catalogId': 'test.catalog',
+          'protocolVersion': '1.0',
+          'components': {
+            'Text': {
+              'type': 'object',
+              'properties': {
+                'component': {'const': 'Text'},
+                'text': {'type': 'string'},
+              },
+              'required': ['component', 'text'],
+            },
+          },
+        }))
+      ],
+    ).negotiate(A2uiRendererCapabilities.forCatalogIds(
+      ['test.catalog'],
+      version: A2uiProtocolVersion.v1_0,
+    ));
+    const reply = '<a2ui>surface("s"); root = Text("</a2ui>")</a2ui>';
+    final complete = textParser.parse(reply);
+    final streamed = await textParser.parseStream(Stream.value(reply));
+    expect(_messageJson(streamed), _messageJson(complete));
+  });
 }
 
 String _jsonReply(
@@ -283,19 +367,36 @@ String _jsonReply(
       '${jsonEncode(payload).substring(1)}]}}]</a2ui-json>';
 }
 
-void _expectFormats(
+Future<void> _expectFormats(
   A2uiReplyParser parser,
   String express,
   String json,
   String componentName,
   String surfaceId,
   Map<String, Object?> expectedComponent,
-) {
+) async {
   final expressMessages = parser.negotiate(_capabilities).parse(express);
   final jsonMessages = A2uiReplyParser(
     catalogs: _catalogs,
     format: A2uiReplyFormat.json,
   ).negotiate(_capabilities).parse(json);
+  final expressReply = parser.negotiate(_capabilities);
+  final jsonReply = A2uiReplyParser(
+    catalogs: _catalogs,
+    format: A2uiReplyFormat.json,
+  ).negotiate(_capabilities);
+  final streamedExpress = await expressReply.parseStream(
+    Stream<String>.fromIterable([
+      express.substring(0, express.length ~/ 2),
+      express.substring(express.length ~/ 2),
+    ]),
+  );
+  final streamedJson = await jsonReply.parseStream(
+    Stream<String>.fromIterable([
+      json.substring(0, json.length ~/ 2),
+      json.substring(json.length ~/ 2),
+    ]),
+  );
   final expected = _messageJson(jsonMessages);
   final expectedCatalogId = switch (expectedComponent['component']) {
     'Chart' => _chartId,
@@ -303,6 +404,8 @@ void _expectFormats(
     _ => _intakeId,
   };
   expect(_messageJson(expressMessages), expected);
+  expect(_messageJson(streamedExpress), _messageJson(expressMessages));
+  expect(_messageJson(streamedJson), _messageJson(jsonMessages));
   expect(expected, hasLength(1));
   final create = expected.single['createSurface'] as Map<String, dynamic>;
   expect(create['surfaceId'], surfaceId);

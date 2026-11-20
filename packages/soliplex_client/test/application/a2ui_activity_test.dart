@@ -46,6 +46,16 @@ List<Map<String, dynamic>> _operations([String surfaceId = 'chart']) => [
       },
     ];
 
+void _expectStandardProjection(
+  Conversation result,
+  List<Map<String, dynamic>> operations,
+) {
+  expect(result.messages, hasLength(1));
+  final data = (result.messages.single as GenUiMessage).data;
+  expect(data, containsPair('messages', operations));
+  expect(data, isNot(contains('workbench')));
+}
+
 ActivitySnapshotEvent _snapshot({
   Object? content,
   String messageId = _id,
@@ -136,7 +146,8 @@ void main() {
       );
     });
 
-    test('foreign operation surfaces fail when registration is injected', () {
+    test('foreign operation uses standard projection with matching metadata',
+        () {
       final metadata = {
         'role': 'content',
         'registration': {'activityMessageId': _id, 'surfaceId': 'chart'},
@@ -153,29 +164,27 @@ void main() {
           'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
         },
       ];
-      expect(
-        () => projectA2uiActivity(
-          _conversation(),
-          ActivityRecord(
-            messageId: _id,
-            activityType: a2uiActivityType,
-            content: {'a2ui_operations': operations, 'workbench': metadata},
-            timestamp: _painted.millisecondsSinceEpoch,
-          ),
-          createdAt: _painted,
-          registeredWorkbenchActivities: [
-            const WorkbenchRegistration(
-              role: WorkbenchRole.content,
-              activityMessageId: _id,
-              surfaceId: 'chart',
-            ),
-          ],
+      final result = projectA2uiActivity(
+        _conversation(),
+        ActivityRecord(
+          messageId: _id,
+          activityType: a2uiActivityType,
+          content: {'a2ui_operations': operations, 'workbench': metadata},
+          timestamp: _painted.millisecondsSinceEpoch,
         ),
-        throwsA(isA<MalformedResponseException>()),
+        createdAt: _painted,
+        registeredWorkbenchActivities: [
+          const WorkbenchRegistration(
+            role: WorkbenchRole.content,
+            activityMessageId: _id,
+            surfaceId: 'chart',
+          ),
+        ],
       );
+      _expectStandardProjection(result, operations);
     });
 
-    test('foreign operation surfaces fail without workbench metadata', () {
+    test('foreign operation uses standard projection without metadata', () {
       final operations = [
         ..._operations(),
         {
@@ -183,29 +192,27 @@ void main() {
           'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
         },
       ];
-      expect(
-        () => projectA2uiActivity(
-          _conversation(),
-          ActivityRecord(
-            messageId: _id,
-            activityType: a2uiActivityType,
-            content: {'a2ui_operations': operations},
-            timestamp: _painted.millisecondsSinceEpoch,
-          ),
-          createdAt: _painted,
-          registeredWorkbenchActivities: [
-            const WorkbenchRegistration(
-              role: WorkbenchRole.content,
-              activityMessageId: _id,
-              surfaceId: 'chart',
-            ),
-          ],
+      final result = projectA2uiActivity(
+        _conversation(),
+        ActivityRecord(
+          messageId: _id,
+          activityType: a2uiActivityType,
+          content: {'a2ui_operations': operations},
+          timestamp: _painted.millisecondsSinceEpoch,
         ),
-        throwsA(isA<MalformedResponseException>()),
+        createdAt: _painted,
+        registeredWorkbenchActivities: [
+          const WorkbenchRegistration(
+            role: WorkbenchRole.content,
+            activityMessageId: _id,
+            surfaceId: 'chart',
+          ),
+        ],
       );
+      _expectStandardProjection(result, operations);
     });
 
-    test('foreign operation surfaces fail when metadata names another surface',
+    test('foreign operation uses standard projection with mismatched metadata',
         () {
       final operations = [
         ..._operations(),
@@ -214,40 +221,38 @@ void main() {
           'createSurface': {'surfaceId': 'foreign', 'catalogId': 'test'},
         },
       ];
-      expect(
-        () => projectA2uiActivity(
-          _conversation(),
-          ActivityRecord(
-            messageId: _id,
-            activityType: a2uiActivityType,
-            content: {
-              'a2ui_operations': operations,
-              'workbench': const {
-                'role': 'content',
-                'registration': {
-                  'activityMessageId': _id,
-                  'surfaceId': 'unregistered',
-                },
-                'sequence': 1,
-                'revision': 1,
-                'publicationId': 'publication_1',
-                'partIndex': 0,
-                'partCount': 1,
+      final result = projectA2uiActivity(
+        _conversation(),
+        ActivityRecord(
+          messageId: _id,
+          activityType: a2uiActivityType,
+          content: {
+            'a2ui_operations': operations,
+            'workbench': const {
+              'role': 'content',
+              'registration': {
+                'activityMessageId': _id,
+                'surfaceId': 'unregistered',
               },
+              'sequence': 1,
+              'revision': 1,
+              'publicationId': 'publication_1',
+              'partIndex': 0,
+              'partCount': 1,
             },
-            timestamp: _painted.millisecondsSinceEpoch,
-          ),
-          createdAt: _painted,
-          registeredWorkbenchActivities: [
-            const WorkbenchRegistration(
-              role: WorkbenchRole.content,
-              activityMessageId: _id,
-              surfaceId: 'chart',
-            ),
-          ],
+          },
+          timestamp: _painted.millisecondsSinceEpoch,
         ),
-        throwsA(isA<MalformedResponseException>()),
+        createdAt: _painted,
+        registeredWorkbenchActivities: [
+          const WorkbenchRegistration(
+            role: WorkbenchRole.content,
+            activityMessageId: _id,
+            surfaceId: 'chart',
+          ),
+        ],
       );
+      _expectStandardProjection(result, operations);
     });
 
     test('unregistered metadata stays on the standard projection path', () {

@@ -401,6 +401,53 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('public metadata constructors validate ordering invariants', () {
+    expect(
+      () => WorkbenchPartMetadata(
+        sequence: -1,
+        publicationId: 'p1',
+        partIndex: 0,
+        partCount: 1,
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchPartMetadata(
+        sequence: 1,
+        publicationId: 'invalid id',
+        partIndex: 0,
+        partCount: 1,
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchPartMetadata(
+        sequence: 1,
+        publicationId: 'p1',
+        partIndex: 1,
+        partCount: 1,
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchActivityMetadata(
+        registration: const WorkbenchRegistration(
+          role: WorkbenchRole.content,
+          activityMessageId: 'a1',
+          surfaceId: 's1',
+        ),
+        revision: -1,
+        part: WorkbenchPartMetadata(
+          sequence: 0,
+          publicationId: 'p1',
+          partIndex: 0,
+          partCount: 1,
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
 }
 
 WorkbenchSnapshot _parseSnapshot(

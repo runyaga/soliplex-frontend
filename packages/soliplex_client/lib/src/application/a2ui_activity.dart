@@ -45,23 +45,6 @@ Conversation projectA2uiActivity(
       (existing is! GenUiMessage || existing.widgetName != 'a2ui')) {
     _malformed(activity.messageId, 'message identity');
   }
-  final boundRegistrations = registeredWorkbenchActivities
-      .where(
-        (registration) => registration.activityMessageId == activity.messageId,
-      )
-      .toList(growable: false);
-  if (boundRegistrations.isNotEmpty) {
-    for (final message in messages) {
-      for (final key in _operations) {
-        final operation = message[key];
-        if (operation is! Map || operation['surfaceId'] is! String) continue;
-        final surfaceId = operation['surfaceId'] as String;
-        if (!boundRegistrations.any((r) => r.surfaceId == surfaceId)) {
-          _malformed(activity.messageId, 'foreign surface registration');
-        }
-      }
-    }
-  }
   final ownedConversation = conversation.copyWith(
     activities: [
       for (final record in conversation.activities)
@@ -165,17 +148,14 @@ WorkbenchActivityMetadata? _workbenchMetadata(
   )) {
     return null;
   }
-  final surfaces = <String>{};
+  final surfaceId = metadata.registration.surfaceId;
   for (final message in messages) {
     for (final operationKey in _operations) {
       final operation = message[operationKey];
       if (operation is Map && operation['surfaceId'] is String) {
-        surfaces.add(operation['surfaceId'] as String);
+        if (operation['surfaceId'] != surfaceId) return null;
       }
     }
-  }
-  if (surfaces.any((surface) => surface != metadata.registration.surfaceId)) {
-    _malformed(messageId, 'foreign surface registration');
   }
   return metadata;
 }
