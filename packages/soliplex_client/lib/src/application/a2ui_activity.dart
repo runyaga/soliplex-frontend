@@ -99,6 +99,8 @@ Conversation projectA2uiActivity(
   }
   final data = <String, dynamic>{
     'messages': messages,
+    if (content['workbenchCommit'] case final Map<String, dynamic> commit)
+      'workbenchCommit': commit,
     if (metadata != null) 'workbench': metadata.toJson(),
     if (!content.containsKey('a2ui_operations')) 'status': status,
     if (updatedByRunIds.isNotEmpty)

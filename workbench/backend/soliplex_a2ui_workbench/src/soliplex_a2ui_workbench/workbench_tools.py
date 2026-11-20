@@ -89,7 +89,7 @@ def _content_result(ctx: WorkbenchToolContext, record: dict[str, Any], parent_id
             "size": "medium", "visibility": "open", "payload": {"activityMessageId": record["activityMessageId"], "surfaceId": record["surfaceId"]}}
     layout["nodes"].append(node)
     published = _publish(ctx, layout, content=[record], new_program_surface=record["surfaceId"] if program else None)
-    return {"status": "published", "layoutRevision": published["layoutRevision"], "nodeId": node_id,
+    return {"status": "published", "layoutRevision": published["layoutRevision"], "events": published["events"], "nodeId": node_id,
             "activityMessageId": record["activityMessageId"], "surfaceId": record["surfaceId"],
             **({"side": "client", "execution": "awaiting_user"} if program else {})}
 
@@ -121,7 +121,7 @@ def create_container(ctx: WorkbenchToolContext, parent_id: str, kind: str, title
     layout["nodes"].append({"id": node_id, "parentId": parent_id, "children": [], "kind": kind,
                             "title": title, "size": "medium", "visibility": "open", "payload": payload})
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "nodeId": node_id}
+    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
 
 
 def place_form(ctx: WorkbenchToolContext, title: str, template: str, parent_id: str) -> dict[str, object]:
@@ -180,7 +180,7 @@ def move_panel(ctx: WorkbenchToolContext, node_id: str, parent_id: str, order: i
     moving["size"] = size
     parent["children"].insert(order, node_id)
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "nodeId": node_id}
+    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
 
 
 def _is_descendant(nodes: list[dict[str, Any]], parent_id: str, candidate_id: str) -> bool:
@@ -204,7 +204,7 @@ def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
     node = _node(layout["nodes"], node_id)
     node["visibility"] = "closed"
     result = _publish(ctx, layout)
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "nodeId": node_id}
+    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id}
 
 
 def repair_program(ctx: WorkbenchToolContext, node_id: str, source: str) -> dict[str, object]:
@@ -221,4 +221,4 @@ def repair_program(ctx: WorkbenchToolContext, node_id: str, source: str) -> dict
         raise ValueError("repair target is not a registered program")
     record["source"] = source
     result = _publish(ctx, layout, content=[record])
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "nodeId": node_id, "surfaceId": record["surfaceId"]}
+    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id, "surfaceId": record["surfaceId"]}

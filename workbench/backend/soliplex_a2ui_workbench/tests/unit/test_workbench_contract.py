@@ -157,7 +157,7 @@ def _rejection_cases() -> dict[str, tuple[object, str]]:
         "orphan": (lambda: validate_layout(orphan), "orphan node"),
         "inconsistent_children": (lambda: validate_layout(inconsistent), "inconsistent child edge"),
         "wrong_parent_kind": (lambda: validate_layout(wrong_parent), "wrong parent kind"),
-        "protected_chat_mutation": (lambda: validate_layout(protected_chat), "chat and tray cannot have children"),
+        "protected_chat_mutation": (lambda: validate_layout(protected_chat), "chat cannot have children"),
         "duplicate_mount": (lambda: validate_layout(duplicate_mount), "duplicate mount"),
         "cross_scope_mount": (lambda: validate_registered_mounts(cross_scope, scoped_mounts - {("activity_form", "surface_form")}), "not registered in this scope"),
         "point_bool": (lambda: Point.model_validate({"id": "p", "label": "P", "value": True}), "valid number"),

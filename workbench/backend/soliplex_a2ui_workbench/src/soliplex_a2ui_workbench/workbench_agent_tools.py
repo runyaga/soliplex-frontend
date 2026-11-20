@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import threading
 
-from pydantic_ai import RunContext
+from ag_ui.core import ActivitySnapshotEvent
+from pydantic_ai import RunContext, ToolReturn
 from soliplex.agents import AgentDependencies
 
 from . import workbench_tools
@@ -37,7 +38,7 @@ async def get_workbench(ctx: RunContext[AgentDependencies]) -> dict[str, object]
     return _call(workbench_tools.get_workbench, ctx)
 
 
-async def open_panel(ctx: RunContext[AgentDependencies], title: str, text: str, parent_id: str) -> dict[str, object]:
+async def open_panel(ctx: RunContext[AgentDependencies], title: str, text: str, parent_id: str) -> ToolReturn:
     """Open a text panel with the supplied text.
 
     Args:
@@ -48,7 +49,7 @@ async def open_panel(ctx: RunContext[AgentDependencies], title: str, text: str, 
     return _call(workbench_tools.open_panel, ctx, title=title, text=text, parent_id=parent_id)
 
 
-async def place_form(ctx: RunContext[AgentDependencies], template: str, title: str, parent_id: str) -> dict[str, object]:
+async def place_form(ctx: RunContext[AgentDependencies], template: str, title: str, parent_id: str) -> ToolReturn:
     """Place the built-in intake form.
 
     Args:
@@ -59,7 +60,7 @@ async def place_form(ctx: RunContext[AgentDependencies], template: str, title: s
     return _call(workbench_tools.place_form, ctx, template=template, title=title, parent_id=parent_id)
 
 
-async def show_chart(ctx: RunContext[AgentDependencies], title: str, kind: str, points: list[dict[str, object]], parent_id: str) -> dict[str, object]:
+async def show_chart(ctx: RunContext[AgentDependencies], title: str, kind: str, points: list[dict[str, object]], parent_id: str) -> ToolReturn:
     """Show a chart using the supplied data points.
 
     Args:
@@ -71,7 +72,7 @@ async def show_chart(ctx: RunContext[AgentDependencies], title: str, kind: str, 
     return _call(workbench_tools.show_chart, ctx, title=title, kind=kind, points=points, parent_id=parent_id)
 
 
-async def run_python_client(ctx: RunContext[AgentDependencies], title: str, source: str, parent_id: str) -> dict[str, object]:
+async def run_python_client(ctx: RunContext[AgentDependencies], title: str, source: str, parent_id: str) -> ToolReturn:
     """Create an inert Python editor that runs only after the user presses Run.
 
     Args:
@@ -92,7 +93,7 @@ async def run_python_server(ctx: RunContext[AgentDependencies], surface_id: str,
     return _call(workbench_tools.run_python_server, ctx, surface_id=surface_id, source=source)
 
 
-async def create_container(ctx: RunContext[AgentDependencies], parent_id: str, kind: str, title: str) -> dict[str, object]:
+async def create_container(ctx: RunContext[AgentDependencies], parent_id: str, kind: str, title: str) -> ToolReturn:
     """Create an empty workbench container.
 
     Args:
@@ -103,7 +104,7 @@ async def create_container(ctx: RunContext[AgentDependencies], parent_id: str, k
     return _call(workbench_tools.create_container, ctx, parent_id=parent_id, kind=kind, title=title)
 
 
-async def move_panel(ctx: RunContext[AgentDependencies], node_id: str, parent_id: str, order: int, size: str) -> dict[str, object]:
+async def move_panel(ctx: RunContext[AgentDependencies], node_id: str, parent_id: str, order: int, size: str) -> ToolReturn:
     """Move a workbench panel and set its placement.
 
     Args:
@@ -115,7 +116,7 @@ async def move_panel(ctx: RunContext[AgentDependencies], node_id: str, parent_id
     return _call(workbench_tools.move_panel, ctx, node_id=node_id, parent_id=parent_id, order=order, size=size)
 
 
-async def close_panel(ctx: RunContext[AgentDependencies], node_id: str) -> dict[str, object]:
+async def close_panel(ctx: RunContext[AgentDependencies], node_id: str) -> ToolReturn:
     """Close a workbench panel.
 
     Args:
@@ -124,7 +125,7 @@ async def close_panel(ctx: RunContext[AgentDependencies], node_id: str) -> dict[
     return _call(workbench_tools.close_panel, ctx, node_id=node_id)
 
 
-async def repair_program(ctx: RunContext[AgentDependencies], node_id: str, source: str) -> dict[str, object]:
+async def repair_program(ctx: RunContext[AgentDependencies], node_id: str, source: str) -> ToolReturn:
     """Replace the source text of a workbench Python program.
 
     Args:
@@ -136,6 +137,11 @@ async def repair_program(ctx: RunContext[AgentDependencies], node_id: str, sourc
 
 def _call(function, ctx: RunContext[AgentDependencies], **kwargs):
     try:
-        return function(_context(ctx), **kwargs)
+        result = function(_context(ctx), **kwargs)
+        if "events" not in result:
+            return result
+        content = {key: value for key, value in result.items() if key != "events"}
+        events = [ActivitySnapshotEvent.model_validate(part["event"]) for part in result["events"]]
+        return ToolReturn(content, metadata=events)
     except PermissionError as exc:
         return {"error": str(exc)}

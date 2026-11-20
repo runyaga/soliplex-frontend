@@ -80,7 +80,7 @@ void main() {
         'cycle' => 'cycle',
         'duplicate_mount' => 'duplicate mount',
         'wrong_parent_kind' => 'wrong parent kind',
-        'protected_chat_mutation' => 'chat and tray cannot have children',
+        'protected_chat_mutation' => 'chat cannot have children',
         _ => null,
       };
       if (expectedReason == null) {

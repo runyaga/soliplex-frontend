@@ -15,6 +15,7 @@ from pydantic import TypeAdapter
 from .a2ui_action import user_action, with_user_action
 from .strict_json import DuplicateJSONKey, parse_json_no_duplicates
 from .workbench_actions import WORKBENCH_INTAKE_TOOL_NAME, WorkbenchActionService, synthetic_intake_messages
+from .workbench_publication import _content_operations
 from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope, shared_repository
 
 
@@ -222,7 +223,8 @@ def _snapshot_records(content: list[dict[str, object]]) -> list[dict[str, object
         items.sort(key=lambda item: item["workbenchCommit"]["index"])
         for index, item in enumerate(items):
             records.append({"recordId": record_id, "sequence": item["workbenchCommit"]["sequence"],
-                            "partIndex": index, "partCount": len(items), "content": item})
+                            "partIndex": index, "partCount": len(items),
+                            "content": item | {"a2ui_operations": _content_operations(item)}})
     return records
 
 

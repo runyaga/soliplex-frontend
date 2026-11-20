@@ -5,7 +5,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pydantic_ai import RunContext
+from ag_ui.core import ActivitySnapshotEvent
+from pydantic_ai import RunContext, ToolReturn
 from pydantic_ai.usage import RunUsage
 from soliplex.agents import AgentDependencies, make_ai_tool
 from soliplex.config.tools import ToolConfig
@@ -71,7 +72,20 @@ def test_agent_tools_share_scope_and_repository_with_snapshot_route(tmp_path, mo
 
     async def invoke(name, **kwargs):
         tool = _tool(name)
-        return await tool.function(context, **kwargs)
+        result = await tool.function(context, **kwargs)
+        if name in {"open_panel", "place_form", "show_chart", "run_python_client", "create_container", "move_panel", "close_panel"}:
+            assert isinstance(result, ToolReturn), name
+            assert result.metadata and all(isinstance(event, ActivitySnapshotEvent) for event in result.metadata)
+            assert all(event.activity_type == "a2ui-surface" for event in result.metadata)
+            publication_id = result.metadata[0].content["workbenchCommit"]["recordId"]
+            receipt = repository.get_receipt(scope, publication_id)
+            assert [event.model_dump(mode="json", by_alias=True, exclude_none=True) for event in result.metadata] == [part["event"] for part in receipt.events]
+            assert result.metadata[-1].content["a2ui_operations"][1]["updateDataModel"]["value"]["workbench"]["layoutRevision"] == result.return_value["layoutRevision"]
+            if "activityMessageId" in result.return_value:
+                event = next(event for event in result.metadata if event.message_id == result.return_value["activityMessageId"])
+                assert event.content["a2ui_operations"][0]["createSurface"]["surfaceId"] == result.return_value["surfaceId"]
+            return result.return_value
+        return result
 
     async def exercise():
         await invoke("get_workbench")
@@ -95,6 +109,7 @@ def test_agent_tools_share_scope_and_repository_with_snapshot_route(tmp_path, mo
     snapshot = response.json()
     assert snapshot["revision"] == 9
     parts = [record["content"] for record in snapshot["records"]]
+    assert all(part["a2ui_operations"] for part in parts)
     assert {part["component"] for part in parts} >= {"Text", "PlaceForm", "Chart", "PythonRepl"}
     assert all(value["status"] == "published" for value in (form, chart, program))
     # Repeated calls in one (scope, run_id) share a single context and publication sequence.

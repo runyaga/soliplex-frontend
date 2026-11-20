@@ -91,3 +91,10 @@ def test_stale_turn_cannot_overwrite_a_successful_tool_mutation(tmp_path):
     with pytest.raises(Exception, match="stale"):
         MINIMUM_ROOM_TOOLS["create_container"].function(second, parent_id="r_right", kind="panel", title="Two")
     repo.close()
+
+
+def test_tray_accepts_published_content(ctx):
+    result = MINIMUM_ROOM_TOOLS["open_panel"].function(ctx, title="Tray note", text="Visible below the workspace", parent_id="r_tray")
+    layout = ctx.repository.load_snapshot(ctx.scope)["layout"]
+    assert next(node for node in layout["nodes"] if node["id"] == "r_tray")["children"]
+    assert result["events"][-1]["kind"] == "layout"

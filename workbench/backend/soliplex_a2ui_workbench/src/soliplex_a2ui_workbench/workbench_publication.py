@@ -84,6 +84,8 @@ class WorkbenchCatalogValidator:
                 if catalog_id == BASIC_CATALOG:
                     _validate_basic_component(item)
             for item in components:
+                if "child" in item and item["child"] not in component_ids:
+                    raise ValueError("emitted component reference does not resolve in its surface")
                 if item.get("component") in {"Card", "Column", "Row", "List"}:
                     children = item.get("children")
                     if not isinstance(children, list) or any(child not in component_ids for child in children):
@@ -212,7 +214,7 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "TextField": common | {"label", "value"},
         "ChoicePicker": common | {"label", "variant", "options", "value", "displayStyle", "filterable"},
         "Slider": common | {"min", "max", "value", "label"},
-        "Button": common | {"label", "action"},
+        "Button": common | {"label", "child", "action"},
     }
     allowed = shapes.get(component)
     if allowed is None or set(item) - allowed or not isinstance(item.get("id"), str) or not _IDENTIFIER.fullmatch(item["id"]):
@@ -227,13 +229,14 @@ def _validate_basic_component(item: Mapping[str, object]) -> None:
         "TextField": {"label", "value"},
         "ChoicePicker": {"label", "variant", "options", "value"},
         "Slider": {"min", "max", "value"},
-        "Button": {"label", "action"},
+        "Button": {"action"},
     }[component]
     if required - set(item):
         raise ValueError("emitted component is missing required properties")
     if component == "Button":
         action = item.get("action")
-        if not isinstance(item.get("label"), str) or not isinstance(action, dict) or not isinstance(action.get("name"), str) or not action["name"] or set(action) - {"name", "context"} or ("context" in action and not isinstance(action["context"], dict)):
+        event = action.get("event", action) if isinstance(action, dict) else None
+        if (not isinstance(item.get("label", item.get("child")), str) or not isinstance(event, dict) or not isinstance(event.get("name"), str) or not event["name"] or set(event) - {"name", "context"} or ("context" in event and not isinstance(event["context"], dict))):
             raise ValueError("invalid emitted Button action")
     if component == "Text":
         text = item["text"]
@@ -293,14 +296,15 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
         catalog_id = BASIC_CATALOG
         data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}
         component_def = {
-            "id": "root", "component": "Card", "children": ["title", "question", "districts", "acknowledged", "submit"],
+            "id": "root", "component": "Column", "children": ["title", "question", "districts", "acknowledged", "submit"],
         }
         extra = [
             {"id": "title", "component": "Text", "text": str(record["title"])},
             {"id": "question", "component": "TextField", "label": "Question", "value": {"@path": "/question"}},
             {"id": "districts", "component": "ChoicePicker", "label": "Districts", "variant": "multipleSelection", "options": [{"value": "north", "label": "North"}, {"value": "south", "label": "South"}], "value": {"@path": "/districts"}, "displayStyle": "chips"},
             {"id": "acknowledged", "component": "CheckBox", "label": "Acknowledged", "value": {"@path": "/acknowledged"}},
-            {"id": "submit", "component": "Button", "label": "Submit", "action": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}},
+            {"id": "submit", "component": "Button", "child": "submit_label", "action": {"event": {"name": "submit_intake", "context": {"question": {"@path": "/question"}, "districts": {"@path": "/districts"}, "acknowledged": {"@path": "/acknowledged"}}}}},
+            {"id": "submit_label", "component": "Text", "text": "Submit"},
         ]
         return [
             _operation(sid, "createSurface", {"catalogId": catalog_id}),

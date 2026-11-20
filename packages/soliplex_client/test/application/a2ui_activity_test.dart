@@ -737,10 +737,22 @@ void main() {
           _snapshot(content: {
             'a2ui_operations': _operations(),
             'workbench': metadata,
+            'workbenchCommit': {
+              'recordId': 'publication_1',
+              'sequence': 1,
+              'index': 0,
+              'count': 2
+            },
           }),
           _snapshot(content: {
             'a2ui_operations': _operations(),
             'workbench': metadata,
+            'workbenchCommit': {
+              'recordId': 'publication_1',
+              'sequence': 1,
+              'index': 0,
+              'count': 2
+            },
           }),
           const RunFinishedEvent(threadId: 'thread', runId: 'run'),
         ];
@@ -781,6 +793,12 @@ void main() {
         expect(replayed.createdAt, streamed.createdAt);
         expect(replayed.data, streamed.data);
         expect(streamed.data['workbench'], metadata);
+        expect(streamed.data['workbenchCommit'], {
+          'recordId': 'publication_1',
+          'sequence': 1,
+          'index': 0,
+          'count': 2
+        });
         expect(history.transcript.messages, isEmpty);
       },
     );

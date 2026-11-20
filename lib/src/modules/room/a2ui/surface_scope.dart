@@ -81,12 +81,21 @@ class ChatSurfaceScope extends InheritedWidget {
     required this.store,
     required super.child,
     this.activeRunId,
+    this.hostedActivityIds = const {},
+    this.hostsWorkbench = false,
   });
 
   final ChatSurfaceStore store;
 
+  /// Activities mounted by the workbench rather than by timeline tiles.
+  final Set<String> hostedActivityIds;
+  final bool hostsWorkbench;
+
   /// The run in flight, whose surfaces count as live.
   final String? activeRunId;
+
+  static ChatSurfaceScope? scopeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ChatSurfaceScope>();
 
   static ChatSurfaceStore? maybeOf(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ChatSurfaceScope>()?.store;
@@ -97,7 +106,10 @@ class ChatSurfaceScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(ChatSurfaceScope oldWidget) =>
-      store != oldWidget.store || activeRunId != oldWidget.activeRunId;
+      store != oldWidget.store ||
+      activeRunId != oldWidget.activeRunId ||
+      hostedActivityIds != oldWidget.hostedActivityIds ||
+      hostsWorkbench != oldWidget.hostsWorkbench;
 }
 
 /// Tells components inside a chat surface whether it arrived live.
