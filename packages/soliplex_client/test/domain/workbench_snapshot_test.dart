@@ -45,7 +45,8 @@ void main() {
       expect(() => _parseSnapshot(layout), throwsFormatException);
     },
     // dart2js represents 1.0 and 1 as the same JavaScript number.
-    testOn: 'vm',
+    // The VM and dart2wasm keep int and double distinct.
+    testOn: '!js',
   );
 
   test('validates the frozen layout acceptance and rejection cases', () {
