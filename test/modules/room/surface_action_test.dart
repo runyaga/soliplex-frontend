@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:a2ui_core/a2ui_core.dart' show BasicCatalog;
 import 'package:flutter/material.dart';
@@ -9,12 +10,16 @@ import 'package:soliplex_design/soliplex_design.dart';
 
 import 'package:soliplex_frontend/src/modules/auth/auth_session.dart';
 import 'package:soliplex_frontend/src/modules/room/message_expansions.dart';
+import 'package:soliplex_frontend/src/modules/room/a2ui/surface_scope.dart';
+import 'package:soliplex_frontend/src/modules/room/a2ui/surface_view.dart';
+import 'package:soliplex_frontend/src/modules/room/workbench/workbench_host.dart';
 import 'package:soliplex_frontend/src/modules/room/room_providers.dart';
 import 'package:soliplex_frontend/src/modules/room/thread_view_state.dart';
 import 'package:soliplex_frontend/src/modules/room/ui/message_timeline.dart';
 import 'package:soliplex_frontend/src/stores/run_registry.dart';
 
 import '../../helpers/fakes.dart';
+import '../../fixtures/workbench_activity_events.dart';
 
 /// Records each run's input and ends it when the test says so.
 class _Provider implements AgentLlmProvider {
@@ -207,6 +212,130 @@ void main() {
       );
       expect(input.messages!.whereType<UserMessage>(), isEmpty);
       provider.finish(0);
+      await _until(() => view.sessionState.value == null);
+    });
+
+    testWidgets('canvas Submit sends current values and activity identity',
+        (tester) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final store = ChatSurfaceStore(onAction: (activity, action) {
+        view.sendAction(action, runtime, activityMessageId: activity);
+      });
+      addTearDown(store.dispose);
+      var fold = RunFold.start(Conversation.empty(threadId: 'thread-1'),
+          runId: 'publication',
+          userMessageId: null,
+          turnCitations: const TurnCitations.empty(),
+          runCreated: DateTime.utc(2026));
+      final events = (jsonDecode(publishedEventsJson) as List).take(2).map(
+          (event) => ActivitySnapshotEvent.fromJson(
+              Map<String, dynamic>.from(event as Map)));
+      for (final event in events) {
+        fold = fold.apply(DecodedEvent(event, event.toJson())).fold;
+      }
+      store.ingest(fold.conversation.messages.whereType<GenUiMessage>());
+      await tester.pumpWidget(MaterialApp(
+        theme: soliplexLightTheme(),
+        home: Scaffold(
+          body: ChatSurfaceScope(
+            store: store,
+            child: const ClientWorkbenchPresentation().buildHost(
+              roomId: 'room-1',
+              threadId: 'thread-1',
+              chat: const Text('Chat'),
+              surfaceBuilder: (activity, surface) => ChatSurfaceView(
+                  controller: store[activity]!, surfaceId: surface),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Current field value');
+      await tester.tap(find.text('North'));
+      await tester.ensureVisible(find.byType(Checkbox));
+      await tester.tap(find.byType(Checkbox));
+      await tester.ensureVisible(find.text('Submit'));
+      await tester.tap(find.text('Submit'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => _until(() => provider.inputs.isNotEmpty));
+      final action =
+          provider.inputs.single.forwardedProps!['a2uiAction'] as Map;
+      expect(action.keys,
+          unorderedEquals(['userAction', 'activityMessageId', 'submissionId']));
+      expect(action['activityMessageId'], events.first.messageId);
+      expect(action['submissionId'], isA<String>());
+      final userAction = action['userAction'] as Map;
+      expect(userAction['name'], 'submit_intake');
+      expect(userAction['sourceComponentId'], 'submit');
+      expect(userAction['surfaceId'], 'surface_2');
+      expect(userAction['context'], {
+        'question': 'Current field value',
+        'districts': ['north'],
+        'acknowledged': true,
+      });
+      expect(
+          provider.inputs.single.messages!.whereType<UserMessage>(), isEmpty);
+      provider.finish(0);
+      await tester
+          .runAsync(() => _until(() => view.sessionState.value == null));
+    });
+
+    test('PythonRepl result uses the same envelope without a reservation',
+        () async {
+      final result = <String, Object?>{
+        'name': 'workbench.program.run_result',
+        'surfaceId': 'program-surface',
+        'sourceComponentId': 'root',
+        'context': {
+          'side': 'client',
+          'engine': 'monty-1.3.0',
+          'invocationId': 'invocation-1',
+          'chainId': 'invocation-1',
+          'outcome': 'success',
+          'output': 'Hello from REPL',
+        },
+      };
+      view.sendAction(result, runtime, activityMessageId: 'program-activity');
+      await _until(() => provider.inputs.isNotEmpty);
+      final envelope =
+          provider.inputs.single.forwardedProps!['a2uiAction'] as Map;
+      expect(envelope.keys,
+          unorderedEquals(['userAction', 'activityMessageId', 'submissionId']));
+      expect(envelope['activityMessageId'], 'program-activity');
+      expect(envelope['submissionId'], isA<String>());
+      expect(envelope['userAction'], result);
+      expect(
+          provider.inputs.single.messages!.whereType<UserMessage>(), isEmpty);
+      provider.finish(0);
+      await _until(() => view.sessionState.value == null);
+    });
+
+    test('distinct submissions queue in order and capture values at click time',
+        () async {
+      view.sendMessage([const TextPart('working')], runtime);
+      await _until(() => provider.inputs.length == 1);
+      final mutable = <String, Object?>{
+        'name': 'submit_intake',
+        'surfaceId': 'form',
+        'context': {'question': 'first'},
+      };
+      view.sendAction(mutable, runtime, activityMessageId: 'form-activity');
+      (mutable['context']! as Map)['question'] = 'second';
+      view.sendAction(mutable, runtime, activityMessageId: 'form-activity');
+      (mutable['context']! as Map)['question'] = 'changed after clicking';
+      provider.finish(0);
+      await _until(() => provider.inputs.length == 2);
+      final first = provider.inputs[1].forwardedProps!['a2uiAction'] as Map;
+      expect((first['userAction'] as Map)['context'], {'question': 'first'});
+      provider.finish(1);
+      await _until(() => provider.inputs.length == 3);
+      final second = provider.inputs[2].forwardedProps!['a2uiAction'] as Map;
+      expect((second['userAction'] as Map)['context'], {'question': 'second'});
+      expect(first['submissionId'], isNot(second['submissionId']));
+      provider.finish(2);
       await _until(() => view.sessionState.value == null);
     });
 

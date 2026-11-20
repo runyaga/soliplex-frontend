@@ -1,156 +1,102 @@
-"""Validation, reservation and the sole workbench action reader."""
+"""Validate canvas submissions and project accepted data into model input.
 
+No reservation, Python execution, or request-byte mutation happens here.
+"""
 from __future__ import annotations
 
 import hashlib
 import json
-from typing import Mapping, Protocol
+from collections.abc import Mapping
+from threading import Lock
 
-from pydantic import ValidationError
+from ag_ui.core import Message
+from pydantic import TypeAdapter
 
-from .workbench_repository import PublicationConflict, SQLiteWorkbenchRepository, WorkbenchScope
-from .workbench_schemas import ActionEnvelope, IntakeSubmit, ProgramExport, RunResult
-from .workbench_tracing import LogfireTraceSink
-
-
-class TraceSink(Protocol):
-    def emit(self, event: Mapping[str, object]) -> None: ...
-
+from .workbench_schemas import ActionEnvelope as CanvasSubmission
+from .workbench_schemas import IntakeSubmit, RunResult
 
 WORKBENCH_INTAKE_TOOL_NAME = "workbench_intake"
 
 
+def validate_submission(payload: object, projection) -> CanvasSubmission:
+    """Bind values to a server-published activity, never a client registration.
+
+    Content tools mint fresh activity identities; layout moves retain them.
+    The source identity therefore follows the published content version.
+    """
+    submission = CanvasSubmission.model_validate(payload)
+    action = submission.userAction
+    record = projection.content.get(submission.activityMessageId)
+    if record is None or record["surfaceId"] != action.surfaceId:
+        raise ValueError("action surface was not published in this thread")
+    if record["component"] == "PlaceForm" and action.name == "submit_intake":
+        if action.sourceComponentId not in (None, "submit"):
+            raise ValueError("action source component does not match intake Submit")
+        context = IntakeSubmit.model_validate(action.context)
+    elif record["component"] == "PythonRepl" and action.name == "workbench.program.run_result":
+        if action.sourceComponentId not in (None, "root"):
+            raise ValueError("action source component does not match PythonRepl")
+        context = RunResult.model_validate(action.context)
+    else:
+        raise ValueError("action name does not match its published component")
+    submission.userAction.context = context.model_dump(mode="json")
+    return submission
+
+
 def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, object]]:
-    """Build a stable AG-UI assistant tool-call and untrusted tool-result pair."""
-    submission_id = envelope.get("submissionId")
-    context = envelope.get("userAction")
-    if not isinstance(submission_id, str) or not isinstance(context, Mapping):
-        raise ValueError("validated intake reservation is malformed")
-    digest = hashlib.sha256(submission_id.encode("utf-8")).hexdigest()[:24]
+    """One deterministic, non-callable intake pair, with untrusted values."""
+    submission_id = envelope["submissionId"]
+    context = envelope["userAction"]["context"]
+    digest = hashlib.sha256(submission_id.encode()).hexdigest()[:24]
     call_id = f"workbench-intake-{digest}"
     result = {
         "kind": "untrusted_user_submitted_data",
         "actionSchemaVersion": "intake.submit@1",
         "submissionId": submission_id,
-        "context": dict(context),
+        "context": context,
     }
     return [
-        {
-            "id": f"{call_id}-assistant",
-            "role": "assistant",
-            "toolCalls": [{
-                "id": call_id,
-                "type": "function",
-                "function": {"name": WORKBENCH_INTAKE_TOOL_NAME, "arguments": json.dumps({"submissionId": submission_id}, separators=(",", ":"))},
-            }],
-        },
-        {
-            "id": f"{call_id}-result",
-            "role": "tool",
-            "toolCallId": call_id,
-            "content": json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
-        },
+        {"id": f"{call_id}-assistant", "role": "assistant", "toolCalls": [{
+            "id": call_id, "type": "function", "function": {
+                "name": WORKBENCH_INTAKE_TOOL_NAME,
+                "arguments": json.dumps({"submissionId": submission_id}, separators=(",", ":")),
+            },
+        }]},
+        {"id": f"{call_id}-result", "role": "tool", "toolCallId": call_id,
+         "content": json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False)},
     ]
 
 
-class WorkbenchActionService:
-    def __init__(self, repository: SQLiteWorkbenchRepository, trace_sink: TraceSink | None = None):
-        self.repository = repository
-        self.trace_sink = trace_sink or LogfireTraceSink()
+def submission_messages(submission: CanvasSubmission) -> list[Message]:
+    envelope = submission.model_dump(mode="json", exclude_none=True)
+    if submission.userAction.name == "submit_intake":
+        wire = synthetic_intake_messages(envelope)
+    else:
+        wire = [{
+            "id": "workbench-result-" + hashlib.sha256(submission.submissionId.encode()).hexdigest()[:24],
+            "role": "user",
+            "content": json.dumps({"kind": "untrusted_user_submitted_data", **envelope}, ensure_ascii=False),
+        }]
+    return TypeAdapter(list[Message]).validate_python(wire)
 
-    def accept(self, scope: WorkbenchScope, payload: Mapping[str, object]) -> dict[str, object]:
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-        if len(encoded) > 16_384:
-            raise ValueError("action envelope exceeds 16 KiB")
-        context_models = {
-            "intake.submit@1": IntakeSubmit,
-            "workbench.program.export_chart@1": ProgramExport,
-            "workbench.program.run_result@1": RunResult,
-        }
-        schema_version = payload.get("actionSchemaVersion")
-        if not isinstance(schema_version, str):
-            raise ValueError("unsupported action schema")
-        context_model = context_models.get(schema_version)
-        if context_model is None:
-            raise ValueError("unsupported action schema")
-        typed_context = context_model.model_validate(
-            payload.get("userAction"),
-            context={"pinned_engine_manifest": {"monty-1.3.0"}},
-        )
-        normalized = dict(payload)
-        normalized["userAction"] = typed_context.model_dump(mode="json")
-        action = ActionEnvelope.model_validate(normalized, context={"pinned_engine_manifest": {"monty-1.3.0"}})
-        digest = hashlib.sha256(encoded).hexdigest()
-        duplicate = self.repository.existing_action(scope, action.submissionId, digest)
-        if duplicate is not None:
-            if isinstance(action.userAction, RunResult):
-                self.repository.emit_trace_once(scope, action.userAction.invocationId, self.trace_sink)
-            return duplicate
-        current = self.repository.load_snapshot(scope)
-        if current["layout"] is None:
-            raise PublicationConflict("stale workbench surface revision")
-        registered = {str(record.get("activityMessageId")): record for record in current["content"]}
-        record = registered.get(action.activityMessageId)
-        if record is None:
-            raise ValueError("action surface is not registered in this thread")
-        surface_revision = record.get("surfaceRevision", current["revision"])
-        if surface_revision != action.surfaceRevision:
-            raise PublicationConflict("stale workbench surface revision")
-        component = record.get("component")
-        expected_components = {
-            "intake.submit@1": {"PlaceForm", "IntakeForm"},
-            "workbench.program.export_chart@1": {"PythonRepl", "Program"},
-            "workbench.program.run_result@1": {"PythonRepl", "Program"},
-        }[action.actionSchemaVersion]
-        if component not in expected_components:
-            raise ValueError("action source component is not registered for this action")
-        receipt_details: dict[str, object] = {}
-        if isinstance(action.userAction, RunResult):
-            invocation_data = action.userAction.model_dump(mode="json")
-            invocation_identity = {
-                "result": invocation_data,
-                "activityMessageId": action.activityMessageId,
-                "surfaceId": str(record.get("surfaceId")),
-            }
-            receipt_details = {
-                "invocationId": action.userAction.invocationId,
-                "invocationDigest": hashlib.sha256(json.dumps(invocation_identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
-                "trace": {
-                    "python.side": "client",
-                    "python.engine": action.userAction.engine,
-                    "room": scope.room_id,
-                    "thread": scope.thread_id,
-                    "surface": str(record.get("surfaceId")),
-                    "chain_id": action.userAction.chainId,
-                    "invocation_id": action.userAction.invocationId,
-                },
-            }
-        receipt = self.repository.reserve_action(
-            scope, action.submissionId, digest, action.model_dump(mode="json"),
-            expected_revision=int(current["revision"]),
-            activity_message_id=action.activityMessageId,
-            receipt_details=receipt_details,
-        )
-        if isinstance(action.userAction, RunResult):
-            self.repository.emit_trace_once(scope, action.userAction.invocationId, self.trace_sink)
-        return receipt
 
-    def consume_dispatch(self, scope: WorkbenchScope, payload: Mapping[str, object]) -> dict[str, object] | None:
-        """Read one reserved action from forwardedProps; reconnects must bypass this."""
-        wrapper = payload.get("forwardedProps")
-        if not isinstance(wrapper, dict):
-            return None
-        envelope = wrapper.get("a2uiAction")
-        if not isinstance(envelope, dict):
-            return None
-        if envelope.get("actionSchemaVersion") != "intake.submit@1":
-            return None
-        # The package owns reading this wire shape. Never consult or install
-        # pydantic-ai's process-global private adapter patch.
-        encoded = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-        digest = hashlib.sha256(encoded).hexdigest()
-        consumed = self.repository.consume_action(scope, str(envelope.get("submissionId", "")), digest)
-        if consumed is None:
-            return None
-        return ActionEnvelope.model_validate(consumed, context={"pinned_engine_manifest": {"monty-1.3.0"}}).model_dump(mode="json")
+class SubmissionDedup:
+    """Router-local race guard; stored run inputs also suppress accepted IDs.
 
+    Keys include authenticated actor/server/room/thread and submission ID.
+    At capacity we fail closed instead of evicting accepted IDs. This is a
+    single-worker preview guard, not a distributed exactly-once promise.
+    """
+    def __init__(self, capacity=4096):
+        self._keys = set()
+        self._lock = Lock()
+        self.capacity = capacity
+
+    def claim(self, scope, submission_id, persisted_ids):
+        key = (*scope.key(), submission_id)
+        with self._lock:
+            if submission_id in persisted_ids or key in self._keys:
+                raise ValueError("workbench submission was already accepted")
+            if len(self._keys) >= self.capacity:
+                raise ValueError("workbench submission capacity reached")
+            self._keys.add(key)

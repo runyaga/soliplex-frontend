@@ -153,6 +153,38 @@ void main() {
     }
   });
 
+  test('canvas submission is sent once and never receives a legacy anchor',
+      () async {
+    final provider = _Provider([_clientToolCall('run-1'), _answer('run-2')]);
+    final tools = const ToolRegistry().register(
+      ClientTool(
+        definition: const Tool(name: 'probe', description: 'Probe'),
+        executor: (_, __) async => 'ok',
+      ),
+    );
+    final submission = {
+      ...action,
+      'activityMessageId': 'canvas-activity',
+      'submissionId': 'submission-1',
+    };
+    await orchestratorFor(provider, tools: tools).runToCompletion(
+      key: _key,
+      userMessage: const [],
+      toolExecutor: (pending) async => [
+        for (final call in pending)
+          call.copyWith(status: ToolCallStatus.completed, result: 'ok'),
+      ],
+      cachedHistory: priorHistory(),
+      a2uiAction: submission,
+    );
+    expect(provider.inputs, hasLength(2));
+    expect(provider.inputs.first.forwardedProps, {
+      'bandwidth': 'low',
+      'a2uiAction': submission,
+    });
+    expect(provider.inputs.last.forwardedProps, {'bandwidth': 'low'});
+  });
+
   test('normal turns still append their visible user message', () async {
     final provider = _Provider();
     final result = await orchestratorFor(provider).runToCompletion(

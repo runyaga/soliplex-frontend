@@ -1,5 +1,6 @@
 import 'dart:async' show scheduleMicrotask, unawaited;
 import 'dart:convert' show jsonDecode, jsonEncode;
+import 'dart:math' show Random;
 
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_logging/soliplex_logging.dart';
@@ -411,43 +412,49 @@ class ThreadViewState {
     );
   }
 
-  /// Sends an A2UI [userAction] as an action-only turn on this thread: no user
-  /// message, the action in `forwardedProps.a2uiAction`. While a session holds
-  /// the thread, the latest action waits and is sent when the session ends.
+  /// Sends the current bound values as an action-only turn. Workbench callers
+  /// retain the activity identity and allocate one submission ID per gesture.
+  /// Distinct pending submissions queue in order with their captured values.
   void sendAction(
     Map<String, Object?> userAction,
     AgentRuntime runtime, {
+    String? activityMessageId,
     Map<String, dynamic>? stateOverlay,
   }) {
     if (_isDisposed) return;
     final action = <String, dynamic>{
       'userAction': jsonDecode(jsonEncode(userAction)),
+      if (activityMessageId != null) ...{
+        'activityMessageId': activityMessageId,
+        'submissionId': 'submission-${DateTime.now().microsecondsSinceEpoch}-'
+            '${Random.secure().nextInt(1 << 32).toRadixString(16)}',
+      },
     };
-    if (_sessionState.value == null) {
+    if (_sessionState.value == null && _queuedActions.isEmpty) {
       _spawnAction(action, runtime, stateOverlay);
       return;
     }
-    final waiting = _queuedAction != null;
-    _queuedAction = (action, runtime, stateOverlay);
-    if (waiting) return;
-    late final void Function() unsubscribe;
-    unsubscribe = _sessionState.subscribe((state) {
+    _queuedActions.add((action, runtime, stateOverlay));
+    _actionQueueUnsub ??= _sessionState.subscribe((state) {
       if (state != null) return;
-      scheduleMicrotask(() {
-        unsubscribe();
-        final queued = _queuedAction;
-        _queuedAction = null;
-        if (queued == null || _isDisposed) return;
-        sendAction(
-          queued.$1['userAction'] as Map<String, Object?>,
-          queued.$2,
-          stateOverlay: queued.$3,
-        );
-      });
+      scheduleMicrotask(_drainActionQueue);
     });
   }
 
-  (Map<String, dynamic>, AgentRuntime, Map<String, dynamic>?)? _queuedAction;
+  final _queuedActions =
+      <(Map<String, dynamic>, AgentRuntime, Map<String, dynamic>?)>[];
+  void Function()? _actionQueueUnsub;
+
+  void _drainActionQueue() {
+    if (_isDisposed || _sessionState.value != null) return;
+    if (_queuedActions.isEmpty) {
+      _actionQueueUnsub?.call();
+      _actionQueueUnsub = null;
+      return;
+    }
+    final queued = _queuedActions.removeAt(0);
+    _spawnAction(queued.$1, queued.$2, queued.$3);
+  }
 
   void _spawnAction(
     Map<String, dynamic> action,
@@ -982,6 +989,9 @@ class ThreadViewState {
   /// outlived the view print a warning, and a write throw.
   void dispose() {
     _isDisposed = true;
+    _actionQueueUnsub?.call();
+    _actionQueueUnsub = null;
+    _queuedActions.clear();
     _authUnsub?.call();
     _authUnsub = null;
     _cancelToken?.cancel('disposed');
@@ -996,6 +1006,7 @@ class ThreadViewState {
   void _onAuthChanged(SessionState state) {
     if (_isDisposed) return;
     if (state is ActiveSession) return;
+    _queuedActions.clear();
     _cancelToken?.cancel('auth expired');
     _activeSession.value?.cancel();
   }

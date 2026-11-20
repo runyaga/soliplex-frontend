@@ -12,6 +12,7 @@ import logging
 from collections.abc import Iterable
 
 from ag_ui.core import ActivitySnapshotEvent
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from soliplex.agui.persistence import ThreadStorage
 
@@ -33,6 +34,8 @@ class RunWorkbenchProjection:
         self.layout_surface_id = f"wb-control-{digest}"
         self.layout = default_layout()
         self.content: dict[str, dict] = {}
+        self.submission_ids = set()
+        self.submission_history = []
         for event in events:
             try:
                 self._fold(event)
@@ -128,6 +131,40 @@ async def projection_from_thread(deps, scope):
         storage = ThreadStorage(session)
         thread = await storage.get_thread(user_name=scope.actor_id, room_id=scope.room_id, thread_id=scope.thread_id)
         events = []
+        stored_inputs = []
         for run in sorted(await thread.list_runs(), key=lambda run: (run.created, run.id_)):
             events.extend(await run.list_events())
-        return RunWorkbenchProjection(scope, events)
+            stored = await run.awaitable_attrs.run_agent_input
+            if stored is not None:
+                stored_inputs.append(stored.to_agui_model())
+        projection = RunWorkbenchProjection(scope, events)
+        for run_input in stored_inputs:
+            restore_submission_history(projection, run_input)
+        return projection
+
+
+def restore_submission_history(projection, run_input):
+    """Restore only pairs already accepted and persisted by our adapter hook."""
+    from .workbench_actions import CanvasSubmission, submission_messages
+
+    props = run_input.forwarded_props
+    envelope = props.get("a2uiAction") if isinstance(props, dict) else None
+    if not isinstance(envelope, dict) or "submissionId" not in envelope:
+        return
+    try:
+        submission = CanvasSubmission.model_validate(envelope)
+    except ValidationError:
+        # Historical reservation envelopes are not action-turn submissions.
+        return
+    if submission.submissionId in projection.submission_ids:
+        return
+    messages = submission_messages(submission)
+    # Presence of the exact server projection distinguishes accepted inputs
+    # from historical legacy/unvalidated action envelopes.
+    index = next((i for i in range(len(run_input.messages))
+                  if run_input.messages[i:i + len(messages)] == messages), None)
+    if index is None:
+        return
+    anchor = run_input.messages[index - 1].id if index else None
+    projection.submission_ids.add(submission.submissionId)
+    projection.submission_history.append((anchor, messages))

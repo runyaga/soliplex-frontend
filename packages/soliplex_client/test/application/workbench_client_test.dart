@@ -62,7 +62,7 @@ class _CaptureClient implements SoliplexHttpClient {
 }
 
 void main() {
-  test('uses scoped snapshot and action routes', () async {
+  test('uses the legacy scoped snapshot route', () async {
     final capture = _CaptureClient();
     final client = WorkbenchClient(
       transport: HttpTransport(client: capture),
@@ -78,14 +78,6 @@ void main() {
       capture.uri!.path,
       '/api/v1/rooms/room_a/threads/thread_1/workbench',
     );
-    await client.postAction(
-      roomId: 'r',
-      threadId: 't',
-      envelope: {'v': 1, 'submissionId': 'id'},
-    );
-    expect(capture.method, 'POST');
-    expect(capture.uri!.path, '/api/v1/rooms/r/threads/t/workbench/actions');
-    expect(capture.body, '{"v":1,"submissionId":"id"}');
   });
 
   test('sends the bearer token through the authenticated transport', () async {

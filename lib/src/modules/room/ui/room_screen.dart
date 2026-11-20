@@ -274,12 +274,16 @@ class _RoomScreenState extends State<RoomScreen> {
             if (!widget.surfaceCatalogs.any((c) => c.id == graphicsCatalogId))
               chartPlaceholderCatalog(),
           ],
-          onAction: (_, action) {
+          onAction: (activityMessageId, action) {
             final threadView = _state.activeThreadView;
             if (threadView?.threadId != threadId) return;
             threadView!.sendAction(
               action,
               _state.runtime,
+              activityMessageId: _surfaceStoreForThread(threadId)
+                      .isWorkbenchSurface(activityMessageId)
+                  ? activityMessageId
+                  : null,
               stateOverlay: _buildStateOverlay(),
             );
           },
@@ -2840,10 +2844,17 @@ class _RoomScreenState extends State<RoomScreen> {
                               runOutcomes: runOutcomes,
                               activeRunId: activeRunId,
                               surfaceCatalogs: widget.surfaceCatalogs,
-                              onSurfaceAction: (_, action) =>
+                              onSurfaceAction: (activityMessageId, action) =>
                                   threadView.sendAction(
                                 action,
                                 _state.runtime,
+                                activityMessageId:
+                                    _workbenchSurfaceStores[threadView.threadId]
+                                                ?.isWorkbenchSurface(
+                                                    activityMessageId) ==
+                                            true
+                                        ? activityMessageId
+                                        : null,
                                 stateOverlay: _buildStateOverlay(),
                               ),
                               onFeedbackSubmit: threadView.submitFeedback,

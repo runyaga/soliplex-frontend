@@ -112,10 +112,10 @@ def test_fresh_run_reconstructs_published_activities_without_client_state(monkey
 def test_dart_fixture_is_exact_tool_metadata():
     _, form, chart, window, program = asyncio.run(publication_fixture())
     fixture = Path(__file__).parents[5] / "test/fixtures/workbench_activity_events.dart"
-    strings = fixture.read_text().split("r'''")
+    strings = fixture.read_text().split("'''")
     expected = [[event.model_dump(mode="json", by_alias=True, exclude_none=True) for result in results for event in result.metadata]
                 for results in [[form, chart], [window, program]]]
-    assert [json.loads(value.split("'''", 1)[0]) for value in strings[1:]] == expected
+    assert [json.loads(value.split("'''", 1)[0]) for value in strings[1::2]] == expected
 
 
 def test_adapter_rebuilds_from_authenticated_thread_storage(monkeypatch):

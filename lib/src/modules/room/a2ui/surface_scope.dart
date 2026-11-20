@@ -32,6 +32,10 @@ class ChatSurfaceStore extends ChangeNotifier {
   String? get layoutError => _layoutError;
   String? get layoutActivityId => _layoutActivityId;
 
+  /// Whether this activity has an accepted server workbench registration.
+  bool isWorkbenchSurface(String messageId) =>
+      _registrations.containsKey(messageId);
+
   /// Ingest every projected activity before either chat or canvas builds.
   /// This is independent of which timeline rows have been virtualized.
   void ingest(Iterable<GenUiMessage> activities, {String? activeRunId}) {

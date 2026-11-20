@@ -360,13 +360,19 @@ def is_effectively_closed(snapshot: LayoutSnapshot, node_id: str) -> bool:
         current = nodes[current.parentId]
 
 
+class A2UIUserAction(Closed):
+    name: Annotated[str, Field(min_length=1, max_length=128)]
+    surfaceId: Id
+    context: dict[str, object]
+    sourceComponentId: Id | None = None
+    timestamp: Annotated[str, Field(max_length=64)] | None = None
+
+
 class ActionEnvelope(Closed):
-    v: Literal[1]
+    """The action-only turn's sole workbench submission envelope."""
     submissionId: Annotated[str, Field(min_length=1, max_length=64)]
     activityMessageId: Id
-    surfaceRevision: Annotated[int, Field(ge=0, strict=True)]
-    actionSchemaVersion: Annotated[str, Field(min_length=1, max_length=128)]
-    userAction: IntakeSubmit | ProgramExport | RunResult
+    userAction: A2UIUserAction
 
     @model_validator(mode="after")
     def within_utf8_limit(self) -> ActionEnvelope:
@@ -374,7 +380,7 @@ class ActionEnvelope(Closed):
             self.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8")
         if len(encoded) > 16_384:
-            raise ValueError("action envelope exceeds 16 KiB")
+            raise ValueError("workbench action exceeds 16 KiB")
         return self
 
 

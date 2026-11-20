@@ -1044,8 +1044,19 @@ class RunOrchestrator {
       messages: conversation.transcript.messages,
       tools: _toolRegistry.toolDefinitions,
       state: conversation.aguiState,
-      forwardedProps: _turnForwardedProps,
+      forwardedProps: _takeRunForwardedProps(),
     );
+  }
+
+  Map<String, dynamic>? _takeRunForwardedProps() {
+    final props = _turnForwardedProps;
+    final action = props?['a2uiAction'];
+    if (action is Map && action.containsKey('submissionId')) {
+      // A submission belongs to the first run only. The server restores its
+      // accepted model input from persisted history for continuations.
+      _turnForwardedProps = {...props!}..remove('a2uiAction');
+    }
+    return props;
   }
 
   void _subscribeToStream(
@@ -1397,6 +1408,7 @@ Map<String, dynamic> _anchored(
   Map<String, dynamic> a2uiAction,
   ThreadHistory? history,
 ) {
+  if (a2uiAction.containsKey('submissionId')) return a2uiAction;
   final last = history?.transcript.messages.lastOrNull;
   return {...a2uiAction, if (last != null) 'afterMessageId': last.id};
 }

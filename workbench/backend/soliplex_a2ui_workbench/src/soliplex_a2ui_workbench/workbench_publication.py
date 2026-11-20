@@ -291,7 +291,12 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     if component == "Chart":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": {"@path": "/spec"}}
     elif component == "PythonRepl":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output"}
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", "onRun": {"event": {
+            "name": "workbench.program.run_result", "context": {
+                "side": "client", "engine": "monty-1.3.0",
+                **{key: {"@path": f"/output/{key}"} for key in ("invocationId", "chainId", "outcome", "output")},
+            },
+        }}}
     elif component == "PlaceForm":
         catalog_id = BASIC_CATALOG
         data = {"title": record["title"], "question": "", "districts": [], "acknowledged": False}

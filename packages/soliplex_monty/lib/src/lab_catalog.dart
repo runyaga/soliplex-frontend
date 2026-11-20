@@ -221,6 +221,11 @@ CatalogImplementation labCatalog({
               ? null
               : (result) => surface.dataModel.set(resolvedOutput, result),
           onRun: props.action('onRun'),
+          includeRunMetadata:
+              switch (node.context?.componentModel.properties['onRun']) {
+                {'event': {'name': 'workbench.program.run_result'}} => true,
+                _ => false,
+              },
           onFailure: props.action('onFailure'),
           retry: ReplRetry.from(props.value('retry')),
           showSource: props.boolean('showSource') ?? false,
@@ -290,6 +295,7 @@ class PythonReplView extends StatefulWidget {
     this.writeSource,
     this.writeResult,
     this.onRun,
+    this.includeRunMetadata = false,
     this.onFailure,
     this.retry,
     this.live = false,
@@ -310,6 +316,9 @@ class PythonReplView extends StatefulWidget {
   final bool Function(String text)? writeSource;
   final void Function(Map<String, Object?> result)? writeResult;
   final Future<void> Function()? onRun;
+
+  /// Adds bounded provenance fields for a workbench run-result action.
+  final bool includeRunMetadata;
 
   /// Asks the model to repair a failed run. The failure is in the result
   /// that [writeResult] wrote just before.
@@ -488,10 +497,22 @@ class _PythonReplViewState extends State<PythonReplView> {
       }
       _record(code, output, ok: ok);
       _runs++;
+      final invocationId =
+          'invocation-${DateTime.now().microsecondsSinceEpoch}-$_runs';
       widget.writeResult?.call({
+        if (widget.includeRunMetadata) ...{
+          'invocationId': invocationId,
+          'chainId': _chain?.id ?? invocationId,
+          'outcome': ok ? 'success' : 'error',
+        },
         'run': _runs,
         'source': code,
-        'output': _clip(output, limits.maxOutputChars),
+        'output': widget.includeRunMetadata
+            ? output.substring(
+                0,
+                math.min(output.length, limits.maxOutputChars),
+              )
+            : _clip(output, limits.maxOutputChars),
         'ok': ok,
       });
       _afterRun(code, output, ok: ok);

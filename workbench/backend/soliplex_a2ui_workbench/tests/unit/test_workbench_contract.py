@@ -335,23 +335,16 @@ def test_layout_budget_counts_utf8_bytes_not_ascii_escapes() -> None:
 
 def test_run_result_envelope_budget_counts_utf8_bytes_not_ascii_escapes() -> None:
     envelope = {
-        "v": 1,
-        "submissionId": "submission_1",
-        "activityMessageId": "activity_python",
-        "surfaceRevision": 1,
-        "actionSchemaVersion": "workbench.program.run_result@1",
+        "submissionId": "submission_1", "activityMessageId": "activity_python",
         "userAction": {
-            "side": "client",
-            "engine": "monty-1.3.0",
-            "invocationId": "invocation_1",
-            "chainId": "chain_1",
-            "outcome": "success",
-            "output": "é" * 3_000,
+            "name": "workbench.program.run_result", "surfaceId": "surface_python",
+            "context": {"side": "client", "engine": "monty-1.3.0",
+                        "invocationId": "invocation_1", "chainId": "chain_1",
+                        "outcome": "success", "output": "é" * 3_000},
         },
     }
-    encoded = json.dumps(envelope, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    assert len(encoded) == 6_286
-    assert ActionEnvelope.model_validate(envelope).userAction.output == "é" * 3_000
+    assert 6_000 < len(json.dumps(envelope, ensure_ascii=False).encode()) < 16_384
+    assert ActionEnvelope.model_validate(envelope).userAction.context["output"] == "é" * 3_000
 
 
 def test_malformed_split_axis_is_a_pydantic_validation_error() -> None:
@@ -634,15 +627,18 @@ def test_python_side_and_handoff_fixtures_validate() -> None:
 def test_source_and_envelope_bounds_are_utf8_aware() -> None:
     with pytest.raises(ValidationError):
         RunPythonClient.model_validate({"title": "Unicode", "source": "é" * 6001, "parent_id": "panel"})
-    action = fixture("intake_action_v1.json")
-    action["userAction"]["question"] = "x" * 20_000
+    action = {
+        "submissionId": "oversized", "activityMessageId": "activity_form",
+        "userAction": {"name": "submit_intake", "surfaceId": "surface_form",
+                       "context": {"question": "é" * 10_000}},
+    }
     with pytest.raises(ValidationError):
         ActionEnvelope.model_validate(action)
 
 
 def test_action_fixture_and_all_minimum_model_schemas() -> None:
-    envelope = ActionEnvelope.model_validate(fixture("intake_action_v1.json"))
-    assert envelope.v == 1
-    export_envelope = ActionEnvelope.model_validate(fixture("export_action_v1.json"))
-    assert export_envelope.userAction.kind == "bar"
+    # Retired reservation fixtures are historical data, never accepted turns.
+    for name in ("intake_action_v1.json", "export_action_v1.json"):
+        with pytest.raises(ValidationError):
+            ActionEnvelope.model_validate(fixture(name))
     assert ExportChart.model_fields.keys() == {"title", "kind", "points"}
