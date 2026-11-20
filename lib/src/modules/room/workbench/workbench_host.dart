@@ -106,7 +106,10 @@ class WorkbenchHost extends StatelessWidget {
         if (node.kind == 'surface')
           node.payload['activityMessageId']! as String,
     };
-    final chatPane = KeyedSubtree(
+    final chatPane = Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: 'Workbench region chat',
       key: const ValueKey('workbench-region-chat'),
       child: scope == null
           ? chat
@@ -128,12 +131,19 @@ class WorkbenchHost extends StatelessWidget {
               (id) => tree.node(id)?.visibility == 'open',
             ) ??
         false;
-    Widget region(String role) => SingleChildScrollView(
-          key: ValueKey('workbench-region-$role'),
-          padding: const EdgeInsets.all(SoliplexSpacing.s1),
-          child: regions[role] == null
+    Widget region(String role) => Semantics(
+          container: true,
+          explicitChildNodes: true,
+          label: 'Workbench region $role',
+          child: !hasContent(role)
               ? const SizedBox.shrink()
-              : _render(context, regions[role]!),
+              : SingleChildScrollView(
+                  key: ValueKey('workbench-region-$role'),
+                  padding: const EdgeInsets.all(SoliplexSpacing.s1),
+                  child: regions[role] == null
+                      ? const SizedBox.shrink()
+                      : _render(context, regions[role]!),
+                ),
         );
     if (width < SoliplexBreakpoints.desktop) {
       return DefaultTabController(
@@ -154,7 +164,12 @@ class WorkbenchHost extends StatelessWidget {
                     children: [
                       for (final role in ['left', 'canvas', 'right', 'tray'])
                         if (regions[role] case final LayoutNode node)
-                          _render(context, node),
+                          Semantics(
+                            container: true,
+                            explicitChildNodes: true,
+                            label: 'Workbench region $role',
+                            child: _render(context, node),
+                          ),
                     ],
                   ),
                 ),
@@ -172,15 +187,23 @@ class WorkbenchHost extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (hasContent('left')) Expanded(flex: 2, child: region('left')),
+              if (hasContent('left'))
+                Expanded(flex: 2, child: region('left'))
+              else
+                region('left'),
               Expanded(flex: 3, child: chatPane),
               Expanded(flex: 5, child: region('canvas')),
               if (hasContent('right'))
-                Expanded(flex: 2, child: region('right')),
+                Expanded(flex: 2, child: region('right'))
+              else
+                region('right'),
             ],
           ),
         ),
-        if (hasContent('tray')) Expanded(child: region('tray')),
+        if (hasContent('tray'))
+          Expanded(child: region('tray'))
+        else
+          region('tray'),
       ],
     );
   }
@@ -249,17 +272,25 @@ class WorkbenchHost extends StatelessWidget {
       );
     }
     if (node.kind == 'panel' || node.kind == 'window') {
-      final content = children.isEmpty
-          ? const SizedBox.shrink()
+      final content = children.isEmpty || children.first.visibility != 'open'
+          ? const Padding(
+              padding: EdgeInsets.all(SoliplexSpacing.s3),
+              child: Text('No open content.'),
+            )
           : _render(context, children.first);
       final chrome = PanelChrome(
         key: ValueKey(node.id),
         node: node,
-        child: SingleChildScrollView(child: content),
+        child: content,
       );
       return node.kind == 'window'
-          ? SizedBox(width: 640, height: 480, child: chrome)
-          : SizedBox(height: 240, child: chrome);
+          ? Semantics(
+              container: true,
+              explicitChildNodes: true,
+              label: 'Workbench window ${node.title}',
+              child: SizedBox(width: 640, height: 480, child: chrome),
+            )
+          : chrome;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

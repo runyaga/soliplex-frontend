@@ -10,7 +10,7 @@ packages:
     source: hosted
     version: "111.0.0"
   a2ui_agent:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: a2ui_agent
       sha256: c4046bfc84265a6c93ab17b1cde2a2c0c1dfbbe647e41d06d5c0c5c7d6658314
@@ -26,7 +26,7 @@ packages:
     source: hosted
     version: "0.8.0"
   a2ui_flutter:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: a2ui_flutter
       sha256: c6eae36082659eddb393a9b0c551c4636ef1b66ae78fefe3e83111b33801e394
@@ -483,7 +483,7 @@ packages:
     source: hosted
     version: "2.4.0"
   flutter_test:
-    dependency: transitive
+    dependency: "direct dev"
     description: flutter
     source: sdk
     version: "0.0.0"
@@ -953,7 +953,7 @@ packages:
     source: path
     version: "0.1.0"
   soliplex_client:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "../../soliplex_client"
       relative: true
@@ -967,7 +967,7 @@ packages:
     source: path
     version: "1.0.0-dev"
   soliplex_design:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       path: "../../soliplex_design"
       relative: true

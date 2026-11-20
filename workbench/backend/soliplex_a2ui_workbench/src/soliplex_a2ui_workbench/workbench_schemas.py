@@ -418,6 +418,7 @@ class RunPythonClient(Closed):
     title: Title
     source: Source
     parent_id: Id
+    replace: bool = False
 
     @field_validator("source")
     @classmethod

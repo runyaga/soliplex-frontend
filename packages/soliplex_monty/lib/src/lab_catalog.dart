@@ -151,6 +151,9 @@ CatalogImplementation labCatalog({
           'onRun': Schema.fromMap({
             r'$ref': r'common_types.json#/$defs/Action',
           }),
+          'onWorkbench': Schema.fromMap({
+            r'$ref': r'common_types.json#/$defs/Action',
+          }),
           'onFailure': Schema.fromMap({
             r'$ref': r'common_types.json#/$defs/Action',
           }),
@@ -221,6 +224,7 @@ CatalogImplementation labCatalog({
               ? null
               : (result) => surface.dataModel.set(resolvedOutput, result),
           onRun: props.action('onRun'),
+          onWorkbench: props.action('onWorkbench'),
           includeRunMetadata:
               switch (node.context?.componentModel.properties['onRun']) {
                 {'event': {'name': 'workbench.program.run_result'}} => true,
@@ -295,6 +299,7 @@ class PythonReplView extends StatefulWidget {
     this.writeSource,
     this.writeResult,
     this.onRun,
+    this.onWorkbench,
     this.includeRunMetadata = false,
     this.onFailure,
     this.retry,
@@ -316,6 +321,7 @@ class PythonReplView extends StatefulWidget {
   final bool Function(String text)? writeSource;
   final void Function(Map<String, Object?> result)? writeResult;
   final Future<void> Function()? onRun;
+  final Future<void> Function()? onWorkbench;
 
   /// Adds bounded provenance fields for a workbench run-result action.
   final bool includeRunMetadata;
@@ -397,6 +403,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   void _claimOnArrival() {
     final retry = widget.retry;
     final id = retry?.chainId;
+    if (widget.onWorkbench != null) return;
     if (!_repairable || !widget.live || retry == null || id == null) return;
     final chain = _chains[id];
     if (chain == null || !chain.claim(retry.attempt)) return;
@@ -485,9 +492,18 @@ class _PythonReplViewState extends State<PythonReplView> {
       final runtime = await _runtime(code);
       if (runtime == null || _disposed) return;
       if (_runMode && !await _freshSession(runtime, code)) return;
-      _arena = PythonUiArena();
-      var (output, ok) = await _execute(runtime, code, limits);
+      _arena = PythonUiArena(workbenchEnabled: widget.onWorkbench != null);
+      var (output, ok) = await _execute(
+        runtime,
+        code,
+        limits,
+        inputs: {'CLIENT': _clientViewport()},
+      );
       if (_disposed) return;
+      if (_arena.workbench.rejected) {
+        ok = false;
+        output = _join(output, 'Workbench layout action limit (8) exceeded.');
+      }
       if (ok) {
         final rejected = _commit(_arena.staged);
         if (rejected != null) {
@@ -517,7 +533,11 @@ class _PythonReplViewState extends State<PythonReplView> {
       });
       _afterRun(code, output, ok: ok);
       final onRun = widget.onRun;
-      if (onRun != null) unawaited(onRun().catchError((Object _) {}));
+      if (ok && _arena.workbench.actions.isNotEmpty) {
+        await _publishWorkbench();
+      } else if (onRun != null) {
+        unawaited(onRun().catchError((Object _) {}));
+      }
     } finally {
       if (!_disposed) setState(() => _running = false);
     }
@@ -690,18 +710,23 @@ class _PythonReplViewState extends State<PythonReplView> {
     final label = 'handle_event(${_quote('$name')}, ...)';
     setState(() => _running = true);
     try {
-      _arena = PythonUiArena();
+      _arena = PythonUiArena(workbenchEnabled: widget.onWorkbench != null);
       final data = _ui?.model.allSurfaces.firstOrNull?.dataModel.get('/');
       var (output, ok) = await _execute(
         runtime,
         'handle_event(EVENT["name"], EVENT["context"])',
         widget.limits,
         inputs: {
+          'CLIENT': _clientViewport(),
           'EVENT': {'name': name, 'context': action['context'] ?? {}},
           'DATA': data ?? {},
         },
       );
       if (_disposed) return;
+      if (_arena.workbench.rejected) {
+        ok = false;
+        output = _join(output, 'Workbench layout action limit (8) exceeded.');
+      }
       if (ok) {
         final rejected = _commit(_arena.staged);
         if (rejected != null) {
@@ -711,11 +736,30 @@ class _PythonReplViewState extends State<PythonReplView> {
       } else if (output.contains("'handle_event' is not defined")) {
         output = 'Define handle_event(name, context) to react to clicks.';
       }
+      if (ok && _arena.workbench.actions.isNotEmpty) await _publishWorkbench();
+      if (_disposed) return;
       _record(label, output, ok: ok, header: 'Click: $name');
       if (!ok) _afterRun(_editor.text, output, ok: false);
     } finally {
       if (!_disposed) setState(() => _running = false);
     }
+  }
+
+  Map<String, Object?> _clientViewport() {
+    final render = context.findRenderObject();
+    final size = render is RenderBox && render.hasSize
+        ? render.size
+        : MediaQuery.sizeOf(context);
+    return {'width': size.width.floor(), 'height': size.height.floor()};
+  }
+
+  Future<void> _publishWorkbench() async {
+    if (_disposed) return;
+    widget.writeResult?.call({
+      'invocationId': 'gesture-${DateTime.now().microsecondsSinceEpoch}',
+      'actions': _arena.workbench.actions,
+    });
+    await widget.onWorkbench?.call();
   }
 
   Future<(String, bool)> _execute(

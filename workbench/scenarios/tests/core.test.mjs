@@ -1,8 +1,9 @@
+import { workspaceMatches } from '../lib/selectors.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, readlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { cleanEvidence, failedAssertions, inRegion, loadCases, parseCredentials, parseSSE, redactor, renderReport, summarizeEvents, validateCases, writeReport } from '../lib/core.mjs';
+import { cleanEvidence, cleanupCreatedThreads, failedAssertions, regionSelector, loadCases, parseCredentials, parseSSE, redactor, renderReport, summarizeEvents, validateCases, writeReport } from '../lib/core.mjs';
 import { hasVisibleInk } from '../lib/png.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -83,17 +84,14 @@ test('SSE decoder handles comments, CRLF, multiline JSON and lifecycle failure',
   assert.equal(summary.completed, true);
 });
 
-test('canvas geometry rejects timeline, offscreen and zero-size content', () => {
-  const chat = { x: 650, y: 900, width: 500, height: 50 };
-  const viewport = { width: 2400, height: 1800 };
-  const box = { x: 1350, y: 200, width: 200, height: 100 };
-  assert.equal(inRegion(box, chat, viewport, 'canvas'), true);
-  assert.equal(inRegion({ ...box, x: 800 }, chat, viewport), false);
-  assert.equal(inRegion({ ...box, x: 800, y: 1100 }, chat, viewport, 'tray'), true);
-  assert.equal(inRegion({ ...box, x: 400 }, chat, viewport, 'left'), true);
-  assert.equal(inRegion({ ...box, x: 2200 }, chat, viewport, 'right'), true);
-  assert.equal(inRegion({ ...box, x: 2600 }, chat, viewport), false);
-  assert.equal(inRegion({ ...box, width: 0 }, chat, viewport), false);
+test('assertions scope to semantic regions independently of composer geometry', () => {
+  assert.equal(regionSelector('canvas'), '[aria-label="Workbench region canvas"]');
+  assert.equal(regionSelector('left'), '[aria-label="Workbench region left"]');
+  assert.equal(regionSelector('chat'), '[aria-label="Workbench region chat"]');
+  const workspace = regionSelector();
+  for (const role of ['left', 'right', 'canvas', 'tray']) assert.ok(workspace.includes(`Workbench region ${role}`));
+  assert.ok(!workspace.includes('chat'));
+  assert.throws(() => regionSelector('invented'));
 });
 
 test('pixel check rejects blank paint and decodes all five PNG scanline filters', () => {
@@ -147,4 +145,36 @@ test('Playwright symlink reuses the existing probe dependency when present', asy
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
   }
+});
+
+test('cleanup deletes only recorded ids by default and honors the keep flag', async () => {
+  const created = [{ room: 'workbench', thread_id: 'first' }, { room: 'workbench-e4b', thread_id: 'second' }];
+  const deleted = [];
+  await cleanupCreatedThreads(created, async threads => deleted.push(...threads), false);
+  assert.deepEqual(deleted, created);
+  await cleanupCreatedThreads(created, async () => { throw new Error('keep must skip deletion'); }, true);
+  await assert.rejects(cleanupCreatedThreads(created, async () => { throw new Error('cleanup failure'); }, false));
+});
+
+test('canvas matches use container ancestry even when composer geometry overlaps', async () => {
+  const target = (name, x) => ({ name, boundingBox: async () => ({ x, y: 100, width: 100, height: 30 }), isVisible: async () => true });
+  const canvas = target('Run', 800);
+  const chat = target('Run', 100);
+  const left = target('Submit', 20);
+  const byContainer = { canvas: [canvas], chat: [chat], left: [left], right: [], tray: [] };
+  const page = {
+    // Calling unscoped composer or text lookups is an error in this fixture.
+    getByRole() { throw new Error('Unscoped geometry lookup'); },
+    locator(selector) {
+      const targets = Object.entries(byContainer).flatMap(([role, nodes]) => selector.includes(`Workbench region ${role}`) ? nodes : []);
+      return { getByRole(_role, { name }) {
+        const matches = targets.filter(item => name.test(item.name));
+        return { count: async () => matches.length, nth: index => matches[index] };
+      } };
+    },
+  };
+  const assertion = { kind: 'role', role: 'button', name: 'Run', region: 'canvas' };
+  assert.deepEqual((await workspaceMatches(page, assertion)).map(item => item.target), [canvas]);
+  assert.deepEqual((await workspaceMatches(page, { ...assertion, region: 'workspace' })).map(item => item.target), [canvas]);
+  assert.deepEqual((await workspaceMatches(page, { ...assertion, name: 'Submit', region: 'left' })).map(item => item.target), [left]);
 });

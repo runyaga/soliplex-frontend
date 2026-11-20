@@ -46,7 +46,7 @@ def _publish(ctx: WorkbenchToolContext, snapshot: dict[str, Any], *, content: li
     all_content = [{key: value for key, value in item.items() if key != "workbenchCommit"} for item in current["content"]]
     for incoming in content or []:
         all_content = [item for item in all_content if item.get("activityMessageId") != incoming.get("activityMessageId")]
-        all_content.append(incoming)
+        all_content.append({key: value for key, value in incoming.items() if key != "workbenchCommit"})
     program_surfaces = {
         str(item["surfaceId"]) for item in all_content if item.get("component") == "PythonRepl"
     }
@@ -111,13 +111,13 @@ def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, o
             "templates": ["intake"]}
 
 
-def create_container(ctx: WorkbenchToolContext, parent_id: str, kind: str, title: str) -> dict[str, object]:
+def create_container(ctx: WorkbenchToolContext, parent_id: str, kind: str, title: str, *, _node_id_override: str | None = None) -> dict[str, object]:
     """Create one empty split, tabs, panel or window under a valid parent."""
     _, layout = _current(ctx)
     parent = _node(layout["nodes"], parent_id)
     if parent["kind"] not in {"region", "split", "tabs"}:
         raise ValueError("container parent cannot accept a child")
-    node_id = _node_id()
+    node_id = _node_id_override or _node_id()
     parent["children"].append(node_id)
     payload = {"axis": "horizontal"} if kind == "split" else {}
     layout["nodes"].append({"id": node_id, "parentId": parent_id, "children": [], "kind": kind,
@@ -144,8 +144,10 @@ def open_panel(ctx: WorkbenchToolContext, title: str, text: str, parent_id: str)
     return _content_result(ctx, text_record(activity_id, surface_id, title, text), parent_id, title=title)
 
 
-def run_python_client(ctx: WorkbenchToolContext, title: str, source: str, parent_id: str) -> dict[str, object]:
+def run_python_client(ctx: WorkbenchToolContext, title: str, source: str, parent_id: str, replace: bool = False) -> dict[str, object]:
     """Place an inert browser PythonRepl surface; execution waits for user Run."""
+    if replace:
+        return repair_program(ctx, parent_id, source)
     activity_id, surface_id = _record_ids()
     return _content_result(ctx, python_record(activity_id, surface_id, title, source), parent_id, title=title, program=True)
 
@@ -210,17 +212,21 @@ def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
 
 
 def repair_program(ctx: WorkbenchToolContext, node_id: str, source: str) -> dict[str, object]:
-    """Replace source only for a node authorized by the host's live repair turn."""
+    """Revise a registered program inertly; the user must press Run again."""
     ctx.require_room()
-    if node_id not in ctx.repair_authorized_node_ids:
-        raise PermissionError("program repair is not authorized for this turn")
     state, layout = _current(ctx)
     node = _node(layout["nodes"], node_id)
+    if node["kind"] == "window" and len(node["children"]) == 1:
+        node = _node(layout["nodes"], node["children"][0])
     if node["kind"] != "surface":
-        raise ValueError("repair target must be a registered program surface")
+        raise ValueError("repair target must be a registered program surface or its window")
     record = next((item for item in state["content"] if item.get("surfaceId") == node["payload"].get("surfaceId") and item.get("component") == "PythonRepl"), None)
     if record is None:
         raise ValueError("repair target is not a registered program")
+    # Older repair attempts closed the content leaf before replacing it.
+    # Reopen that leaf; retain the owning window's visibility and placement.
+    node["visibility"] = "open"
     record["source"] = source
+    record["output"] = ""
     result = _publish(ctx, layout, content=[record])
-    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node_id, "surfaceId": record["surfaceId"]}
+    return {"status": "published", "layoutRevision": result["layoutRevision"], "events": result["events"], "nodeId": node["id"], "surfaceId": record["surfaceId"], "execution": "awaiting_user"}

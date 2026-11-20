@@ -108,17 +108,10 @@ export function summarizeEvents(events) {
   };
 }
 
-export function inRegion(box, chat, viewport, region = 'workspace') {
-  if (!box || box.width < 2 || box.height < 2 || box.y < 0 || box.y + box.height > viewport.height + 2 || box.x < 0 || box.x + box.width > viewport.width + 2) return false;
-  const middle = box.x + box.width / 2;
-  const left = middle < chat.x - 12;
-  const right = middle > chat.x + chat.width + 70;
-  const tray = box.y > chat.y + chat.height + 25;
-  if (region === 'left') return left;
-  if (region === 'right') return right && middle > chat.x + chat.width + (viewport.width - chat.x - chat.width) * 0.72;
-  if (region === 'canvas') return right && !tray;
-  if (region === 'tray') return tray;
-  return left || right || tray;
+export function regionSelector(region = 'workspace') {
+  const roles = region === 'workspace' ? ['left', 'right', 'canvas', 'tray'] : [region];
+  if (roles.some(role => !['chat', 'left', 'right', 'canvas', 'tray'].includes(role))) throw new Error('Unknown workbench region');
+  return roles.map(role => `[aria-label="Workbench region ${role}"]`).join(', ');
 }
 
 export function assertionLabel(a) {
@@ -162,4 +155,8 @@ export async function writeReport(directory, results, timestamp, redact) {
   await writeFile(`${directory}/report.md`, renderReport(results, timestamp, redact), { mode: 0o600 });
   // Persist only the bounded, explicitly selected evidence. No headers or storage state.
   await writeFile(`${directory}/results.json`, JSON.stringify(cleanEvidence(results, redact), null, 2) + '\n', { mode: 0o600 });
+}
+
+export async function cleanupCreatedThreads(threads, remove, keep = process.env.WB_KEEP_THREADS === '1') {
+  if (!keep && threads.length) await remove(threads);
 }

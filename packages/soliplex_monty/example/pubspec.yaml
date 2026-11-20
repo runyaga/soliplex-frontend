@@ -10,6 +10,7 @@ environment:
   flutter: ">=3.47.0"
 
 dependencies:
+  a2ui_flutter: ^0.4.0
   flutter:
     sdk: flutter
   soliplex_frontend:
@@ -18,6 +19,13 @@ dependencies:
     path: ..
 
 dev_dependencies:
+  a2ui_agent: 0.4.0
+  flutter_test:
+    sdk: flutter
+  soliplex_client:
+    path: ../../soliplex_client
+  soliplex_design:
+    path: ../../soliplex_design
   very_good_analysis: ^10.0.0
 
 flutter:

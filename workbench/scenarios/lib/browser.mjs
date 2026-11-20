@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
-import { assertionLabel, inRegion, parseSSE, summarizeEvents } from './core.mjs';
+import { assertionLabel, regionSelector, parseSSE, summarizeEvents } from './core.mjs';
 import { hasVisibleInk } from './png.mjs';
+import { workspaceMatches } from './selectors.mjs';
+export { workspaceMatches } from './selectors.mjs';
 
 const exact = name => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -82,7 +84,7 @@ export async function waitForComposer(page) {
   throw new Error('Room composer is unavailable');
 }
 
-export async function freshThread(page, base, alias, room) {
+export async function freshThread(page, base, alias, room, recordThread) {
   await openThread(page, base, alias, room);
   const created = page.waitForResponse(response => response.request().method() === 'POST'
     && new URL(response.url()).pathname.endsWith(`/rooms/${room}/agui`));
@@ -92,6 +94,7 @@ export async function freshThread(page, base, alias, room) {
   if (!response.ok()) throw new Error(`Thread creation HTTP ${response.status()}`);
   const { thread_id: threadId } = await response.json();
   if (!/^[0-9a-f-]{36}$/.test(threadId)) throw new Error('Thread creation returned no valid thread id');
+  recordThread?.(room, threadId);
   await page.waitForURL(url => url.hash.endsWith(`/thread/${threadId}`));
   await waitForComposer(page);
   return threadId;
@@ -131,29 +134,6 @@ async function bounded(promise, timeoutMs, message) {
   }
 }
 
-function locatorFor(page, a) {
-  return a.kind === 'text'
-    ? page.getByText(exact(a.name))
-    : page.getByRole(a.kind === 'source' ? 'textbox' : a.role, { name: exact(a.name) });
-}
-
-export async function workspaceMatches(page, a) {
-  const chat = await composer(page).boundingBox();
-  if (!chat) throw new Error('Cannot locate chat to distinguish canvas from timeline');
-  const locator = locatorFor(page, a);
-  const matches = [];
-  for (let i = 0; i < await locator.count(); i++) {
-    const target = locator.nth(i);
-    const box = await target.boundingBox();
-    if (!await target.isVisible() || !inRegion(box, chat, page.viewportSize(), a.region)) continue;
-    if (a.kind === 'source') {
-      const value = await target.inputValue();
-      if (!value.includes(a.includes)) continue;
-    }
-    matches.push({ target, box });
-  }
-  return matches;
-}
 
 export async function assertCanvas(page, assertions, timeoutMs = 12000) {
   const results = [];
@@ -231,13 +211,13 @@ export async function timelineTools(page, names) {
     if (await header.isVisible()) await header.click();
   }
   const visible = [];
-  const chat = await composer(page).boundingBox();
+  const chat = page.locator(regionSelector('chat'));
   for (const name of new Set(names)) {
-    const labels = page.getByText(exact(name));
+    const labels = chat.getByText(exact(name));
     for (let i = 0; i < await labels.count(); i++) {
       const label = labels.nth(i);
       const box = await label.boundingBox();
-      if (await label.isVisible() && box && box.x >= chat.x - 70 && box.x < chat.x + chat.width + 70) {
+      if (await label.isVisible() && box) {
         visible.push(name);
         break;
       }

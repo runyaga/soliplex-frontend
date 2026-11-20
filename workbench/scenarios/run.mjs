@@ -3,7 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cleanEvidence, failedAssertions, loadCases, parseCredentials, redactor, writeReport } from './lib/core.mjs';
+import { cleanEvidence, cleanupCreatedThreads, failedAssertions, loadCases, parseCredentials, redactor, writeReport } from './lib/core.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(root, '../..');
@@ -17,8 +17,7 @@ function options(args) {
   return { deterministic: args.includes('--deterministic') || args.includes('--all'), models: args.includes('--models') || args.includes('--all') };
 }
 
-async function seed(credentials) {
-  const source = await readFile(`${root}/deterministic/seed.py`, 'utf8');
+async function backendScript(source, config) {
   // Configuration travels over stdin. No credentials in process arguments,
   // temporary files, Docker env flags, or child stdout/stderr forwarded to logs.
   const bootstrap = 'import json,sys\nSCENARIO_CONFIG=json.loads(sys.stdin.readline())\nexec(compile(sys.stdin.read(), "scenario-seed", "exec"))';
@@ -39,15 +38,20 @@ async function seed(credentials) {
     child.stderr.on('data', () => {});
     child.stdin.on('error', () => {});
   });
-  child.stdin.end(`${JSON.stringify({ user: credentials.WB_ADMIN_USER, email: credentials.WB_ADMIN_EMAIL, room: 'workbench' })}\n${source}`);
-  if (!await done) return [];
-  try {
-    const seeds = JSON.parse(output);
-    if (!Array.isArray(seeds) || seeds.some(s => !/^[a-z_]+$/.test(s.scenario) || (s.thread_id !== null && !/^[0-9a-f-]{36}$/.test(s.thread_id)))) return [];
-    return seeds;
-  } catch {
-    return [];
+  child.stdin.end(`${JSON.stringify(config)}\n${source}`);
+  if (!await done) throw new Error('Backend harness operation failed');
+  return JSON.parse(output);
+}
+
+async function seed(credentials, recordThread) {
+  const source = await readFile(`${root}/deterministic/seed.py`, 'utf8');
+  const seeds = await backendScript(source, { user: credentials.WB_ADMIN_USER, email: credentials.WB_ADMIN_EMAIL, room: 'workbench' });
+  if (!Array.isArray(seeds)) throw new Error('Invalid seed response');
+  for (const item of seeds) {
+    const id = item.cleanup_thread_id || item.thread_id;
+    if (id) recordThread('workbench', id);
   }
+  return seeds;
 }
 
 async function main() {
@@ -65,6 +69,12 @@ async function main() {
   const results = [];
   let redact = redactor();
   let browser;
+  let credentials;
+  const createdThreads = new Map();
+  const recordThread = (room, threadId) => {
+    if (!['workbench', 'workbench-e4b'].includes(room) || !/^[0-9a-f-]{36}$/.test(threadId)) throw new Error('Invalid recorded thread');
+    createdThreads.set(`${room}/${threadId}`, { room, thread_id: threadId });
+  };
   let setupStage = 'Read literal credentials from workbench.env';
   const record = async result => {
     // Sanitize before persistence and before printing even a case label.
@@ -74,15 +84,15 @@ async function main() {
     console.log(redact(`${clean.model} ${clean.id}: ${clean.pass ? 'PASS' : 'FAIL'}`));
   };
   try {
-    const credentials = parseCredentials(await readFile(`${repository}/workbench/stack/workbench.env`, 'utf8'));
+    credentials = parseCredentials(await readFile(`${repository}/workbench/stack/workbench.env`, 'utf8'));
     redact = redactor(Object.values(credentials));
     setupStage = 'Seed deterministic threads in the backend container';
-    const seeds = selected.deterministic ? await seed(credentials) : [];
+    const seeds = selected.deterministic ? await seed(credentials, recordThread) : [];
     setupStage = 'Import Playwright, launch Chrome, and sign in';
     const { openBrowser } = await import('./lib/browser.mjs');
     const opened = await openBrowser(base, credentials);
     browser = opened.browser;
-    const common = { page: opened.page, base, alias, directory, credentials, record };
+    const common = { page: opened.page, base, alias, directory, credentials, record, recordThread };
     setupStage = 'Run selected browser suites';
     if (selected.deterministic) {
       const { checkDeterministic } = await import('./deterministic/check.mjs');
@@ -108,7 +118,19 @@ async function main() {
       }
     }
   } finally {
-    await browser?.close();
+    await browser?.close().catch(() => { process.exitCode = 1; });
+    if (credentials && createdThreads.size) {
+      try {
+        const source = await readFile(`${root}/deterministic/cleanup.py`, 'utf8');
+        await cleanupCreatedThreads([...createdThreads.values()], async threads => {
+          const result = await backendScript(source, { user: credentials.WB_ADMIN_USER, threads });
+          if (result.failed) throw new Error('Thread cleanup incomplete');
+        });
+      } catch {
+        console.error('Could not delete all recorded scenario threads');
+        process.exitCode = 1;
+      }
+    }
     await writeReport(directory, results, timestamp, redact);
   }
   console.log(`Report: ${directory}/report.md`);

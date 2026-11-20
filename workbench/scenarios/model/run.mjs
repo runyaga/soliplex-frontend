@@ -6,13 +6,13 @@ export const MODELS = [
   { room: 'workbench-e4b', name: 'Gemma 4 E4B' },
 ];
 
-export async function checkModels({ page, base, alias, cases, directory, credentials, timeoutMs, record }) {
+export async function checkModels({ page, base, alias, cases, directory, credentials, timeoutMs, record, recordThread }) {
   const createdThreads = new Set();
   for (const model of MODELS) {
     for (const item of cases) {
       const result = { id: item.id, model: model.name, assertions: [], runErrors: [], toolCalls: [], timelineTools: [], turns: [] };
       try {
-        result.threadId = await freshThread(page, base, alias, model.room);
+        result.threadId = await freshThread(page, base, alias, model.room, recordThread);
         if (createdThreads.has(result.threadId)) throw new Error('A prompt reused an earlier case thread');
         createdThreads.add(result.threadId);
         for (const [index, prompt] of [...(item.setup ?? []), item.prompt].entries()) {

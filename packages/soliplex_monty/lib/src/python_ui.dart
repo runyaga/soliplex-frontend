@@ -4,6 +4,7 @@ import 'package:a2ui_core/a2ui_core.dart';
 import 'package:dart_monty/core.dart';
 
 import 'package:soliplex_monty/src/lab_chart_api.dart';
+import 'package:soliplex_monty/src/python_workbench.dart';
 
 /// Positional order of every v1.0 basic-catalog constructor, from the Track B
 /// binding contract. Each name is also accepted as a keyword.
@@ -85,9 +86,11 @@ class StagedSurface {
 /// Constructors return opaque string handles that name an entry in this
 /// arena. Handles from another execution fail validation.
 class PythonUiArena {
-  PythonUiArena()
-    : _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36);
+  PythonUiArena({bool workbenchEnabled = false})
+    : workbench = PythonWorkbench(enabled: workbenchEnabled),
+      _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36);
 
+  final PythonWorkbench workbench;
   final String _nonce;
   final Map<String, Map<String, Object?>> _nodes = {};
   final Map<String, Object?> _values = {};
@@ -105,6 +108,14 @@ class PythonUiArena {
   /// The `ui` module given to Monty; every call goes to [current]'s arena.
   static ExternalModule moduleFor(PythonUiArena Function() current) =>
       ExternalModule({
+        'workbench': ExternalModule({
+          for (final name in PythonWorkbench.signatures.keys)
+            name: MontyHostFunction(name, (positional, keywords) {
+              final function =
+                  current().workbench.module.attrs[name]! as MontyHostFunction;
+              return function.fn(positional, keywords);
+            }),
+        }),
         for (final MapEntry(key: name, value: params) in {
           ...basicSignatures,
           ...labChartSignatures,

@@ -74,15 +74,16 @@ async def show_chart(ctx: RunContext[AgentDependencies], title: str, kind: str, 
     return await _call(workbench_tools.show_chart, ctx, title=title, kind=kind, points=points, parent_id=parent_id)
 
 
-async def run_python_client(ctx: RunContext[AgentDependencies], title: str, source: str, parent_id: str) -> ToolReturn:
+async def run_python_client(ctx: RunContext[AgentDependencies], title: str, source: str, parent_id: str, replace: bool = False) -> ToolReturn:
     """Create an inert Python editor that runs only after the user presses Run.
 
     Args:
         title: Short heading shown above the editor.
         source: Python source text to preload; it is not executed by this tool.
         parent_id: Existing window node where the editor should be placed.
+        replace: Replace its existing program, retaining window and surface ids.
     """
-    return await _call(workbench_tools.run_python_client, ctx, title=title, source=source, parent_id=parent_id)
+    return await _call(workbench_tools.run_python_client, ctx, title=title, source=source, parent_id=parent_id, replace=replace)
 
 
 async def run_python_server(ctx: RunContext[AgentDependencies], surface_id: str, source: str) -> dict[str, str]:

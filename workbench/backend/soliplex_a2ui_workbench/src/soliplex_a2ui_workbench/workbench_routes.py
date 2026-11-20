@@ -173,6 +173,13 @@ def _endpoint_with_adapter(endpoint, adapter):
             **{**vars(namespace["ai_ag_ui"]), "AGUIAdapter": adapter})
     if "AGUIAdapter" in namespace:
         namespace["AGUIAdapter"] = adapter
+    original_init = namespace.get("init_agent_stream")
+    if original_init is not None:
+        async def init_without_inference(**kwargs):
+            if getattr(kwargs["agui_adapter"], "_program_events", None) is not None:
+                kwargs.update(title_agent_config=None, label_agent_config=None, messages=[])
+            return await original_init(**kwargs)
+        namespace["init_agent_stream"] = init_without_inference
     bound = types.FunctionType(endpoint.__code__, namespace, endpoint.__name__,
                                endpoint.__defaults__, endpoint.__closure__)
     bound.__kwdefaults__ = endpoint.__kwdefaults__
@@ -229,6 +236,18 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         request.state.workbench_scope = await value if hasattr(value, "__await__") else value
 
     class WorkbenchAdapter(AGUIAdapter):
+        def run_stream(self, **kwargs):
+            events = getattr(self, "_program_events", None)
+            if events is None:
+                return super().run_stream(**kwargs)
+            async def stream():
+                from ag_ui.core import ActivitySnapshotEvent, RunStartedEvent, RunFinishedEvent
+                yield RunStartedEvent(thread_id=self.run_input.thread_id, run_id=self.run_input.run_id)
+                for event in events:
+                    yield ActivitySnapshotEvent.model_validate(event)
+                yield RunFinishedEvent(thread_id=self.run_input.thread_id, run_id=self.run_input.run_id)
+            return stream()
+
         @classmethod
         async def from_request(cls, request, **kwargs):
             if request.path_params.get("room_id") not in rooms:
@@ -275,6 +294,32 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 ids.update(message.id for message in missing)
             props = run_input.forwarded_props
             if not isinstance(props, dict) or "a2uiAction" not in props:
+                return adapter
+            raw_action = props["a2uiAction"]
+            action = raw_action.get("userAction", {}) if isinstance(raw_action, dict) else {}
+            if isinstance(action, dict) and action.get("name") == "workbench.program.layout":
+                from .program_actions import apply_program_actions
+                from .workbench_schemas import ActionEnvelope, Id
+                from pydantic import TypeAdapter
+                try:
+                    envelope = ActionEnvelope.model_validate(raw_action)
+                    record = projection.content.get(envelope.activityMessageId)
+                    if (record is None or record["component"] != "PythonRepl"
+                            or record["surfaceId"] != envelope.userAction.surfaceId
+                            or envelope.userAction.sourceComponentId not in (None, "root")):
+                        raise ValueError("unregistered program action source")
+                    context = envelope.userAction.context
+                    if set(context) != {"invocationId", "actions"}:
+                        raise ValueError("invalid program action context")
+                    TypeAdapter(Id).validate_python(context["invocationId"])
+                    events = apply_program_actions(projection, scope, run_input.run_id, record, context["actions"], envelope.submissionId)
+                except (ValueError, TypeError, KeyError):
+                    raise HTTPException(422, "invalid program layout action: check ownership, bounds and tree rules") from None
+                try:
+                    dedup.claim(scope, envelope.submissionId, getattr(projection, "submission_ids", set()))
+                except ValueError as exc:
+                    raise HTTPException(409, str(exc)) from exc
+                adapter._program_events = events
                 return adapter
             try:
                 submission = validate_submission(props["a2uiAction"], projection)

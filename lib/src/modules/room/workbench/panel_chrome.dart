@@ -21,18 +21,23 @@ class PanelChrome extends StatelessWidget {
           borderRadius: BorderRadius.circular(context.radii.md),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(SoliplexSpacing.s2),
-              child: Text(
-                node.title,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-            ),
-            Expanded(child: child),
-          ],
-        ),
+        child: LayoutBuilder(
+            builder: (context, constraints) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(SoliplexSpacing.s2),
+                      child: Text(
+                        node.title,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    if (constraints.hasBoundedHeight)
+                      Expanded(child: SingleChildScrollView(child: child))
+                    else
+                      child,
+                  ],
+                )),
       );
 }

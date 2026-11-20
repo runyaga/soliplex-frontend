@@ -276,3 +276,10 @@ def test_stock_router_hook_preserves_signature_auth_dependencies_and_global_adap
     assert hooked.endpoint.__globals__['ai_ag_ui'].AGUIAdapter is not original_adapter
     assert original.endpoint.__code__ is hooked.endpoint.__code__
     assert set(inspect.signature(hooked.endpoint).parameters) >= {'the_room_authz', 'the_user_claims'}
+
+
+@pytest.mark.parametrize('user_action', [None, [], 'invalid'])
+def test_malformed_action_shape_is_rejected_before_inference(boundary, user_action):
+    response = send(boundary, {'submissionId':'shape', 'activityMessageId':boundary.program['activityMessageId'], 'userAction':user_action})
+    assert response.status_code == 422
+    assert not boundary.captured

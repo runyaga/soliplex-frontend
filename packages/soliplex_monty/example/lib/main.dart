@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:soliplex_frontend/soliplex_frontend.dart';
-import 'package:soliplex_monty/soliplex_monty.dart';
+import 'package:soliplex_monty_app/workbench_catalogs.dart';
 
 final Set<String> _workbenchRooms =
     const String.fromEnvironment(
@@ -33,7 +33,7 @@ Future<void> main() async {
     final flavor = await workbenchFlavor(
       identity: _identity,
       callbackParams: oauthCallback,
-      surfaceCatalogs: [labCatalog(isLive: ChatSurfaceOrigin.isLive)],
+      surfaceCatalogs: workbenchCatalogs(isLive: ChatSurfaceOrigin.isLive),
       presentation: WorkbenchRoomAllowlistPresentation(
         rooms: _workbenchRooms,
         host: const ClientWorkbenchPresentation(),

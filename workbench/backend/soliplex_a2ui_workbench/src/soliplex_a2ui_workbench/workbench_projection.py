@@ -81,6 +81,7 @@ class RunWorkbenchProjection:
             validate_registered_mounts(candidate, self.mounts)
             if candidate.layoutRevision >= self.layout["layoutRevision"]:
                 self.layout = candidate.model_dump(mode="json")
+                self.submission_ids.update(self.layout["shared"].get("programSubmissions", []))
             return
         components = next(op["updateComponents"]["components"] for op in operations if "updateComponents" in op)
         root = next(component for component in components if component["id"] == "root")

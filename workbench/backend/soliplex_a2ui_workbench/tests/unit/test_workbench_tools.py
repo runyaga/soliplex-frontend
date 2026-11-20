@@ -98,3 +98,36 @@ def test_tray_accepts_published_content(ctx):
     layout = ctx.repository.load_snapshot(ctx.scope)["layout"]
     assert next(node for node in layout["nodes"] if node["id"] == "r_tray")["children"]
     assert result["events"][-1]["kind"] == "layout"
+
+@pytest.mark.parametrize('target', ['window', 'surface', 'replace'])
+def test_program_revision_preserves_mount_window_and_position_without_execution(ctx, target):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+    window = tools.create_container(ctx, 'r_canvas', 'window', 'Tally')
+    program = tools.run_python_client(ctx, 'Tally', 'import ui\nui.Label("bad")', window['nodeId'])
+    before = ctx.snapshot()
+    if target == 'replace':
+        result = tools.run_python_client(ctx, 'Tally', 'import ui\nui.show(ui.Text("fixed"))', window['nodeId'], replace=True)
+    else:
+        result = tools.repair_program(ctx, window['nodeId'] if target == 'window' else program['nodeId'], 'import ui\nui.show(ui.Text("fixed"))')
+    after = ctx.snapshot()
+    assert after['layout']['nodes'] == before['layout']['nodes']
+    assert result['surfaceId'] == program['surfaceId']
+    assert result['nodeId'] == program['nodeId']
+    assert result['execution'] == 'awaiting_user'
+    content = next(r for r in after['content'] if r['surfaceId'] == result['surfaceId'])
+    assert content['source'].endswith('ui.show(ui.Text("fixed"))')
+    assert content['activityMessageId'] == program['activityMessageId']
+    emitted = next(e['event'] for e in result['events'] if e['kind']=='content')
+    assert 'retry' not in emitted['content']['a2ui_operations'][-1]['updateComponents']['components'][0]
+
+
+def test_repair_reopens_a_previously_closed_program_leaf(ctx):
+    from soliplex_a2ui_workbench import workbench_tools as tools
+    window = tools.create_container(ctx, 'r_canvas', 'window', 'Tally')
+    program = tools.run_python_client(ctx, 'Tally', 'print("old")', window['nodeId'])
+    tools.close_panel(ctx, program['nodeId'])
+    result = tools.repair_program(ctx, window['nodeId'], 'print("fixed")')
+    layout = ctx.snapshot()['layout']
+    assert next(n for n in layout['nodes'] if n['id'] == program['nodeId'])['visibility'] == 'open'
+    assert next(n for n in layout['nodes'] if n['id'] == window['nodeId'])['visibility'] == 'open'
+    assert result['execution'] == 'awaiting_user'

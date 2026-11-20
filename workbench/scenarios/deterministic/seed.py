@@ -62,28 +62,7 @@ async def scripted_tools(name, call):
             parent_id=window["nodeId"],
         )
         if name == "fix_program_in_window":
-            # Remove the old child before placing its replacement. close_panel
-            # preserves edges, so closing it alone does not empty the window.
-            retired = await call(
-                "create_container",
-                parent_id="r_canvas",
-                kind="window",
-                title="Retired program",
-            )
-            await call(
-                "move_panel",
-                node_id=program["nodeId"],
-                parent_id=retired["nodeId"],
-                order=0,
-                size="small",
-            )
-            await call("close_panel", node_id=retired["nodeId"])
-            await call(
-                "run_python_client",
-                title="Scenario program",
-                source=FIXED_SOURCE,
-                parent_id=window["nodeId"],
-            )
+            await call("repair_program", node_id=program["nodeId"], source=FIXED_SOURCE)
         if name == "second_window":
             second = await call(
                 "create_container",
@@ -186,6 +165,7 @@ async def seed_one(config, installation, engine, name):
             )
             # Commit the identity first, so the wrapper's separate authenticated
             # history read can see the actual thread. No inference is performed.
+        config.setdefault("created_threads", []).append({"room": config["room"], "thread_id": thread.thread_id})
         async with session.begin():
             ctx = RunContext(deps=deps, model=None, usage=RunUsage())
             events = [RunStartedEvent(thread_id=thread.thread_id, run_id=run.run_id)]
@@ -232,7 +212,9 @@ async def seed(config):
                 thread_id = await seed_one(config, installation, engine, name)
             except Exception:  # noqa: BLE001 - never echo credential-bearing library failures
                 thread_id = None
-            results.append({"scenario": name, "thread_id": thread_id})
+            created = config.get("created_threads", [])
+            results.append({"scenario": name, "thread_id": thread_id,
+                            "cleanup_thread_id": created[-1]["thread_id"] if len(created) > len([r for r in results if r.get("cleanup_thread_id")]) else None})
     finally:
         await engine.dispose()
     return results

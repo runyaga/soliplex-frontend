@@ -223,6 +223,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('host exports a semantics container for every region',
+      (tester) async {
+    _desktop(tester);
+    final handle = tester.ensureSemantics();
+
+    await tester.pumpWidget(_app(_regionHost()));
+    await tester.pumpAndSettle();
+    for (final role in ['chat', 'left', 'right', 'canvas', 'tray']) {
+      expect(find.bySemanticsLabel('Workbench region $role'), findsOneWidget);
+    }
+    handle.dispose();
+  });
+
+  testWidgets(
+      'sidebar form grows beyond the former panel height and Submit is hittable',
+      (tester) async {
+    _desktop(tester);
+    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    addTearDown(store.dispose);
+    var fold = _fold();
+    for (final event in _events()) {
+      fold = fold.apply(DecodedEvent(event, event.toJson())).fold;
+    }
+    store.ingest(fold.conversation.messages.whereType<GenUiMessage>());
+    await tester.pumpWidget(_app(_host(store, fold.conversation.messages)));
+    await tester.pumpAndSettle();
+    final panel = find.ancestor(
+        of: find.text('Submit'), matching: find.byType(PanelChrome));
+    expect(tester.getSize(panel).height, greaterThan(240));
+    expect(find.text('Submit').hitTestable(), findsOneWidget);
+    await tester.tap(find.text('Submit'));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('narrow width keeps Chat and Workspace tabs', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(600, 1200);

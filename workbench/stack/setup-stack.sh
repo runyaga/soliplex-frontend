@@ -258,34 +258,14 @@ for room_id, agent, model in [('workbench','default_chat','Glimmer'),
     acl['room_id'] = room_id
     save(p/'backend/environment/rooms'/room_id/'authz.yaml', acl)
     skill_name = f'{room_id}-workbench'
-    # Workbench rooms load only their own skill: the lab skills teach tools these rooms do not register.
+    # Combined guide includes generated catalog teaching without legacy lab tools.
     room['skills'] = {'installation_skill_names': [{'name': skill_name, 'defer_loading': False}]}
     save(p/'backend/environment/rooms'/room_id/'room_config.yaml', room)
     skill = p/'backend/environment/skills'/skill_name
     skill.mkdir(parents=True, exist_ok=True)
-    tools = ', '.join(MINIMUM_ROOM_TOOL_MANIFEST)
-    (skill/'SKILL.md').write_text(f"""---
-name: {skill_name}
-description: |
-    How to arrange the workbench canvas in this room with the workbench tools
-    and the layout tree rules. Hand-written for the preview.
----
+    from soliplex_a2ui_workbench.workbench_teaching import room_skill
+    (skill/'SKILL.md').write_text(room_skill(skill_name))
 
-# Workbench room guide
-
-The tools in this room are: {tools}.
-
-Call get_workbench first to read the current layout tree and its stable ids.
-Place content with a parent id and a node kind. Forms go in a panel. Charts
-and mini programs go in panels or windows on the canvas. run_python_client
-shows Python source the user runs with the Run button. run_python_server is
-disabled and returns not_enabled.
-
-Layout rules: keep returned stable ids, never invent them. Windows sit under
-the canvas and never inside another window. Splits hold at most 3 children,
-tabs at most 12. Closing a parent hides its children. The user can move,
-minimize and pin what you place, and the user's changes win.
-""")
 installation = yaml.safe_load((p/'backend/environment/installation.yaml').read_text())
 for room_id in ('workbench', 'workbench-e4b'):
     if not any(x['skill_name'] == f'{room_id}-workbench' for x in installation['skill_configs']):
