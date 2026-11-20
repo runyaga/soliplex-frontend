@@ -15,6 +15,10 @@ Newest first. Each entry: what happened, the evidence, what changed.
 | A widget can work and send nothing | Run showed "Run 1 · ok" and the form ticked its boxes, while the page made zero API requests. Only a network log after the click showed the break | Harness cases assert the action turn's stream and the stored run input, not the widget state |
 | Probe the deployed app before writing the fix brief | A 60-line Playwright probe found both the checkbox roles and the silent Run in one pass. The brief then named the exact evidence | Keep probes in the scratchpad and hand their output to the fixing round |
 | Playwright's request context lacks the app's bearer header | The stored-run read returned 401. The app authenticates by header, not cookie | The harness reuses the header from the intercepted request, in memory only, and a test checks it stays out of the record |
+| Server-owned run state must not echo to the client | A repair action wrote `workbenchAction` into run state. The `STATE_SNAPSHOT` returned it, the client resent it, and the guard rejected every later request in the thread with 422. Backend tests sent one request at a time and never replayed the snapshot | The route discards incoming server-owned keys and keeps repair data in private run context. A test replays the snapshot into the next request |
+| Untrusted data alone does not tell a model what to do | Glimmer received the full repair request as untrusted JSON and replied in prose without calling `repair_program` | A repair turn adds a server-authored instruction that names the target node. The payload stays untrusted |
+| A model copies its own earlier answers | In a thread that already held a prose non-repair, Glimmer repeated it on the next repair. Fresh threads passed 12 of 12 | Judge repair reliability on fresh threads. Broken threads carry their bad history |
+| Flutter web hides SelectableText from the accessibility tree | Run output was in the DOM only as an empty disabled textbox. The harness found "Run 2 · ok" and never the output, and a screen reader could not read it | The output node carries its text as a semantics label |
 
 ## 2026-11-19
 
