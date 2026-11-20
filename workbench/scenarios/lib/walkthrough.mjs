@@ -10,16 +10,28 @@ export async function watchWalkthrough(page, options, checkpoints, inspect, onTu
   const assertions = [];
   let expected = 0;
   let failure;
+  let queue = Promise.resolve();
   const handler = async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() !== 'POST' || !path.includes(`/rooms/${options.room}/agui/${options.threadId}/`) || path.split('/').length !== 8) return route.fallback();
-    const task = (async () => {
+    let response, body;
+    try {
+      response = await route.fetch({ timeout: options.timeoutMs });
+      body = await response.text();
+      await route.fulfill({ response, body });
+    } catch (error) {
+      failure ??= error;
+      reject(error);
+      await route.abort().catch(() => {});
+      return;
+    }
+    // Check turns one at a time in arrival order. A slow checkpoint must
+    // surface as its own failure, not as the next step arriving early.
+    const task = queue = queue.then(async () => {
+      if (failure) return;
       try {
-        const response = await route.fetch({ timeout: options.timeoutMs });
-        const body = await response.text();
         const events = parseSSE(body);
-        await route.fulfill({ response, body });
         if (!response.ok()) throw new Error(`Walkthrough HTTP ${response.status()}`);
         const turn = summarizeEvents(events);
         turn.threadId = options.threadId;
@@ -43,9 +55,8 @@ export async function watchWalkthrough(page, options, checkpoints, inspect, onTu
       } catch (error) {
         failure ??= error;
         reject(error);
-        await route.abort().catch(() => {});
       }
-    })();
+    });
     pending.add(task);
     try { await task; } finally { pending.delete(task); }
   };
