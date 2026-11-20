@@ -6,6 +6,9 @@ Newest first. Each entry: what happened, the evidence, what changed.
 
 | Lesson | Evidence | What changed |
 | --- | --- | --- |
+| One run per prompt cannot score a small model | E4B flipped two prompts from pass to fail between runs with no relevant change. Three runs gave 19 of 30 with two prompts at 0 of 3 | E4B is reported as passes out of 3 per prompt. Glimmer still runs once |
+| Make the tool forgiving before teaching the model | E4B put programs in regions and moved content ids. Teaching alone did not fix it. Tools that create the window and resolve a content id to its panel took tally_counter and move_chart_right to passing | When a weak model misuses a tool the same way twice, change the tool first |
+| A green tick must mean success | A tool raised a validation error, the timeline showed success and the model told the user it worked | Tool validation failures are retryable errors with corrective text and render as failed |
 | Chrome drops streamed response bodies | `response.text()` on the AG-UI SSE stream failed in 16 of 20 model cases with "No resource with given identifier" | The harness routes the run request, fetches it itself and fulfils the page with the full body |
 | A fixed-height window hides what a program draws | Glimmer wrote a correct tally program. The window clipped at about 450 px, so Run and the buttons were in the semantics tree with blank pixels | Windows and the source editor must scroll or size to content. The pixel check caught it |
 | Type into Flutter web with key events | The first model-suite run failed all 20 prompts: `fill` hit a read-only text area, and `insertText` left Flutter's editing state empty | The harness clicks the composer, waits, and sends key events. Twenty failures in one shape point at the harness first |
