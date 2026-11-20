@@ -50,17 +50,9 @@ async def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
                 allowed_rooms=allowed_rooms,
                 installation=deps.the_installation,
             )
-        working = deps._workbench_context
-        action = deps.state.get("workbenchAction") if isinstance(deps.state, dict) else None
-        if isinstance(action, dict):
-            from .workbench_actions import validate_submission
-            submission = validate_submission(action, working.repository)
-            if submission.userAction.name == "workbench.program.repair":
-                working.repair_request = {
-                    "surfaceId": submission.userAction.surfaceId,
-                    **submission.userAction.context,
-                }
-        return working
+        # Repair metadata is installed by the authenticated adapter for this
+        # run only. Never recover it from client state or historical envelopes.
+        return deps._workbench_context
 
 
 async def start_walkthrough(ctx: RunContext[AgentDependencies]) -> ToolReturn:
@@ -73,7 +65,9 @@ async def get_workbench(ctx: RunContext[AgentDependencies]) -> dict[str, object]
     return await _call(workbench_tools.get_workbench, ctx)
 
 
-async def read_form_results(ctx: RunContext[AgentDependencies], title: str) -> dict[str, object]:
+async def read_form_results(
+    ctx: RunContext[AgentDependencies], title: str
+) -> dict[str, object]:
     """Read the row count and bounded recent CSV rows for a form in this thread.
 
     Args:
@@ -82,7 +76,9 @@ async def read_form_results(ctx: RunContext[AgentDependencies], title: str) -> d
     try:
         return await _call(workbench_tools.read_form_results, ctx, title=title)
     except OSError:
-        raise ModelRetry("Form results could not be read; retry when the thread workdir is readable") from None
+        raise ModelRetry(
+            "Form results could not be read; retry when the thread workdir is readable"
+        ) from None
 
 
 async def open_panel(
@@ -101,8 +97,11 @@ async def open_panel(
 
 
 async def place_form(
-    ctx: RunContext[AgentDependencies], title: str, parent_id: str,
-    template: str | None = None, fields: list[dict[str, object] | str] | None = None
+    ctx: RunContext[AgentDependencies],
+    title: str,
+    parent_id: str,
+    template: str | None = None,
+    fields: list[dict[str, object] | str] | None = None,
 ) -> ToolReturn:
     """Place an intake template or a custom form with safe, non-sensitive fields.
 
@@ -152,7 +151,9 @@ async def show_chart(
 
 
 async def open_demo(ctx: RunContext[AgentDependencies], name: str) -> ToolReturn:
-    """Publish a curated editor. For error examples, say tick AI Fix and press Run.
+    """Publish a curated editor and briefly confirm that the example is open.
+
+    For error examples, invite the user to enable AI Fix and press Run.
 
     Args:
         name: ``monty_gui``, ``syntax_error``, ``name_error`` or ``type_check``.

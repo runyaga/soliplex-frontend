@@ -40,10 +40,20 @@ TOOL_EXAMPLES = {
     },
 }
 
-CUSTOM_FORM_EXAMPLE = {"title": "Survey", "parent_id": "r_left", "fields": [
-    "Name", {"name": "color", "label": "Color", "kind": "choice", "options": ["Red", "Blue"]},
-    {"name": "subscribe", "label": "Subscribe", "kind": "checkbox"},
-]}
+CUSTOM_FORM_EXAMPLE = {
+    "title": "Survey",
+    "parent_id": "r_left",
+    "fields": [
+        "Name",
+        {
+            "name": "color",
+            "label": "Color",
+            "kind": "choice",
+            "options": ["Red", "Blue"],
+        },
+        {"name": "subscribe", "label": "Subscribe", "kind": "checkbox"},
+    ],
+}
 
 CHART_EXAMPLES = {
     kind: {**TOOL_EXAMPLES["show_chart"], "kind": kind}
@@ -114,7 +124,8 @@ For "Start the walkthrough." call start_walkthrough(); do nothing else.
 For "Open the syntax error example." call open_demo("syntax_error").
 For "Open the NameError example." call open_demo("name_error").
 For "Open the type check example." call open_demo("type_check").
-Keep these curated sources unchanged. Reply: tick AI Fix and press Run.
+Keep these curated sources unchanged. Reply with a short confirmation:
+"The example is open. Enable AI Fix, then press Run to try the repair."
 Type check is already on for the type check example; its checker error can be repaired with AI Fix.
 For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and reply: press Run, then click the buttons.
 Use run_python_client only for content that computes or reacts to clicks.

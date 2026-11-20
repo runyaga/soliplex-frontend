@@ -1098,12 +1098,26 @@
             "window": "NameError example"
           }
         ]
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "window": "NameError example",
+        "expectRepair": false,
+        "expectedOutput": "766228"
       }
     ],
     "assertions": [
       {
         "kind": "text",
         "name": "766228",
+        "region": "canvas",
+        "window": "NameError example"
+      },
+      {
+        "kind": "text",
+        "name": "ok",
         "region": "canvas",
         "window": "NameError example"
       }
@@ -1113,6 +1127,12 @@
     "id": "type_check_ai_fix",
     "prompt": "Open the type check example.",
     "actions": [
+      {
+        "kind": "check",
+        "name": "Type check",
+        "region": "canvas",
+        "window": "Type check example"
+      },
       {
         "kind": "check",
         "name": "AI Fix",
@@ -1152,6 +1172,12 @@
       {
         "kind": "text",
         "name": "766228",
+        "region": "canvas",
+        "window": "Type check example"
+      },
+      {
+        "kind": "text",
+        "name": "ok",
         "region": "canvas",
         "window": "Type check example"
       }

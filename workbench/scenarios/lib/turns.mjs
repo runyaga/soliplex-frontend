@@ -71,7 +71,9 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
 
 // Observe every action turn, including a repair followed by its automatic Run.
 // Off must stay quiet for the full 20 seconds; a single captured turn is a failure.
+// An expectedOutput without a repair instead requires a successful ordinary Run.
 export async function captureProgramTurns(page, { room, threadId, timeoutMs, expectedOutput }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const expectSuccess = !expectRepair && Boolean(expectedOutput);
   const turns = [];
   let completed;
   let rejected;
@@ -101,7 +103,7 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs, exp
         turns.push(summary);
         await onTurn(summary);
         if (!summary.completed || summary.runErrors.length) throw new Error('Program action turn failed');
-        if (!expectRepair) throw new Error(`AI Fix off sent action turn: ${summary.actionName}`);
+        if (!expectRepair && !expectSuccess) throw new Error(`AI Fix off sent action turn: ${summary.actionName}`);
         if (summary.actionName === 'workbench.program.run_result' && summary.programContext?.outcome === 'success') completed();
       } catch (error) {
         firstError ??= error;
@@ -119,7 +121,7 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs, exp
     await Promise.race([
       finished,
       new Promise((resolve, reject) => {
-        if (expectRepair) timer = setTimeout(() => reject(new Error('Repair and automatic Run timed out')), timeoutMs);
+        if (expectRepair || expectSuccess) timer = setTimeout(() => reject(new Error('Program Run timed out')), timeoutMs);
         else wait(20000).then(resolve, reject);
       }),
     ]);
@@ -127,6 +129,9 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs, exp
     if (firstError) throw firstError;
     const repairs = turns.filter(t => t.actionName === 'workbench.program.repair');
     const runs = turns.filter(t => t.actionName === 'workbench.program.run_result');
+    if (expectSuccess && (repairs.length !== 0 || runs.length !== 1 || turns.length !== 1 || runs[0].programContext?.outcome !== 'success')) {
+      throw new Error('Expected one successful Run and no repair');
+    }
     if (expectRepair && (repairs.length !== 1 || repairs[0].programContext?.result?.run !== 1 || repairs[0].programContext?.result?.aiFix !== true || repairs[0].programContext?.result?.autoRun !== true || !repairs[0].toolCalls.some(name => ['repair_program', 'run_python_client'].includes(name)) || repairs[0].activitySnapshots < 1 || runs.length !== 1 || runs[0].programContext?.outcome !== 'success' || turns.length !== 2)) {
       throw new Error(`Expected one repair arrival and one automatic success: ${repairs.length} repairs, ${runs.length} results, ${turns.length} action turns`);
     }
@@ -134,10 +139,10 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs, exp
         !repairs[0].programContext.result.chainId || repairs[0].programContext.result.chainId !== runs[0].programContext.chainId)) {
       throw new Error('Automatic Run did not belong to the repaired program and chain');
     }
-    if (expectRepair && expectedOutput && !runs[0].programContext.output?.includes(expectedOutput)) {
-      throw new Error('Automatic Run output did not match the expected value');
+    if ((expectRepair || expectSuccess) && expectedOutput && !runs[0].programContext.output?.includes(expectedOutput)) {
+      throw new Error('Program Run output did not match the expected value');
     }
-    return { actionTurns: turns.length, repairRequests: repairs.length, successfulRuns: runs.length, observationMs: expectRepair ? undefined : 20000 };
+    return { actionTurns: turns.length, repairRequests: repairs.length, successfulRuns: runs.length, observationMs: expectRepair || expectSuccess ? undefined : 20000 };
   } finally {
     clearTimeout(timer);
     await page.unroute('**/agui/**', handler);
