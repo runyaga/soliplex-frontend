@@ -51,7 +51,7 @@
 
 | Added model case | Sequence |
 | --- | --- |
-| `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, choose North, check Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
+| `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
 | `repl_result` | Publish Scenario compute with `print(pow(7, 12345, 1000003))`, press Run and await its action turn, then ask what it printed. Require the computed value in the follow-up reply |
 
 | Existing REPL result path | Code trace |

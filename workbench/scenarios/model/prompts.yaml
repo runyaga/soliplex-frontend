@@ -347,7 +347,7 @@
         "region": "left"
       },
       {
-        "kind": "choose",
+        "kind": "check",
         "name": "North",
         "region": "left"
       },
