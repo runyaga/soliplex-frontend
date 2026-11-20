@@ -187,3 +187,11 @@ test('custom form assertions require a paired persisted submission, exact values
   assert.ok(cases.find(c => c.id === 'credential_form').assertions.some(a => a.absent && a.name === 'Password'));
   assert.throws(() => validateCases([{ id: 'bad', prompt: 'Test', assertions: [{ ...assertion, context: { title: 'T', values: [] } }] }], { prompts: true }));
 });
+
+test('a custom form submit also reads the stored run input', async () => {
+  const { page, operations } = fixture({ actionName: 'submit_form' });
+  const turns = [];
+  await performActions(page, [{ role: 'button', name: 'Submit', region: 'left', awaitTurn: true }], options, turn => turns.push(turn), noWait);
+  assert.ok(operations.includes('read-input'));
+  assert.equal(turns[0].actionName, 'submit_form');
+});

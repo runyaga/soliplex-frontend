@@ -383,7 +383,7 @@
   },
   {
     "id": "repl_result",
-    "prompt": "Create a Python program in a window titled Scenario compute. Its source must be exactly print(pow(7, 12345, 1000003)). Do not calculate or mention the result in your reply. I will press Run.",
+    "prompt": "Create a Python program in a window titled Scenario compute. Its source must be exactly print(pow(7, 12345, 1000003)). Do not work out the result yourself. I will press Run and then ask you what it printed.",
     "actions": [
       {
         "role": "button",

@@ -37,7 +37,7 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
     summary.threadId = threadId;
     summary.actionName = response.input?.forwardedProps?.a2uiAction?.userAction?.name;
     if (!summary.completed && summary.runErrors.length === 0) throw new Error('Agent stream ended without RUN_FINISHED');
-    if (summary.actionName === 'submit_intake') {
+    if (['submit_intake', 'submit_form'].includes(summary.actionName)) {
       // The synthetic tool pair is server-authored and absent from the POST.
       // This public read uses the same authenticated Playwright context.
       const headers = response.authorization ? { authorization: response.authorization } : {};
