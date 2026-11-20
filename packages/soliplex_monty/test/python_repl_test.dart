@@ -225,15 +225,16 @@ void main() {
         'Run 1 · ok',
       ])
         tester.getSemantics(find.text(label)),
-      tester.getSemantics(find.text('45\n90')),
+      tester.getSemantics(find.bySemanticsLabel('45\n90')),
     ];
     expect(nodes.take(3).map((node) => node.label), [
       'Python (Monty sandbox)',
       'Latest run',
       'Run 1 · ok',
     ]);
-    expect(nodes.last.value, '45\n90');
-    expect(nodes.last.label, isEmpty);
+    // Flutter web writes a read-only field's value into the DOM only on
+    // focus, so the output must be the node's label to be read at all.
+    expect(nodes.last.label, '45\n90');
     expect(nodes.map((node) => node.id).toSet(), hasLength(nodes.length));
     semantics.dispose();
     await unmount(tester);

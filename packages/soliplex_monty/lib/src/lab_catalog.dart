@@ -1410,8 +1410,12 @@ class _EntryViewState extends State<_EntryView> {
                 child: SelectableText(_prompt(entry.input), style: mono),
               ),
             if (entry.output.isNotEmpty)
+              // Flutter web exposes a read-only field's value only on focus;
+              // the label makes the output readable by assistive technology.
               Semantics(
                 container: true,
+                label: entry.output,
+                excludeSemantics: true,
                 child: SelectableText(
                   entry.output,
                   style: mono.copyWith(
