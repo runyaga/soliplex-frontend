@@ -14,6 +14,7 @@ import 'package:soliplex_frontend/src/modules/room/workbench/workbench_host.dart
 import 'package:soliplex_monty/soliplex_monty.dart';
 
 import '../../../../test/fixtures/workbench_activity_events.dart';
+import '../../test/support/monty.dart';
 import '../tool/generate_workbench_teaching.dart' as teaching;
 
 void main() {
@@ -32,122 +33,201 @@ void main() {
     expect(generated, teaching.workbenchTeaching());
   });
 
-  testWidgets('window mounts Python source and Run without execution', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1600, 1000);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    var starts = 0;
-    final store = ChatSurfaceStore(
-      catalogs: [
-        labCatalog(
-          startRuntime: (limits, modules) async {
-            starts++;
-            throw StateError('must remain inert');
-          },
-        ),
-      ],
-    );
-    addTearDown(store.dispose);
-    final controller = store.obtain('program', [
-      {
-        'version': '1.0',
-        'createSurface': {
-          'surfaceId': 'program_surface',
-          'catalogId':
-              'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
-        },
-      },
-      {
-        'version': '1.0',
-        'updateDataModel': {
-          'surfaceId': 'program_surface',
-          'path': '/',
-          'value': {'source': 'print("tally")'},
-        },
-      },
-      {
-        'version': '1.0',
-        'updateComponents': {
-          'surfaceId': 'program_surface',
-          'components': [
-            {
-              'id': 'root',
-              'component': 'PythonRepl',
-              '@catalogId': labCatalogId,
-              'source': {'@path': '/source'},
-              'outputPath': '/output',
-            },
+  for (final execute in [false, true]) {
+    testWidgets(
+      execute
+          ? '40-line canvas program has reachable drawn buttons after Run'
+          : '40-line window mounts source and hittable Run without scrolling',
+      (
+        tester,
+      ) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(1600, 1000);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final lines = _tallySource.trim().split('\n');
+        final source = [
+          ...lines,
+          ...List.filled(40 - lines.length, '# padding'),
+        ].join('\n');
+        expect(source.split('\n'), hasLength(40));
+        final starter = MontyStarter();
+        var starts = 0;
+        final store = ChatSurfaceStore(
+          catalogs: [
+            labCatalog(
+              startRuntime: execute
+                  ? starter.call
+                  : (limits, modules) async {
+                      starts++;
+                      throw StateError('must remain inert');
+                    },
+            ),
           ],
-        },
-      },
-    ]);
-    expect(controller.error, isNull);
-    final layout =
-        jsonDecode(
-              File(
-                '../../../test/fixtures/workbench/layout_tree_v1.json',
-              ).readAsStringSync(),
+        );
+        addTearDown(store.dispose);
+        final controller = store.obtain('program', [
+          {
+            'version': '1.0',
+            'createSurface': {
+              'surfaceId': 'program_surface',
+              'catalogId':
+                  'https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json',
+            },
+          },
+          {
+            'version': '1.0',
+            'updateDataModel': {
+              'surfaceId': 'program_surface',
+              'path': '/',
+              'value': {'source': source},
+            },
+          },
+          {
+            'version': '1.0',
+            'updateComponents': {
+              'surfaceId': 'program_surface',
+              'components': [
+                {
+                  'id': 'root',
+                  'component': 'PythonRepl',
+                  '@catalogId': labCatalogId,
+                  'source': {'@path': '/source'},
+                  'outputPath': '/output',
+                },
+              ],
+            },
+          },
+        ]);
+        expect(controller.error, isNull);
+        final layout =
+            jsonDecode(
+                  File(
+                    '../../../test/fixtures/workbench/layout_tree_v1.json',
+                  ).readAsStringSync(),
+                )
+                as Map<String, dynamic>;
+        final nodes = (layout['nodes'] as List).cast<Map<String, dynamic>>();
+        (nodes.singleWhere((n) => n['id'] == 'r_canvas')['children'] as List)
+            .add(
+              'window',
+            );
+        nodes.addAll([
+          {
+            'id': 'window',
+            'parentId': 'r_canvas',
+            'children': ['leaf'],
+            'kind': 'window',
+            'title': 'Tally Counter',
+            'size': 'medium',
+            'visibility': 'open',
+            'payload': <String, dynamic>{},
+          },
+          {
+            'id': 'leaf',
+            'parentId': 'window',
+            'children': <String>[],
+            'kind': 'surface',
+            'title': 'Program',
+            'size': 'medium',
+            'visibility': 'open',
+            'payload': {
+              'activityMessageId': 'program',
+              'surfaceId': 'program_surface',
+            },
+          },
+        ]);
+        final tree = LayoutTree.fromLayout(layout, [
+          WorkbenchRegistration(
+            role: WorkbenchRole.program,
+            activityMessageId: 'program',
+            surfaceId: 'program_surface',
+          ),
+        ]);
+        Widget host() => MaterialApp(
+          theme: soliplexLightTheme(),
+          home: Scaffold(
+            body: WorkbenchHost(
+              tree: tree,
+              chat: const Text('Chat'),
+              mounts: SurfaceMountRegistry(),
+              surfaceBuilder: (activity, surface) =>
+                  ChatSurfaceView(controller: controller, surfaceId: surface),
+            ),
+          ),
+        );
+        await tester.pumpWidget(host());
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('python-repl-editor')),
+          findsOneWidget,
+        );
+        expect(find.text(source), findsOneWidget);
+        expect(find.text('Run').hitTestable(), findsOneWidget);
+        expect(starts, 0);
+        expect(starter.starts, 0);
+        final editorScroll = tester.state<ScrollableState>(
+          find.descendant(
+            of: find.byKey(const ValueKey('python-repl-editor')),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        expect(editorScroll.position.maxScrollExtent, greaterThan(0));
+        final windowScroll = find
+            .ancestor(
+              of: find.byType(PythonReplView),
+              matching: find.byType(SingleChildScrollView),
             )
-            as Map<String, dynamic>;
-    final nodes = (layout['nodes'] as List).cast<Map<String, dynamic>>();
-    (nodes.singleWhere((n) => n['id'] == 'r_canvas')['children'] as List).add(
-      'window',
-    );
-    nodes.addAll([
-      {
-        'id': 'window',
-        'parentId': 'r_canvas',
-        'children': ['leaf'],
-        'kind': 'window',
-        'title': 'Tally Counter',
-        'size': 'medium',
-        'visibility': 'open',
-        'payload': <String, dynamic>{},
+            .first;
+        ScrollPosition windowPosition() => tester
+            .state<ScrollableState>(
+              find
+                  .descendant(
+                    of: windowScroll,
+                    matching: find.byType(Scrollable),
+                  )
+                  .first,
+            )
+            .position;
+        expect(windowPosition().pixels, 0);
+        if (execute) {
+          await tester.runAsync(() => tester.tap(find.text('Run')));
+          await pumpUntil(tester, () => find.text('+1').evaluate().isNotEmpty);
+          expect(starter.starts, 1);
+          expect(find.text('+1').hitTestable(), findsNothing);
+          for (final (label, count) in [
+            ('+1', 1),
+            ('-1', 0),
+            ('+1', 1),
+            ('Reset', 0),
+          ]) {
+            final button = find.text(label);
+            await tester.ensureVisible(button);
+            await tester.pumpAndSettle();
+            expect(button.hitTestable(), findsOneWidget);
+            expect(windowPosition().pixels, greaterThan(0));
+            await tester.runAsync(() => tester.tap(button));
+            await tester.pump();
+            await pumpUntil(
+              tester,
+              () =>
+                  find.text('Count: $count').evaluate().isNotEmpty &&
+                  tester
+                          .widget<SoliplexButton>(
+                            find.byKey(const ValueKey('python-repl-run')),
+                          )
+                          .onPressed !=
+                      null,
+            );
+          }
+          await tester.pumpWidget(const SizedBox());
+          await tester.runAsync(starter.close);
+        }
+        expect(tester.takeException(), isNull);
       },
-      {
-        'id': 'leaf',
-        'parentId': 'window',
-        'children': <String>[],
-        'kind': 'surface',
-        'title': 'Program',
-        'size': 'medium',
-        'visibility': 'open',
-        'payload': {
-          'activityMessageId': 'program',
-          'surfaceId': 'program_surface',
-        },
-      },
-    ]);
-    final tree = LayoutTree.fromLayout(layout, [
-      WorkbenchRegistration(
-        role: WorkbenchRole.program,
-        activityMessageId: 'program',
-        surfaceId: 'program_surface',
-      ),
-    ]);
-    Widget host() => MaterialApp(
-      theme: soliplexLightTheme(),
-      home: Scaffold(
-        body: WorkbenchHost(
-          tree: tree,
-          chat: const Text('Chat'),
-          mounts: SurfaceMountRegistry(),
-          surfaceBuilder: (activity, surface) =>
-              ChatSurfaceView(controller: controller, surfaceId: surface),
-        ),
-      ),
+      skip: execute && skipWithoutMonty != false,
     );
-    await tester.pumpWidget(host());
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('python-repl-editor')), findsOneWidget);
-    expect(find.text('print("tally")'), findsOneWidget);
-    expect(find.text('Run').hitTestable(), findsOneWidget);
-    expect(starts, 0);
-    expect(tester.takeException(), isNull);
-  });
+  }
   testWidgets('streamed program fills an already mounted empty window', (
     tester,
   ) async {
@@ -253,3 +333,26 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
+
+const _tallySource = '''
+import ui
+count = 0
+def draw():
+    details = [ui.Text("Detail " + str(i)) for i in range(24)]
+    ui.show(ui.Column(details + [
+        ui.Text("Count: " + str(count)),
+        ui.Button(ui.Text("+1"), action=ui.Event("plus", {})),
+        ui.Button(ui.Text("-1"), action=ui.Event("minus", {})),
+        ui.Button(ui.Text("Reset"), action=ui.Event("reset", {})),
+    ]))
+def handle_event(name, context):
+    global count
+    if name == "plus":
+        count += 1
+    if name == "minus":
+        count -= 1
+    if name == "reset":
+        count = 0
+    draw()
+draw()
+''';

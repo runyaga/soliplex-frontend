@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:a2ui_core/a2ui_core.dart';
 import 'package:a2ui_flutter/a2ui_flutter.dart';
 import 'package:a2ui_flutter/basic_catalog.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 /// Owns validated A2UI surfaces independently of chat navigation.
 ///
@@ -17,7 +17,7 @@ class ChatSurfaceController extends ChangeNotifier {
     List<CatalogImplementation> catalogs = const [],
   }) {
     processor = MessageProcessor<ComponentImplementation>(
-      catalogs: [basicCatalog(), ...catalogs],
+      catalogs: [_basicCatalog(), ...catalogs],
       validationConfig: ValidationConfig.strict,
     );
     processor.model.onSurfaceCreated.subscribe((_) {
@@ -92,4 +92,26 @@ class ChatSurfaceController extends ChangeNotifier {
     processor.dispose();
     super.dispose();
   }
+}
+
+// A field needs its own semantics boundary so nearby static labels do not
+// merge into its accessible name. Keep the catalog's binding and validation.
+CatalogImplementation _basicCatalog() {
+  final basic = basicCatalog();
+  return basic.copyWith(components: [
+    for (final component in basic.components.values)
+      if (component.name == 'TextField')
+        ComponentImplementation(
+          name: component.name,
+          schema: component.schema,
+          allowedParents: component.allowedParents,
+          allowedChildren: component.allowedChildren,
+          builder: (context, node, props, buildChild) => Semantics(
+            container: true,
+            child: component.builder(context, node, props, buildChild),
+          ),
+        )
+      else
+        component,
+  ]);
 }

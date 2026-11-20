@@ -902,7 +902,9 @@ class _PythonReplViewState extends State<PythonReplView> {
             onChanged: _onEdit,
             style: mono,
             minLines: 3,
-            maxLines: 16,
+            // Keep Run and output near the top of a workbench window;
+            // longer source scrolls inside the editor.
+            maxLines: 8,
             keyboardType: TextInputType.multiline,
             decoration: const InputDecoration(
               labelText: 'Python source',

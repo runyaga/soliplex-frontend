@@ -257,6 +257,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('intake textbox has only Question as its accessible name',
+      (tester) async {
+    _desktop(tester);
+    final semantics = tester.ensureSemantics();
+    final store = ChatSurfaceStore(catalogs: [chartPlaceholderCatalog()]);
+    addTearDown(store.dispose);
+    var fold = _fold();
+    for (final event in _events()) {
+      fold = fold.apply(DecodedEvent(event, event.toJson())).fold;
+    }
+    store.ingest(fold.conversation.messages.whereType<GenUiMessage>());
+    await tester.pumpWidget(_app(_host(store, fold.conversation.messages)));
+    await tester.pumpAndSettle();
+    final field = find.byType(TextField);
+    expect(tester.getSemantics(field).label, 'Question');
+    await tester.enterText(field, 'Need help');
+    await tester.pump();
+    expect(tester.getSemantics(field).label, 'Question');
+    expect(tester.getSemantics(field).value, 'Need help');
+    expect(tester.getSemantics(find.text('Districts')).label,
+        contains('Districts'));
+    semantics.dispose();
+  });
+
   testWidgets('narrow width keeps Chat and Workspace tabs', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(600, 1200);
