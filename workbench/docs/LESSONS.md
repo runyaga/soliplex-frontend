@@ -2,6 +2,15 @@
 
 Newest first. Each entry: what happened, the evidence, what changed.
 
+## 2026-11-20
+
+| Lesson | Evidence | What changed |
+| --- | --- | --- |
+| A deploy-time patch hides the bug class | The stack script rewrote one `nextInt(1 << 32)` while staging. Two more stayed in source. Under dart2js the shift wraps to 0 and `nextInt(0)` throws, so every canvas Run and Submit died before its request. VM widget tests passed | Fixed in source. The deploy now refuses any shift by 32 in the staged tree. A Chrome test fails without the fix |
+| A widget can work and send nothing | Run showed "Run 1 · ok" and the form ticked its boxes, while the page made zero API requests. Only a network log after the click showed the break | Harness cases assert the action turn's stream and the stored run input, not the widget state |
+| Probe the deployed app before writing the fix brief | A 60-line Playwright probe found both the checkbox roles and the silent Run in one pass. The brief then named the exact evidence | Keep probes in the scratchpad and hand their output to the fixing round |
+| Playwright's request context lacks the app's bearer header | The stored-run read returned 401. The app authenticates by header, not cookie | The harness reuses the header from the intercepted request, in memory only, and a test checks it stays out of the record |
+
 ## 2026-11-19
 
 | Lesson | Evidence | What changed |
