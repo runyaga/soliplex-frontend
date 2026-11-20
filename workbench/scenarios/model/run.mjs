@@ -1,5 +1,5 @@
 import { assertCanvas, freshThread, performActions, screenshot, sendPrompt, timelineTools, visibleErrors } from '../lib/browser.mjs';
-import { failedAssertions } from '../lib/core.mjs';
+import { assertTurn, failedAssertions } from '../lib/core.mjs';
 
 export const MODELS = [
   { room: 'workbench', name: 'Glimmer' },
@@ -13,30 +13,40 @@ export async function checkModels({ page, base, alias, cases, directory, credent
   for (const model of MODELS.filter(m => !rooms.size || rooms.has(m.room))) {
     for (const item of cases) {
       const result = { id: item.id, model: model.name, assertions: [], runErrors: [], toolCalls: [], timelineTools: [], turns: [] };
+      let latestTurn;
+      const remember = (turn, stage) => {
+        latestTurn = turn;
+        result.threadId = turn.threadId;
+        result.turns.push({ stage, ...turn });
+        result.runErrors.push(...turn.runErrors);
+        result.toolCalls.push(...turn.toolCalls);
+        result.finalMessage = turn.finalMessage;
+        if (!turn.completed || turn.runErrors.length) throw new Error('Agent turn did not finish successfully');
+      };
       try {
         result.threadId = await freshThread(page, base, alias, model.room, recordThread);
         if (createdThreads.has(result.threadId)) throw new Error('A prompt reused an earlier case thread');
         createdThreads.add(result.threadId);
         for (const [index, prompt] of [...(item.setup ?? []), item.prompt].entries()) {
           const turn = await sendPrompt(page, model.room, prompt, timeoutMs, result.threadId);
-          result.threadId = turn.threadId;
-          result.turns.push({ setup: index < (item.setup?.length ?? 0), ...turn });
-          result.runErrors.push(...turn.runErrors);
-          result.toolCalls.push(...turn.toolCalls);
-          result.finalMessage = turn.finalMessage;
-          if (turn.runErrors.length) throw new Error('Agent reported RUN_ERROR');
+          remember(turn, index < (item.setup?.length ?? 0) ? 'setup' : 'prompt');
           if (index === (item.setup?.length ?? 0) - 1 && item.setup_assertions) {
             const setup = await assertCanvas(page, item.setup_assertions);
             result.assertions.push(...setup.map(a => ({ ...a, label: `Setup: ${a.label}` })));
             if (setup.some(a => !a.pass)) throw new Error('Required follow-up setup did not render');
           }
         }
-        await performActions(page, item.actions);
+        await performActions(page, item.actions, { room: model.room, threadId: result.threadId, timeoutMs }, turn => remember(turn, 'action'));
+        for (const prompt of item.followup ?? []) {
+          remember(await sendPrompt(page, model.room, prompt, timeoutMs, result.threadId), 'followup');
+        }
       } catch (error) {
         result.error = error.message;
       }
       try {
-        result.assertions.push(...await assertCanvas(page, item.assertions, result.error ? 0 : 12000));
+        const canvas = item.assertions.filter(a => !['reply', 'submission'].includes(a.kind));
+        result.assertions.push(...await assertCanvas(page, canvas, result.error ? 0 : 12000));
+        result.assertions.push(...item.assertions.filter(a => ['reply', 'submission'].includes(a.kind)).map(a => assertTurn(a, latestTurn)));
       } catch {
         result.assertions.push(...failedAssertions(item.assertions, 'Canvas could not be inspected'));
         result.error ||= 'Canvas inspection failed';
@@ -51,6 +61,11 @@ export async function checkModels({ page, base, alias, cases, directory, credent
         result.error ||= 'Prompt screenshot failed';
       }
       result.pass = !result.error && result.runErrors.length === 0 && result.assertions.length > 0 && result.assertions.every(a => a.pass);
+      if (item.expectFail) {
+        result.expectFail = item.expectFail;
+        result.unexpectedPass = result.pass;
+        // Expected failures remain visible failures and keep the suite nonzero.
+      }
       await record(result);
     }
   }

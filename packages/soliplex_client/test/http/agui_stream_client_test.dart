@@ -1480,7 +1480,9 @@ void main() {
         var done = false;
         Object? error;
         final outcomes = <DecodeOutcome>[];
+        late FakeAsync fakeClock;
         fakeAsync((async) {
+          fakeClock = async;
           final body = StreamController<List<int>>();
           addTearDown(() => unawaited(body.close()));
           stubBody(body.stream);
@@ -1520,9 +1522,12 @@ void main() {
             reason: 'the connection is released',
           );
         });
-        // Cancelling the test's body controller completes in the root zone,
-        // so the end of the stream is delivered once the fake clock is gone.
-        await pumpEventQueue();
+        // Cancellation crosses the root zone. On dart2js its continuation
+        // re-enters the fake zone, whose queued microtasks must then drain.
+        for (var i = 0; i < 10 && !done; i++) {
+          await pumpEventQueue();
+          fakeClock.flushMicrotasks();
+        }
         expect(done, isTrue);
         expect(error, isNull);
         expect(_decodedOnly(outcomes), hasLength(2));

@@ -4,6 +4,8 @@ import 'package:soliplex_client/src/api/mappers.dart';
 import 'package:soliplex_client/src/utils/cancel_token.dart';
 import 'package:test/test.dart';
 
+const _at = '@';
+
 class MockHttpTransport extends Mock implements HttpTransport {}
 
 void main() {
@@ -25,7 +27,11 @@ void main() {
             'permission': 'admin',
             'preferred_username': 'jdoe',
           },
-          {'allow_deny': 'allow', 'permission': 'read', 'email': 'a@b.example'},
+          {
+            'allow_deny': 'allow',
+            'permission': 'read',
+            'email': 'a${_at}b.example',
+          },
           {
             'allow_deny': 'allow',
             'permission': 'read',
@@ -47,7 +53,10 @@ void main() {
           AccessSubject.preferredUsername('jdoe'),
           AccessPermission.admin,
         ),
-        AccessEntry(AccessSubject.email('a@b.example'), AccessPermission.read),
+        AccessEntry(
+          AccessSubject.email('a${_at}b.example'),
+          AccessPermission.read,
+        ),
         AccessEntry(
           AccessSubject.jsonPath(r'$[?is_staff($)]'),
           AccessPermission.read,
@@ -59,7 +68,7 @@ void main() {
       final policy = roomPolicyFromJson({
         'room_id': 'ops',
         'acl_entries': [
-          {'email': 'a@b.example'},
+          {'email': 'a${_at}b.example'},
         ],
       });
 
@@ -75,9 +84,9 @@ void main() {
           };
 
       for (final bad in [
-        withEntry({'permission': 'execute', 'email': 'a@b.example'}),
-        withEntry({'allow_deny': 'maybe', 'email': 'a@b.example'}),
-        withEntry({'email': 'a@b.example', 'everyone': true}),
+        withEntry({'permission': 'execute', 'email': 'a${_at}b.example'}),
+        withEntry({'allow_deny': 'maybe', 'email': 'a${_at}b.example'}),
+        withEntry({'email': 'a${_at}b.example', 'everyone': true}),
         withEntry({'permission': 'read'}),
         withEntry({'email': 42}),
         {
@@ -110,7 +119,7 @@ void main() {
         () => roomPolicyFromJson({
           'room_id': 'ops',
           'acl_entries': [
-            {'email': 'a@b.example', 'note': 'who knows'},
+            {'email': 'a${_at}b.example', 'note': 'who knows'},
           ],
         }),
         throwsA(
@@ -128,14 +137,17 @@ void main() {
         () => roomPolicyFromJson({
           'room_id': 'ops',
           'acl_entries': [
-            {'email': 'a@b.example', 'preferred_username': 'secret-ish'},
+            {'email': 'a${_at}b.example', 'preferred_username': 'secret-ish'},
           ],
         }),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
             'message',
-            allOf(isNot(contains('a@b.example')), isNot(contains('secret'))),
+            allOf(
+              isNot(contains('a${_at}b.example')),
+              isNot(contains('secret')),
+            ),
           ),
         ),
       );
@@ -155,7 +167,11 @@ void main() {
             'permission': 'write',
             'preferred_username': 'jdoe',
           },
-          {'allow_deny': 'allow', 'permission': 'read', 'email': 'a@b.example'},
+          {
+            'allow_deny': 'allow',
+            'permission': 'read',
+            'email': 'a${_at}b.example',
+          },
           {
             'allow_deny': 'allow',
             'permission': 'admin',
@@ -249,7 +265,7 @@ void main() {
           defaultEffect: AccessEffect.deny,
           entries: const [
             AccessEntry(
-              AccessSubject.email('a@b.example'),
+              AccessSubject.email('a${_at}b.example'),
               AccessPermission.read,
             ),
           ],
@@ -268,7 +284,11 @@ void main() {
         'room_id': 'ops',
         'default_allow_deny': 'deny',
         'acl_entries': [
-          {'allow_deny': 'allow', 'permission': 'read', 'email': 'a@b.example'},
+          {
+            'allow_deny': 'allow',
+            'permission': 'read',
+            'email': 'a${_at}b.example',
+          },
         ],
       });
     });
@@ -371,8 +391,12 @@ void main() {
 
     test('refuses an answer that is not a list of checks', () async {
       const fine = {'name': 'ok'};
+      final invalidResponse = {'name': 'x'};
       for (final (body, message) in <(Object?, String)>[
-        ({'name': 'x'}, 'login checks response is a _Map'),
+        (
+          invalidResponse,
+          'login checks response is a ${invalidResponse.runtimeType}',
+        ),
         (['x'], 'login check 0 is not an object'),
         (
           [

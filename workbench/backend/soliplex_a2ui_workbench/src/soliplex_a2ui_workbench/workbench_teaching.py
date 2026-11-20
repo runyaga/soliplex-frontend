@@ -18,8 +18,8 @@ TOOL_EXAMPLES = {
         "parent_id": "r_canvas",
     },
     "run_python_client": {
-        "title": "Tally",
-        "source": 'import ui\nui.show(ui.Text("0"))',
+        "title": "Compute",
+        "source": "print(sum([2, 3, 5]))",
         "parent_id": "r_canvas",
     },
     "run_python_server": {"surface_id": "SURFACE_ID", "source": "print(1)"},
@@ -90,6 +90,11 @@ canvas ancestry. No nested windows. Maximum depth 8, splits 3 children, tabs
 12, open surfaces 12, open windows 2. Closing a parent hides its descendants.
 The user's placements win. run_python_server is declared but disabled and
 returns not_enabled. Client tools only publish source; the user presses Run.
+
+Static text, tables and forms go through open_panel / place_form / show_chart.
+Use run_python_client only for content that computes or reacts to clicks.
+Example: "show Hello in a second window" -> create_container(kind="window"),
+then open_panel(text="Hello") inside it; "compute a sum" -> run_python_client.
 
 run_python_client accepts a region or plain container on the canvas as
 parent_id and creates a window titled with title when no window is an ancestor.

@@ -3035,9 +3035,10 @@ void _listedFileTimeAndSizeTests(
 
   test('a non-string modified_at is null and logged without its value', () {
     final sink = _attach(loggerName: 'soliplex_client.parse_utils');
+    final invalidTimestamp = [_canary];
     final f = parse(
       entry({
-        'modified_at': [_canary],
+        'modified_at': invalidTimestamp,
         'size_bytes': 7,
       }),
     );
@@ -3046,7 +3047,13 @@ void _listedFileTimeAndSizeTests(
     expect(f.sizeBytes, 7);
     final record = sink.records.single;
     expect(record.level, LogLevel.warning);
-    expect(record.message, allOf(contains('modified_at'), contains('List')));
+    expect(
+      record.message,
+      allOf(
+        contains('modified_at'),
+        contains('${invalidTimestamp.runtimeType}'),
+      ),
+    );
     expect(_render(record), isNot(contains(_canary)));
   });
 

@@ -1,5 +1,7 @@
 import { chromium } from 'playwright';
-import { assertionLabel, regionSelector, parseSSE, summarizeEvents } from './core.mjs';
+import { assertionLabel, regionSelector } from './core.mjs';
+import { captureTurn } from './turns.mjs';
+export { performActions } from './actions.mjs';
 import { hasVisibleInk } from './png.mjs';
 import { workspaceMatches } from './selectors.mjs';
 export { workspaceMatches } from './selectors.mjs';
@@ -101,58 +103,16 @@ export async function freshThread(page, base, alias, room, recordThread) {
 }
 
 export async function sendPrompt(page, room, prompt, timeoutMs, threadId) {
-  // Chrome does not keep a streamed SSE body, so response.text() fails at
-  // random. Route the run request, fetch it here, and hand the full body to
-  // the page. The request is the one Flutter built: no synthetic agent call.
-  const isRun = url => {
-    const path = new URL(url).pathname;
-    return path.includes(`/rooms/${room}/agui/${threadId}/`) && path.split('/').length === 8;
-  };
-  let settle;
-  const captured = new Promise((resolve, reject) => { settle = { resolve, reject }; });
-  captured.catch(() => {});
-  const handler = async route => {
-    if (route.request().method() !== 'POST' || !isRun(route.request().url())) return route.fallback();
-    try {
-      const response = await route.fetch({ timeout: timeoutMs });
-      const body = await response.text();
-      await route.fulfill({ response, body });
-      settle.resolve({ status: response.status(), ok: response.ok(), url: route.request().url(), body });
-    } catch (error) {
-      settle.reject(error);
-      await route.abort().catch(() => {});
-    }
-  };
-  await page.route('**/agui/**', handler);
-  try {
-    // Flutter web keeps the text area read-only until it has focus, and only
-    // keyboard input reaches its editing state.
+  const summary = await captureTurn(page, { room, threadId, timeoutMs }, async () => {
+    // Focus plus key events update Flutter's editing state.
     await composer(page).click();
     await pause(300);
     await page.keyboard.type(prompt);
     await page.keyboard.press('Enter');
-    const response = await bounded(captured, timeoutMs, 'Agent stream timed out');
-    if (!response.ok) throw new Error(`Agent HTTP ${response.status}`);
-    const summary = summarizeEvents(parseSSE(response.body));
-    summary.threadId = new URL(response.url).pathname.split('/').at(-2);
-    if (!summary.completed && summary.runErrors.length === 0) throw new Error('Agent stream ended without RUN_FINISHED');
-    await waitForComposer(page);
-    await pause(500);
-    return summary;
-  } finally {
-    await page.unroute('**/agui/**', handler);
-  }
-}
-
-async function bounded(promise, timeoutMs, message) {
-  let timer;
-  try {
-    return await Promise.race([promise, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    })]);
-  } finally {
-    clearTimeout(timer);
-  }
+  });
+  await waitForComposer(page);
+  await pause(500);
+  return summary;
 }
 
 
@@ -193,22 +153,6 @@ export async function assertCanvas(page, assertions, timeoutMs = 12000) {
     });
   }
   return results;
-}
-
-export async function performActions(page, actions = []) {
-  for (const action of actions) {
-    const assertion = { kind: 'role', region: 'workspace', ...action };
-    const deadline = Date.now() + 15000;
-    let matches = [];
-    while (Date.now() < deadline) {
-      matches = await workspaceMatches(page, assertion);
-      if (matches.length) break;
-      await pause(250);
-    }
-    if (matches.length !== 1) throw new Error(`Action needs one visible workspace ${action.role}: ${action.name}`);
-    await matches[0].target.click();
-    await pause(600);
-  }
 }
 
 export async function visibleErrors(page) {

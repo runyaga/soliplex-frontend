@@ -1,3 +1,6 @@
+@TestOn('vm') // The drift audit reads checked-in files with dart:io.
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -185,7 +188,11 @@ Map<String, _Shape> _shapesOf(Map<String, dynamic> features) {
 }
 
 void main() {
-  final files = Directory(_snapshotDir)
+  // Support both the package runner and workspace-root direct Flutter runner.
+  final directory = Directory(_snapshotDir).existsSync()
+      ? Directory(_snapshotDir)
+      : Directory('packages/soliplex_client/$_snapshotDir');
+  final files = directory
       .listSync()
       .whereType<File>()
       .where((f) => f.path.endsWith('.json'))

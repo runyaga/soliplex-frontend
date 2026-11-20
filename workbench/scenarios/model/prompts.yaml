@@ -331,5 +331,99 @@
         "region": "tray"
       }
     ]
+  },
+  {
+    "id": "submit_form",
+    "setup": [
+      "Place the built-in intake form titled Scenario intake in the left sidebar."
+    ],
+    "setup_assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      }
+    ],
+    "prompt": "When I submit the intake form, acknowledge my question in your reply.",
+    "actions": [
+      {
+        "kind": "fill",
+        "name": "Question",
+        "value": "Scenario zebra question",
+        "region": "left"
+      },
+      {
+        "kind": "choose",
+        "name": "North",
+        "region": "left"
+      },
+      {
+        "kind": "check",
+        "name": "Acknowledged",
+        "region": "left"
+      },
+      {
+        "role": "button",
+        "name": "Submit",
+        "region": "left",
+        "awaitTurn": true
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "submission",
+        "name": "workbench_intake",
+        "context": {
+          "question": "Scenario zebra question",
+          "districts": [
+            "north"
+          ],
+          "acknowledged": true
+        }
+      },
+      {
+        "kind": "reply",
+        "includes": "zebra"
+      }
+    ]
+  },
+  {
+    "id": "repl_result",
+    "prompt": "Create a Python program in a window titled Scenario compute. Its source must be exactly print(pow(7, 12345, 1000003)). Do not calculate or mention the result in your reply. I will press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "region": "canvas",
+        "awaitTurn": true
+      }
+    ],
+    "followup": [
+      "What number did the program print? Reply with the number only."
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Scenario compute",
+        "region": "canvas"
+      },
+      {
+        "kind": "reply",
+        "includes": {
+          "pow": [
+            7,
+            12345,
+            1000003
+          ]
+        }
+      }
+    ]
   }
 ]

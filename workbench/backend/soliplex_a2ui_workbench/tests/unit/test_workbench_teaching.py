@@ -45,6 +45,20 @@ def test_generated_catalog_contains_actual_component_schemas():
     assert {"Text", "Button", "PythonRepl", "Chart"} <= names
 
 
+def test_generated_teaching_routes_static_content_to_panels():
+    text = room_skill("workbench")
+    assert (
+        "Static text, tables and forms go through open_panel / place_form / show_chart."
+        in text
+    )
+    assert (
+        "Use run_python_client only for content that computes or reacts to clicks."
+        in text
+    )
+    assert 'then open_panel(text="Hello") inside it' in text
+    assert TOOL_EXAMPLES["run_python_client"]["source"] == "print(sum([2, 3, 5]))"
+
+
 def test_generated_move_close_teaching_matches_executable_content_id_rules():
     text = room_skill("workbench")
     for phrase in (

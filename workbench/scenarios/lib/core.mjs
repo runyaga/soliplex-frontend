@@ -46,6 +46,21 @@ export function cleanEvidence(value, redact) {
 }
 
 const regions = new Set(['workspace', 'left', 'canvas', 'right', 'tray']);
+export function replyExpectation(includes) {
+  if (typeof includes === 'string' && includes.trim()) return includes;
+  const args = includes?.pow;
+  if (!includes || Object.keys(includes).length !== 1 || !Array.isArray(args) || args.length !== 3 || args.some(n => !Number.isSafeInteger(n) || n < 0) || args[2] === 0) throw new Error('Invalid reply expectation');
+  let [base, exponent, modulus] = args.map(BigInt);
+  let value = 1n % modulus;
+  base %= modulus;
+  while (exponent) {
+    if (exponent & 1n) value = value * base % modulus;
+    base = base * base % modulus;
+    exponent >>= 1n;
+  }
+  return String(value);
+}
+
 export function validateCases(data, { prompts = false } = {}) {
   if (!Array.isArray(data) || data.length === 0) throw new Error('Expected nonempty case list');
   const ids = new Set();
@@ -54,18 +69,35 @@ export function validateCases(data, { prompts = false } = {}) {
     ids.add(item.id);
     if (prompts && (typeof item.prompt !== 'string' || !item.prompt.trim())) throw new Error('Missing prompt');
     if (item.setup && (!Array.isArray(item.setup) || item.setup.some(p => typeof p !== 'string' || !p.trim()))) throw new Error('Invalid setup');
+    if (item.followup !== undefined && (!prompts || !Array.isArray(item.followup) || !item.followup.length || item.followup.some(p => typeof p !== 'string' || !p.trim()))) throw new Error('Invalid followup');
+    if (item.expectFail !== undefined && (!prompts || typeof item.expectFail !== 'string' || !item.expectFail.trim())) throw new Error('Invalid expected failure reason');
     if (!Array.isArray(item.assertions) || item.assertions.length === 0) throw new Error('Missing canvas assertions');
     if (item.assertions.every(a => a?.absent)) throw new Error('A case must require visible content');
     if (item.reload !== undefined && typeof item.reload !== 'boolean') throw new Error('Invalid reload flag');
     for (const a of item.assertions) {
+      if (a?.kind === 'reply') {
+        if (!prompts || ['region', 'name', 'absent', 'count', 'role'].some(key => key in a)) throw new Error('Invalid reply assertion');
+        replyExpectation(a.includes);
+        continue;
+      }
+      if (a?.kind === 'submission') {
+        if (!prompts || a.name !== 'workbench_intake' || !a.context || typeof a.context.question !== 'string' || !Array.isArray(a.context.districts) || a.context.districts.some(d => !['north', 'south'].includes(d)) || a.context.acknowledged !== true) throw new Error('Invalid submission assertion');
+        continue;
+      }
       if (!a || !['text', 'role', 'source'].includes(a.kind) || typeof a.name !== 'string' || !a.name.trim() || !regions.has(a.region ?? 'workspace')) throw new Error('Invalid assertion');
       if (a.kind === 'role' && !['button', 'textbox', 'tab', 'checkbox', 'img'].includes(a.role)) throw new Error('Invalid accessible role');
       if (a.kind === 'source' && (typeof a.includes !== 'string' || !a.includes)) throw new Error('Missing source expectation');
       if (a.absent !== undefined && typeof a.absent !== 'boolean') throw new Error('Invalid absence assertion');
       if (a.count !== undefined && (!Number.isInteger(a.count) || a.count < 1 || a.absent)) throw new Error('Invalid count');
     }
+    if (item.actions !== undefined && !Array.isArray(item.actions)) throw new Error('Invalid actions');
     for (const action of item.actions ?? []) {
-      if (!['button', 'tab'].includes(action.role) || typeof action.name !== 'string' || !action.name) throw new Error('Invalid action');
+      const kind = action?.kind ?? 'click';
+      const role = action?.role ?? ({ fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
+      if (!['click', 'fill', 'select', 'choose', 'check'].includes(kind) || typeof action.name !== 'string' || !action.name.trim() || !regions.has(action.region ?? 'workspace')) throw new Error('Invalid action');
+      if ((kind === 'click' && !['button', 'tab'].includes(role)) || (kind === 'fill' && role !== 'textbox') || (kind === 'check' && role !== 'checkbox') || (['select', 'choose'].includes(kind) && !['button', 'checkbox', 'radio', 'option'].includes(role))) throw new Error('Invalid action role');
+      if (kind === 'fill' && typeof action.value !== 'string') throw new Error('Missing fill value');
+      if (action.awaitTurn !== undefined && (!prompts || typeof action.awaitTurn !== 'boolean' || kind !== 'click')) throw new Error('Invalid awaitTurn flag');
     }
     if (item.setup_assertions) validateCases([{ id: 'setup', assertions: item.setup_assertions }]);
   }
@@ -115,7 +147,34 @@ export function regionSelector(region = 'workspace') {
 }
 
 export function assertionLabel(a) {
+  if (a.kind === 'reply') return `Latest assistant reply containing ${replyExpectation(a.includes)}`;
+  if (a.kind === 'submission') return `Run input contains ${a.name} submission`;
   return `${a.absent ? 'Absent ' : ''}${a.kind === 'role' ? a.role : a.kind} ${a.name} in ${a.region ?? 'workspace'}${a.includes ? ` containing ${a.includes}` : ''}${a.count ? ` count ${a.count}` : ''}`;
+}
+
+export function assertTurn(a, turn) {
+  if (a.kind === 'reply') return {
+    label: assertionLabel(a),
+    pass: Boolean(turn?.completed && !turn.runErrors?.length && turn.finalMessage?.toLowerCase().includes(replyExpectation(a.includes).toLowerCase())),
+    detail: turn?.finalMessage || 'No captured assistant reply',
+  };
+  if (a.kind === 'submission') {
+    const matches = (turn?.submissions ?? []).filter(s => s.name === a.name && s.context.question === a.context.question && s.context.acknowledged === a.context.acknowledged && JSON.stringify(s.context.districts) === JSON.stringify(a.context.districts));
+    return { label: assertionLabel(a), pass: Boolean(turn?.completed && turn.actionName === 'submit_intake' && !turn.runErrors?.length && matches.length === 1), detail: `${matches.length} matching submissions in persisted run input, RUN_FINISHED=${Boolean(turn?.completed)}` };
+  }
+  throw new Error('Unknown turn assertion');
+}
+
+// Persist only the intake data needed by assertions, never the complete input.
+export function intakeSubmissions(input) {
+  const messages = input?.messages ?? [];
+  const calls = new Set(messages.flatMap(m => (m.toolCalls ?? []).filter(c => c.function?.name === 'workbench_intake').map(c => c.id)));
+  return messages.filter(m => m.role === 'tool' && calls.has(m.toolCallId)).flatMap(m => {
+    const result = JSON.parse(m.content);
+    if (result.kind !== 'untrusted_user_submitted_data' || result.actionSchemaVersion !== 'intake.submit@1') return [];
+    const { question, districts, acknowledged } = result.context;
+    return [{ name: 'workbench_intake', context: { question, districts, acknowledged } }];
+  });
 }
 
 export function failedAssertions(assertions, reason) {
@@ -141,6 +200,8 @@ export function renderReport(results, timestamp, redact = redactor()) {
       `| Run errors | ${paragraph((r.runErrors ?? []).join('\n') || 'None recorded')} |`,
       `| Harness error | ${paragraph(r.error || 'None')} |`,
       `| Final assistant message | ${paragraph(r.finalMessage || 'None recorded')} |`,
+      `| Expected failure reason | ${paragraph(r.expectFail || 'None')} |`,
+      `| Unexpected pass | ${r.unexpectedPass ? 'Yes' : 'No'} |`,
       `| Timeline tool calls | ${paragraph((r.timelineTools ?? []).join(', ') || 'None visible')} |`,
       `| Run tool calls | ${paragraph((r.toolCalls ?? []).join(', ') || 'None recorded')} |`,
       `| Screenshot | ${r.screenshot ? `[Open](${r.screenshot})` : 'Not captured'} |`,

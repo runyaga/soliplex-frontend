@@ -11,9 +11,9 @@ const valid = () => [{ id: 'intake', prompt: 'Make a form', assertions: [{ kind:
 
 const AT = '@';
 
-test('prompt corpus has ten independent cases and checked follow-up prerequisites', async () => {
+test('prompt corpus has twelve independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
-  assert.equal(prompts.length, 10);
+  assert.equal(prompts.length, 12);
   assert.ok(prompts.find(p => p.id === 'fix_program').setup.length);
   for (const prompt of prompts.filter(p => p.setup)) assert.ok(prompt.setup_assertions.length);
   assert.ok(prompts.some(p => p.actions?.some(a => a.name === 'Run')));
@@ -57,8 +57,9 @@ test('literal env parsing preserves shell characters without shell evaluation', 
 test('credential redaction happens before JSON escaping or markdown transformation', () => {
   const fixture = 'fixture"\\|secret,with punctuation';
   const redact = redactor([fixture, `fixture${AT}example.invalid`]);
-  const result = cleanEvidence({ finalMessage: `Value: ${fixture}`, turns: [{ runErrors: ['Bearer abc123', 'token=arbitrary'] }] }, redact);
+  const result = cleanEvidence({ finalMessage: `Value: ${fixture}`, turns: [{ runErrors: ['Bearer abc123', 'token=arbitrary'], submissions: [{ context: { question: fixture } }] }] }, redact);
   assert.equal(result.finalMessage, 'Value: [redacted]');
+  assert.equal(result.turns[0].submissions[0].context.question, '[redacted]');
   assert.ok(!JSON.stringify(result).includes('abc123'));
   assert.ok(!JSON.stringify(result).includes('arbitrary'));
   assert.equal(redact(encodeURIComponent(fixture)), '[redacted]');
