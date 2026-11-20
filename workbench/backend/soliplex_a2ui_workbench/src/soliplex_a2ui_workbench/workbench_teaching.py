@@ -240,15 +240,10 @@ WELCOME_MESSAGE = (
 # and matches a reproducible harness flow.
 ROOM_SUGGESTIONS = (
     "Open the Monty GUI demo.",
-    "Show a bar chart titled Regions with North 80 and South 76 on the canvas.",
-    "Show a line chart titled Weekly visits with Mon 12, Tue 18, Wed 9, Thu 22, Fri 30 in the right sidebar.",
-    "Show a pie chart titled Budget with Rent 50, Food 30 and Fun 20 on the canvas.",
-    "Put a form titled Team survey in the left sidebar with a text field Name, a single choice Color "
-    "(Red, Green, Blue), a number Age from 1 to 120 and a checkbox Subscribe.",
-    "Place the built-in intake form in the left sidebar.",
-    "Make a Python program in a window titled Primes that prints the sum of all primes below 50000.",
-    "Create a tally counter program in a window titled Tally with +1, -1 and Reset buttons.",
-    "Split the canvas into two text panels titled Alpha and Beta.",
-    "Create tabs on the canvas with two text panels titled Notes and Ideas.",
-    "Put a login form on the canvas with Username and Password fields.",
+    "Put a form titled Team survey in the left sidebar with Name, a single choice Color (Red, Green, Blue), "
+    "Age from 1 to 120 and Subscribe. Save each submission to a CSV.",
+    "Build a dashboard: a line chart titled Weekly visits with Mon 12, Tue 18, Wed 9, Thu 22, Fri 30 on the "
+    "canvas and a bar chart titled Regions with North 80 and South 76 in the right sidebar.",
+    "Write a Python program in a window titled Primes that sums all primes below 50000. After I press Run, "
+    "tell me the result.",
 )

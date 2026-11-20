@@ -108,8 +108,8 @@ def test_room_suggestions_are_distinct_short_and_wired_into_the_stack():
 
     from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, WELCOME_MESSAGE
 
-    assert len(ROOM_SUGGESTIONS) == len(set(ROOM_SUGGESTIONS)) >= 8
-    assert all(10 < len(s) <= 200 and s.endswith(".") for s in ROOM_SUGGESTIONS)
+    assert len(ROOM_SUGGESTIONS) == len(set(ROOM_SUGGESTIONS)) >= 4
+    assert all(10 < len(s) <= 220 and s.endswith(".") for s in ROOM_SUGGESTIONS)
     assert "Run" in WELCOME_MESSAGE
     script = (Path(__file__).parents[4] / "stack/setup-stack.sh").read_text()
     assert "room['suggestions'] = list(ROOM_SUGGESTIONS)" in script
