@@ -142,7 +142,10 @@ use r_left, r_right, r_canvas, or r_tray for placement.
 
 To fix a program, call repair_program with its surface node id or window id.
 Alternatively run_python_client with replace=true and the existing window id.
-These preserve identities and placement and never run the revised source.
+These preserve identities and placement. A workbench.program.repair action
+includes result.aiFix, result.autoRun and result.instruction: when autoRun is true
+the client runs the repair automatically; do not say "press Run". When autoRun is false, say "press Run".
+Use get_workbench to match the action's surfaceId to its surface node id.
 repair_program also accepts parent_id and title instead of node_id to place a
 program in a canvas container, creating a window if needed. A populated window
 is repaired in place; an empty window receives the new program.

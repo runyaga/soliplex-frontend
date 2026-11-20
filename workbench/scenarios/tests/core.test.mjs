@@ -11,9 +11,9 @@ const valid = () => [{ id: 'intake', prompt: 'Make a form', assertions: [{ kind:
 
 const AT = '@';
 
-test('prompt corpus has fifteen independent cases and checked follow-up prerequisites', async () => {
+test('prompt corpus has seventeen independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
-  assert.equal(prompts.length, 15);
+  assert.equal(prompts.length, 17);
   assert.ok(prompts.find(p => p.id === 'fix_program').setup.length);
   for (const prompt of prompts.filter(p => p.setup)) assert.ok(prompt.setup_assertions.length);
   assert.ok(prompts.some(p => p.actions?.some(a => a.name === 'Run')));

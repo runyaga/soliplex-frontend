@@ -1,5 +1,5 @@
 import { workspaceMatches } from './selectors.mjs';
-import { captureTurn } from './turns.mjs';
+import { captureProgramTurns, captureTurn } from './turns.mjs';
 
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -16,9 +16,10 @@ async function check(target, wait) {
 }
 
 export async function performActions(page, actions = [], turnOptions, onTurn = () => {}, wait = pause, onAssertions) {
+  const observations = [];
   for (const action of actions) {
     const kind = action.kind ?? 'click';
-    const role = action.role ?? ({ fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
+    const role = action.role ?? ({ run_program: 'button', fill: 'textbox', check: 'checkbox', select: 'button', choose: 'button' })[kind];
     const assertion = { ...action, kind: 'role', role, region: action.region ?? 'workspace' };
     const deadline = Date.now() + 15000;
     let matches = [];
@@ -49,7 +50,10 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
         await target.click();
       }
     };
-    if (action.awaitTurn) {
+    if (kind === 'run_program') {
+      if (!turnOptions) throw new Error('run_program requires room and thread context');
+      observations.push(await captureProgramTurns(page, turnOptions, trigger, action.expectRepair, onTurn, wait));
+    } else if (action.awaitTurn) {
       if (!turnOptions) throw new Error('awaitTurn requires room and thread context');
       await onTurn(await captureTurn(page, turnOptions, trigger));
     } else await trigger();
@@ -60,4 +64,5 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
       if (!results.length || results.some(a => !a.pass)) throw new Error(`Action assertions failed after ${action.name}`);
     }
   }
+  return observations;
 }

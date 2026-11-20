@@ -825,5 +825,68 @@
       }
     ],
     "prompt": "Open the Monty GUI demo."
+  },
+  {
+    "id": "ai_fix_off",
+    "prompt": "Create a client Python program in a canvas window titled Scenario AI Fix. Its source must be exactly two lines: raise ValueError(\"scenario deliberate failure\") then print(pow(7, 12345, 1000003)). Keep that deliberate failing line for this initial program. I will test AI Fix using Run. Do not calculate the print output yourself.",
+    "actions": [
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "expectRepair": false
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Scenario AI Fix",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "scenario deliberate failure",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "failed",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "ai_fix_on",
+    "prompt": "Create a client Python program in a canvas window titled Scenario AI Fix. Its source must be exactly two lines: raise ValueError(\"scenario deliberate failure\") then print(pow(7, 12345, 1000003)). Keep that deliberate failing line for this initial program. I will test AI Fix using Run. Do not calculate the print output yourself.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "region": "canvas"
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "region": "canvas",
+        "expectRepair": true
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Scenario AI Fix",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "766228",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "ok",
+        "region": "canvas"
+      }
+    ]
   }
 ]

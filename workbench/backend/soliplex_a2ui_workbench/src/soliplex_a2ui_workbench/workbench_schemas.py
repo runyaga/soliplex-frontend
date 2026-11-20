@@ -375,6 +375,23 @@ class ExportChart(Closed):
         return value
 
 
+class ProgramRepairResult(Closed):
+    run: Annotated[int, Field(ge=0)]
+    source: Annotated[str, Field(max_length=20_000)]
+    output: Annotated[str, Field(max_length=2000)]
+    error: Annotated[str, Field(max_length=2000)]
+    ok: Literal[False]
+    attempt: Annotated[int, Field(ge=1, le=50)]
+    chainId: Annotated[str, Field(min_length=1, max_length=64)]
+    aiFix: bool
+    autoRun: bool
+    instruction: Annotated[str, Field(max_length=200)]
+
+
+class ProgramRepair(Closed):
+    result: ProgramRepairResult
+
+
 class RunResult(Closed):
     side: Literal["client"]
     engine: Engine

@@ -14,7 +14,7 @@ from pydantic import TypeAdapter
 
 from .workbench_forms import validate_form_values
 from .workbench_schemas import ActionEnvelope as CanvasSubmission
-from .workbench_schemas import IntakeSubmit, RunResult
+from .workbench_schemas import IntakeSubmit, ProgramRepair, RunResult
 
 WORKBENCH_INTAKE_TOOL_NAME = "workbench_intake"
 WORKBENCH_FORM_TOOL_NAME = "workbench_form"
@@ -44,6 +44,10 @@ def validate_submission(payload: object, projection) -> CanvasSubmission:
         if action.sourceComponentId not in (None, "submit"):
             raise ValueError("action source component does not match intake Submit")
         context = IntakeSubmit.model_validate(action.context)
+    elif record["component"] == "PythonRepl" and action.name == "workbench.program.repair":
+        if action.sourceComponentId not in (None, "root"):
+            raise ValueError("action source component does not match PythonRepl")
+        context = ProgramRepair.model_validate(action.context)
     elif record["component"] == "PythonRepl" and action.name == "workbench.program.run_result":
         if action.sourceComponentId not in (None, "root"):
             raise ValueError("action source component does not match PythonRepl")

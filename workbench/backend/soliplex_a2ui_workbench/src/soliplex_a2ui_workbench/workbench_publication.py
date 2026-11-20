@@ -274,7 +274,9 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
     if component == "Chart":
         component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "spec": record["spec"], "selection": record["selection"], "description": record["description"], **({"height": record["height"]} if "height" in record else {})}
     elif component == "PythonRepl":
-        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", "onWorkbench": {"event": {
+        component_def = {"id": "root", "component": component, "@catalogId": catalog_id, "source": {"@path": "/source"}, "outputPath": "/output", "onFailure": {"event": {
+            "name": "workbench.program.repair", "context": {"result": {"@path": "/output"}},
+        }}, "onWorkbench": {"event": {
             "name": "workbench.program.layout", "context": {
                 "invocationId": {"@path": "/output/invocationId"}, "actions": {"@path": "/output/actions"},
             },

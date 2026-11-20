@@ -26,6 +26,7 @@ dev_dependencies:
     path: ../../../../../dart_monty2/packages/dart_monty
   flutter_test:
     sdk: flutter
+  shared_preferences: ^2.5.5
   soliplex_agent:
     path: ../../soliplex_agent
   soliplex_client:

@@ -113,3 +113,10 @@ def test_room_suggestions_are_distinct_short_and_wired_into_the_stack():
     assert "Run" in WELCOME_MESSAGE
     script = (Path(__file__).parents[4] / "stack/setup-stack.sh").read_text()
     assert "room['suggestions'] = list(ROOM_SUGGESTIONS)" in script
+
+
+def test_repair_teaching_explains_both_ai_fix_states():
+    text = room_skill("workbench")
+    assert "result.aiFix" in text and "result.instruction" in text
+    assert 'do not say "press Run"' in text
+    assert 'When autoRun is false, say "press Run"' in text

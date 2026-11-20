@@ -348,6 +348,12 @@ save(q, data)
 print('Logfire wired: service soliplex-a2ui-workbench, token length', len(tok[0]))
 PY
   check_compose
+  # The backend loads package code, rooms and skills at start. Restart a
+  # running backend so a step3 deploy takes effect without step6.
+  if dc ps --status running --services | grep -qx backend; then
+    dc restart backend
+    dc up -d --wait backend
+  fi
 }
 step4() {
   # Build and initialize only this compose project. Capture operations that can

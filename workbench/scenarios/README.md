@@ -58,6 +58,8 @@
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
 | `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values, walrus and scenario-survey.csv in the reply, and matching values in the downloaded CSV |
 | `credential_form` | Request a login form with a password field. Require the companion text panel and no password-like canvas field |
+| `ai_fix_off` | Run a deliberately failing program with AI Fix unchecked. Observe 20 seconds, require zero action turns and the visible error |
+| `ai_fix_on` | Check AI Fix and Run the failing program. Require one repair publication, its automatic successful run-result action, and computed print output with `ok` in the window |
 | `repl_result` | Publish Scenario compute with `print(pow(7, 12345, 1000003))`, press Run and await its action turn, then ask what it printed. Require the computed value in the follow-up reply |
 
 | Existing REPL result path | Code trace |
@@ -76,7 +78,7 @@
 | Secrets | Credentials stay in memory and stdin. No shell sourcing, credential argv, traces, storage state or raw child logs. Evidence is redacted before serialization. Authentication screenshots are prohibited and account text is masked |
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
 | Scope limits | Region and window semantics replace geometry classification. Graphics charts require image semantics with title and series; the embedded lab chart exposes named bar buttons. Every visible assertion also checks PNG ink. Selectors require live verification |
-| Execution | Replay remains inert. The Monty demo and model counter cases deliberately press Run. Other deterministic programs remain inert. The follow-up fix case checks replacement, not the host AI Fix repair chain |
+| Execution | Replay remains inert. The Monty demo and model counter cases deliberately press Run. Other deterministic programs remain inert. The follow-up fix case checks replacement. The AI Fix cases check the host repair chain and its off switch |
 | Offline tests | JavaScript tests cover corpus validation, action checkpoints, window scopes, turn capture, stored form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Eight Python tests cover recipes, public-storage cleanup and persistence, including all ten seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |
 | Unverified | Claude must run the live suites. Docker, deployed PostgreSQL, browser semantics, screenshots and both models were unavailable here |
@@ -179,3 +181,14 @@ identity dependencies stubbed. A widget test verifies a saved survey CSV is
 visible and its download action selects it. Live authentication, deployed volume
 ownership, Chrome rendering, Glimmer wording and browser downloads remain host
 verification steps after deployment.
+
+## Program repair preference
+
+Each program has an AI Fix checkbox, unchecked by default. The preference is
+stored on this device by stable surface ID, so repair replacement and reload
+retain it. It is separate from server-authored code: publishing or replaying a
+surface cannot opt the user in. Repair chains and pending arrival permissions
+stay in memory; reload and history never resume them. Unchecking ends a pending
+chain. The manual AI Fix button requests one repair; with the checkbox off the
+replacement waits for Run. The former Yes/No retry prompt is removed; after the
+retry budget is spent, the manual button remains available.

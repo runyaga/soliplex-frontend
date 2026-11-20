@@ -7,7 +7,7 @@ enum RepairStatus {
   /// Repairs may be requested and a repaired editor may run on arrival.
   active,
 
-  /// The user pressed Stop or No. Nothing in the chain runs by itself.
+  /// The user pressed Stop or unchecked AI Fix; automatic runs stop.
   ended,
 
   /// A repaired program ran without an error.
@@ -19,9 +19,12 @@ enum RepairStatus {
 /// The client owns the count. [max] comes from the client's limits and grows
 /// only on an explicit user request, never from a server payload.
 class RepairChain extends ChangeNotifier {
-  RepairChain._(this.id, this.max);
+  RepairChain._(this.id, this.max, this.autoRun);
 
   final String id;
+
+  /// Whether AI Fix authorized running the delivered repair at failure time.
+  final bool autoRun;
 
   /// Repair rounds the chain may request.
   int max;
@@ -32,6 +35,9 @@ class RepairChain extends ChangeNotifier {
   /// The attempt a repaired editor must carry to run on arrival, or null
   /// when no repair is pending.
   int? awaiting;
+
+  /// Delivered source awaiting replacement; remounting it cannot claim a fix.
+  String? awaitingSource;
 
   RepairStatus status = RepairStatus.active;
 
@@ -49,8 +55,8 @@ class RepairChain extends ChangeNotifier {
     return rounds;
   }
 
-  /// Grants one round beyond the current budget, as a user's Yes or AI Fix
-  /// click does, and reopens an ended chain.
+  /// Grants one round beyond the current budget after a manual AI Fix click,
+  /// and reopens an ended chain.
   void grant() {
     if (awaiting != null) return;
     status = RepairStatus.active;
@@ -93,6 +99,9 @@ class RepairChains {
   /// The chains of the app session.
   static final RepairChains shared = RepairChains();
 
+  /// Pending chains keyed by stable program surface, never persisted.
+  final Map<String, String> surfaceChains = {};
+
   final int capacity;
   final Map<String, RepairChain> _chains = {};
   final Random _random = Random.secure();
@@ -100,14 +109,17 @@ class RepairChains {
   RepairChain? operator [](String id) => _chains[id];
 
   /// Starts a chain allowed [max] rounds.
-  RepairChain start(int max) {
-    final id = List.generate(
-      8,
-      (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
-    ).join();
+  RepairChain start(int max, {bool autoRun = false}) {
+    final id =
+        'chain-${List.generate(
+          8,
+          (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+        ).join()}';
     while (_chains.length >= capacity) {
-      _chains.remove(_chains.keys.first)?.end();
+      final id = _chains.keys.first;
+      _chains.remove(id)?.end();
+      surfaceChains.removeWhere((_, chainId) => chainId == id);
     }
-    return _chains[id] = RepairChain._(id, max);
+    return _chains[id] = RepairChain._(id, max, autoRun);
   }
 }

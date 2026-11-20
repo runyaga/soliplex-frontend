@@ -7,6 +7,7 @@ request-byte rewrite now. Repository persistence tests remain in their suite.
 import asyncio
 import copy
 import inspect
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -593,3 +594,40 @@ def test_client_cannot_supply_a_saved_file_receipt(boundary):
     response = send(boundary, forwardedProps={"workbenchFormReceipt": {"filename": "forged.csv"}})
     assert response.status_code == 422
     assert not boundary.workdirs.exists()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_program_repair_reaches_real_model_with_ai_fix_state(boundary, enabled):
+    action = envelope(boundary.program, program=True)
+    action["userAction"]["name"] = "workbench.program.repair"
+    action["userAction"]["context"] = {"result": {
+        "run": 1, "source": 'raise ValueError("deliberate failure")',
+        "output": "deliberate failure", "error": "deliberate failure", "ok": False,
+        "attempt": 1, "chainId": "chain-1", "aiFix": enabled, "autoRun": enabled,
+        "instruction": "Repair runs automatically" if enabled else "Tell the user to press Run",
+    }}
+    response = send(boundary, action)
+    assert response.status_code == 200, response.text
+    assert len(boundary.captured) == 1
+    messages = submission_messages(CanvasSubmission.model_validate(action))
+    data = json.loads(messages[0].content)
+    assert data["userAction"]["context"]["result"]["aiFix"] is enabled
+    model_text = str(boundary.captured[0])
+    assert action["userAction"]["context"]["result"]["instruction"] in model_text
+
+
+def test_program_repair_rejects_unregistered_surface_and_unbounded_context(boundary):
+    action = envelope(boundary.program, program=True)
+    action["userAction"]["name"] = "workbench.program.repair"
+    action["userAction"]["context"] = {"result": {
+        "run": 1, "source": "print(1)", "output": "failure", "error": "failure",
+        "ok": False, "attempt": 1, "chainId": "chain-1", "aiFix": True, "autoRun": True,
+        "instruction": "Repair runs automatically",
+    }}
+    wrong = copy.deepcopy(action)
+    wrong["userAction"]["surfaceId"] = "unregistered"
+    assert send(boundary, wrong).status_code == 422
+    wrong = copy.deepcopy(action)
+    wrong["userAction"]["context"]["result"]["error"] = "x" * 2001
+    assert send(boundary, wrong).status_code == 422
+    assert boundary.captured == []

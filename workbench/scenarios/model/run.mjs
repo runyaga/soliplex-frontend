@@ -36,7 +36,7 @@ export async function checkModels({ page, base, alias, cases, directory, credent
             if (setup.some(a => !a.pass)) throw new Error('Required follow-up setup did not render');
           }
         }
-        await performActions(page, item.actions, { room: model.room, threadId: result.threadId, timeoutMs }, turn => remember(turn, 'action'), undefined, async assertions => {
+        result.programRuns = await performActions(page, item.actions, { room: model.room, threadId: result.threadId, timeoutMs }, turn => remember(turn, 'action'), undefined, async assertions => {
           const checked = await assertCanvas(page, assertions);
           result.assertions.push(...checked.map(a => ({ ...a, label: `After action: ${a.label}` })));
           return checked;

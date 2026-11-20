@@ -68,3 +68,70 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
     await page.unroute('**/agui/**', handler);
   }
 }
+
+// Observe every action turn, including a repair followed by its automatic Run.
+// Off must stay quiet for the full 20 seconds; a single captured turn is a failure.
+export async function captureProgramTurns(page, { room, threadId, timeoutMs }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const turns = [];
+  let completed;
+  let rejected;
+  const finished = new Promise((resolve, reject) => { completed = resolve; rejected = reject; });
+  finished.catch(() => {});
+  const pending = new Set();
+  let firstError;
+  const handler = async route => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() !== 'POST' || !path.includes(`/rooms/${room}/agui/${threadId}/`) || path.split('/').length !== 8) return route.fallback();
+    const task = (async () => {
+      try {
+        const input = request.postDataJSON();
+        const response = await route.fetch({ timeout: timeoutMs });
+        const body = await response.text();
+        await route.fulfill({ response, body });
+        if (!response.ok()) throw new Error(`Program action HTTP ${response.status()}`);
+        const events = parseSSE(body);
+        const summary = summarizeEvents(events);
+        summary.threadId = threadId;
+        const action = input?.forwardedProps?.a2uiAction?.userAction;
+        summary.actionName = action?.name;
+        summary.programContext = action?.context;
+        summary.activitySnapshots = events.filter(e => e.type === 'ACTIVITY_SNAPSHOT').length;
+        turns.push(summary);
+        await onTurn(summary);
+        if (!summary.completed || summary.runErrors.length) throw new Error('Program action turn failed');
+        if (!expectRepair) throw new Error(`AI Fix off sent action turn: ${summary.actionName}`);
+        if (summary.actionName === 'workbench.program.run_result' && summary.programContext?.outcome === 'success') completed();
+      } catch (error) {
+        firstError ??= error;
+        rejected(error);
+        await route.abort().catch(() => {});
+      }
+    })();
+    pending.add(task);
+    try { await task; } finally { pending.delete(task); }
+  };
+  await page.route('**/agui/**', handler);
+  let timer;
+  try {
+    await trigger();
+    await Promise.race([
+      finished,
+      new Promise((resolve, reject) => {
+        if (expectRepair) timer = setTimeout(() => reject(new Error('Repair and automatic Run timed out')), timeoutMs);
+        else wait(20000).then(resolve, reject);
+      }),
+    ]);
+    await Promise.all([...pending]);
+    if (firstError) throw firstError;
+    const repairs = turns.filter(t => t.actionName === 'workbench.program.repair');
+    const runs = turns.filter(t => t.actionName === 'workbench.program.run_result');
+    if (expectRepair && (repairs.length !== 1 || repairs[0].programContext?.result?.run !== 1 || repairs[0].programContext?.result?.aiFix !== true || repairs[0].programContext?.result?.autoRun !== true || !repairs[0].toolCalls.some(name => ['repair_program', 'run_python_client'].includes(name)) || repairs[0].activitySnapshots < 1 || runs.length !== 1 || runs[0].programContext?.outcome !== 'success' || turns.length !== 2)) {
+      throw new Error(`Expected one repair arrival and one automatic success: ${repairs.length} repairs, ${runs.length} results, ${turns.length} action turns`);
+    }
+    return { actionTurns: turns.length, repairRequests: repairs.length, successfulRuns: runs.length, observationMs: expectRepair ? undefined : 20000 };
+  } finally {
+    clearTimeout(timer);
+    await page.unroute('**/agui/**', handler);
+  }
+}

@@ -479,7 +479,7 @@ def repair_program(
     parent_id: str | None = None,
     title: str = "Python",
 ) -> dict[str, object]:
-    """Revise a registered program inertly; the user must press Run again."""
+    """Revise a registered program; the client controls execution via AI Fix."""
     ctx.require_room()
     state, layout = _current(ctx)
     if (node_id is None) == (parent_id is None):
@@ -528,5 +528,6 @@ def repair_program(
         "events": result["events"],
         "nodeId": node["id"],
         "surfaceId": record["surfaceId"],
-        "execution": "awaiting_user",
+        "execution": "client_controlled",
+        "instruction": "Follow the repair request: autoRun=true runs automatically; otherwise say press Run.",
     }

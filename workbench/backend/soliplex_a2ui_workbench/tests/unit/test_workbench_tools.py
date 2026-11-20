@@ -263,7 +263,9 @@ def test_program_revision_preserves_mount_window_and_position_without_execution(
     assert after["layout"]["nodes"] == before["layout"]["nodes"]
     assert result["surfaceId"] == program["surfaceId"]
     assert result["nodeId"] == program["nodeId"]
-    assert result["execution"] == "awaiting_user"
+    assert result["execution"] == "client_controlled"
+    assert "autoRun=true runs automatically" in result["instruction"]
+    assert "otherwise say press Run" in result["instruction"]
     content = next(r for r in after["content"] if r["surfaceId"] == result["surfaceId"])
     assert content["source"].endswith('ui.show(ui.Text("fixed"))')
     assert content["activityMessageId"] == program["activityMessageId"]
@@ -297,7 +299,7 @@ def test_repair_reopens_a_previously_closed_program_leaf(ctx):
         next(n for n in layout["nodes"] if n["id"] == window["nodeId"])["visibility"]
         == "open"
     )
-    assert result["execution"] == "awaiting_user"
+    assert result["execution"] == "client_controlled"
 
 
 @pytest.mark.parametrize("tool_name", ["run_python_client", "repair_program"])

@@ -31,6 +31,16 @@
             "@path": "/source"
           },
           "outputPath": "/output",
+          "onFailure": {
+            "event": {
+              "name": "workbench.program.repair",
+              "context": {
+                "result": {
+                  "@path": "/output"
+                }
+              }
+            }
+          },
           "onWorkbench": {
             "event": {
               "name": "workbench.program.layout",
