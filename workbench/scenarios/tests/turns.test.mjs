@@ -248,3 +248,13 @@ test('custom form corpus requires a saved filename reply and exact downloaded CS
     assert.throws(() => validateCases([{ ...custom, assertions: [{ kind: 'csv', filename, values: { name: 'x' } }] }], { prompts: true }));
   }
 });
+
+test('custom form submission and CSV checks ignore the case of model-chosen field names', () => {
+  const submission = { name: 'workbench_form', context: { surfaceId: 's', title: 'Scenario survey', values: { Name: 'Scenario walrus', Color: 'Blue', Subscribe: true } } };
+  const turn = { completed: true, actionName: 'submit_form', runErrors: [], submissions: [submission],
+    savedCsv: { filename: 'scenario-survey.csv', rowCount: 1, submissionId: 'sub-1', lastRow: { submitted_at: '2026-11-20T00:00:00Z', submission_id: 'sub-1', Name: 'Scenario walrus', Color: 'Blue', Subscribe: 'true' } } };
+  const values = { name: 'Scenario walrus', color: 'Blue', subscribe: true };
+  assert.equal(assertTurn({ kind: 'submission', name: 'workbench_form', context: { title: 'Scenario survey', values } }, turn).pass, true);
+  assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values }, turn).pass, true);
+  assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values: { ...values, color: 'Red' } }, turn).pass, false);
+});

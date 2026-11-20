@@ -167,7 +167,11 @@ export function assertTurn(a, turn) {
     const matches = csv?.filename === a.filename && csv.rowCount > 0 &&
       csv.submissionId && csv.lastRow.submission_id === csvCell(csv.submissionId) &&
       !Number.isNaN(Date.parse(csv.lastRow.submitted_at)) &&
-      Object.entries(a.values).every(([key, value]) => csv.lastRow[key] === csvCell(value));
+      // The model names the fields, so column case varies between runs.
+      Object.entries(a.values).every(([key, value]) => {
+        const column = Object.keys(csv.lastRow).find(name => name.toLowerCase() === key.toLowerCase());
+        return column !== undefined && csv.lastRow[column] === csvCell(value);
+      });
     return { label: assertionLabel(a), pass: Boolean(turn?.completed && !turn.runErrors?.length && matches), detail: csv ? `${csv.filename}: ${csv.rowCount} rows` : 'No downloaded CSV' };
   }
   if (a.kind === 'reply') return {
@@ -176,7 +180,11 @@ export function assertTurn(a, turn) {
     detail: turn?.finalMessage || 'No captured assistant reply',
   };
   if (a.kind === 'submission') {
-    const matches = (turn?.submissions ?? []).filter(s => s.name === a.name && isDeepStrictEqual(a.name === 'workbench_form' ? { title: s.context.title, values: s.context.values } : s.context, a.context));
+    // The model names custom form fields, so compare their keys case-insensitively.
+    const lowerKeys = values => Object.fromEntries(Object.entries(values ?? {}).map(([key, value]) => [key.toLowerCase(), value]));
+    const matches = (turn?.submissions ?? []).filter(s => s.name === a.name && (a.name === 'workbench_form'
+      ? isDeepStrictEqual({ title: s.context.title, values: lowerKeys(s.context.values) }, { title: a.context.title, values: lowerKeys(a.context.values) })
+      : isDeepStrictEqual(s.context, a.context)));
     return { label: assertionLabel(a), pass: Boolean(turn?.completed && turn.actionName === (a.name === 'workbench_form' ? 'submit_form' : 'submit_intake') && !turn.runErrors?.length && matches.length === 1), detail: `${matches.length} matching submissions in persisted run input, RUN_FINISHED=${Boolean(turn?.completed)}` };
   }
   throw new Error('Unknown turn assertion');

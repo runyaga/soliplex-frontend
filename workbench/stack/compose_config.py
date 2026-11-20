@@ -81,11 +81,20 @@ def install_workbench_backend(target: str | Path, source_project: str | Path) ->
     installation = yaml.safe_load(installation_path.read_text()) or {}
     installation.setdefault("sandbox_config", {"environments_path": "environments"})["workdirs_path"] = WORKBENCH_WORKDIRS_PATH
     operations = installation.setdefault("app_router_operations", [])
-    operations[:] = [item for item in operations if item.get("group_name") != "agui"]
+    operations[:] = [item for item in operations if item.get("group_name") not in {"agui", "sandbox_workdirs"}]
     operations.append({
         "kind": "add",
         "group_name": "agui",
         "router_name": router_name,
+        "replace_existing": True,
+        "prefix": "/api",
+    })
+    # Soliplex mounts the workdir file router only where bwrap runs. The
+    # backend image has no bwrap, and form CSVs live in thread workdirs.
+    operations.append({
+        "kind": "add",
+        "group_name": "sandbox_workdirs",
+        "router_name": "soliplex.views.sandbox_workdirs.router",
         "replace_existing": True,
         "prefix": "/api",
     })

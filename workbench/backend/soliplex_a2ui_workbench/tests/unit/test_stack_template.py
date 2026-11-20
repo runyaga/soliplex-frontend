@@ -69,6 +69,9 @@ def test_step3_installs_workbench_package_and_imports_configured_router(tmp_path
     agui = [item for item in configured["app_router_operations"] if item.get("group_name") == "agui"]
     assert agui == [{"kind": "add", "group_name": "agui", "router_name": "soliplex_a2ui_workbench.workbench_routes.guarded_router", "replace_existing": True, "prefix": "/api"}]
     assert router_name == agui[0]["router_name"]
+    # The backend image has no bwrap, so the workdir router is mounted explicitly.
+    workdirs = [item for item in configured["app_router_operations"] if item.get("group_name") == "sandbox_workdirs"]
+    assert workdirs == [{"kind": "add", "group_name": "sandbox_workdirs", "router_name": "soliplex.views.sandbox_workdirs.router", "replace_existing": True, "prefix": "/api"}]
     requirements = (generated / "backend/requirements.txt").read_text()
     for dependency in ("fastapi", "soliplex", "pydantic"):
         assert dependency in requirements
