@@ -13,12 +13,16 @@ const ThreadKey _key = (serverId: 'srv', roomId: 'r', threadId: 't');
 /// Writes down each call, with what the band builder reads from it.
 class _RecordingObserver implements RunFoldObserver {
   final List<String> seen = [];
+  final List<WorkbenchRegistration> registrationsSeen = [];
 
   @override
-  void runStarted(RunFold fold, {required bool continuesTurn}) => seen.add(
-        '${fold.runId} starts${continuesTurn ? ', continuing its turn' : ''}, '
-        '${_streaming(fold)}',
-      );
+  void runStarted(RunFold fold, {required bool continuesTurn}) {
+    registrationsSeen.addAll(fold.registeredWorkbenchActivities);
+    seen.add(
+      '${fold.runId} starts${continuesTurn ? ', continuing its turn' : ''}, '
+      '${_streaming(fold)}',
+    );
+  }
 
   @override
   void eventFolded(RunFold fold, {required BaseEvent? processed}) => seen.add(
@@ -54,6 +58,37 @@ List<Map<String, dynamic>> _call(String toolCallId, String name) => [
 
 void main() {
   setUpAll(registerLiveSessionFallbacks);
+
+  test('stored history passes authenticated registrations into run folding',
+      () async {
+    const registration = WorkbenchRegistration(
+      role: WorkbenchRole.content,
+      activityMessageId: 'activity_1',
+      surfaceId: 'surface_1',
+    );
+    final observer = _RecordingObserver();
+    await storedHistoryFromJson(
+      observer: observer,
+      registeredWorkbenchActivities: const [registration],
+      [
+        (
+          runId: 'registered-run',
+          parentRunId: null,
+          runInput: {
+            'messages': [
+              {'role': 'user', 'id': 'user-1', 'content': 'Q'},
+            ],
+          },
+          events: [
+            _runStarted('registered-run'),
+            _runFinished('registered-run'),
+          ],
+        ),
+      ],
+    );
+    expect(observer.registrationsSeen, isNotEmpty);
+    expect(observer.registrationsSeen, everyElement(registration));
+  });
 
   /// Runs [runs] live, one backend run per entry, then reloads them as the
   /// backend stored them, and expects the fold steps of both to be the same.

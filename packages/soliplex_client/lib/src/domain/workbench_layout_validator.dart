@@ -36,7 +36,7 @@ void _validateEnvelope(Map<String, dynamic> layout) {
         layout['nodes'] is! List ||
         (layout['nodes'] as List).length < 6 ||
         (layout['nodes'] as List).length > 64 ||
-        layout['shared'] is! Map,
+        layout['shared'] is! Map<String, dynamic>,
     'malformed layout',
   );
 }
@@ -102,10 +102,16 @@ void _validateNodeContent(
 ) {
   final mounts = <String>{};
   final surfaceIds = <String>{};
-  final registered = {
-    for (final entry in registrations)
-      '${entry.activityMessageId}\u0000${entry.surfaceId}',
-  };
+  final registered = <String, WorkbenchRole>{};
+  for (final entry in registrations) {
+    _need(
+      !_id(entry.activityMessageId) || !_id(entry.surfaceId),
+      'invalid workbench registration identity',
+    );
+    final mount = '${entry.activityMessageId}\u0000${entry.surfaceId}';
+    _need(registered.containsKey(mount), 'duplicate workbench registration');
+    registered[mount] = entry.role;
+  }
   for (final node in nodes.values) {
     final children = node['children'] as List;
     _need(children.toSet().length != children.length, 'duplicate child');
@@ -121,7 +127,7 @@ void _validatePayload(
   Map<String, dynamic> payload,
   Set<String> mounts,
   Set<String> surfaceIds,
-  Set<String> registered,
+  Map<String, WorkbenchRole> registered,
 ) {
   if (kind == 'region') {
     _need(!_hasKeys(payload, {'role'}), 'invalid region payload');
@@ -142,7 +148,7 @@ void _validateSurface(
   Map<String, dynamic> payload,
   Set<String> mounts,
   Set<String> surfaceIds,
-  Set<String> registered,
+  Map<String, WorkbenchRole> registered,
 ) {
   _need(
     !_hasKeys(payload, {'activityMessageId', 'surfaceId'}) ||
@@ -151,12 +157,16 @@ void _validateSurface(
     'invalid surface payload',
   );
   final mount = '${payload['activityMessageId']}\u0000${payload['surfaceId']}';
-  _need(!mounts.add(mount), 'duplicate mount');
+  final role = registered[mount];
+  _need(role == null, 'unregistered mount');
+  _need(role == WorkbenchRole.layout, 'layout registration cannot mount');
+  _need(mounts.contains(mount), 'duplicate mount');
   _need(
-    !surfaceIds.add(payload['surfaceId'] as String),
+    surfaceIds.contains(payload['surfaceId'] as String),
     'duplicate surface id',
   );
-  _need(!registered.contains(mount), 'unregistered mount');
+  mounts.add(mount);
+  surfaceIds.add(payload['surfaceId'] as String);
 }
 
 void _validateChildCapacity(String kind, int count) {
@@ -186,7 +196,7 @@ void _validateReachability(
   String rootId,
   Map<String, Map<String, dynamic>> nodes,
 ) {
-  final seen = <String>{};
+  final complete = <String>{};
   final visiting = <String>{};
   final parents = <String, int>{};
   for (final node in nodes.values) {
@@ -195,32 +205,27 @@ void _validateReachability(
     }
   }
   _need(parents.values.any((count) => count > 1), 'multiple parents');
-  void visit(String id, int depth) {
+  final reachableFromRoot = <String>{};
+  void visit(String id, int depth, {required bool fromRoot}) {
     _need(depth > 8, 'maximum depth exceeded');
-    _need(!visiting.add(id), 'cycle');
-    _need(!seen.add(id), 'multiple parents');
+    if (fromRoot) reachableFromRoot.add(id);
+    _need(visiting.contains(id), 'cycle');
+    if (complete.contains(id)) return;
+    visiting.add(id);
     for (final child in (nodes[id]!['children'] as List).cast<String>()) {
-      visit(child, depth + 1);
+      visit(child, depth + 1, fromRoot: fromRoot);
     }
     visiting.remove(id);
+    complete.add(id);
   }
 
+  visit(rootId, 1, fromRoot: true);
   for (final id in nodes.keys) {
-    if (!seen.contains(id)) visit(id, 1);
-  }
-  // Nodes visited through any component may include valid disconnected
-  // subgraphs. Recheck reachability from the reserved root separately.
-  seen.clear();
-  void visitRoot(String id, int depth) {
-    _need(depth > 8, 'maximum depth exceeded');
-    if (!seen.add(id)) return;
-    for (final child in (nodes[id]!['children'] as List).cast<String>()) {
-      visitRoot(child, depth + 1);
+    if (!complete.contains(id)) {
+      visit(id, 1, fromRoot: false);
     }
   }
-
-  visitRoot(rootId, 1);
-  _need(seen.length != nodes.length, 'orphan node');
+  _need(reachableFromRoot.length != nodes.length, 'orphan node');
 }
 
 void _validateReserved(
@@ -265,11 +270,14 @@ void _validateAncestry(
   }
   final programs = {
     for (final entry in registrations)
-      if (entry.role == WorkbenchRole.program) entry.surfaceId,
+      if (entry.role == WorkbenchRole.program)
+        '${entry.activityMessageId}\u0000${entry.surfaceId}',
   };
   for (final node in nodes.values.where((n) => n['kind'] == 'surface')) {
-    final surfaceId = (node['payload'] as Map)['surfaceId'];
-    if (programs.contains(surfaceId)) _requireWindowAncestor(node, nodes);
+    final payload = node['payload'] as Map;
+    final mount =
+        '${payload['activityMessageId']}\u0000${payload['surfaceId']}';
+    if (programs.contains(mount)) _requireWindowAncestor(node, nodes);
   }
 }
 
@@ -356,7 +364,16 @@ bool _text(Object? value, int max) =>
     value is String && value.isNotEmpty && value.runes.length <= max;
 bool _hasKeys(Map<dynamic, dynamic> value, Set<String> keys) =>
     value.length == keys.length && value.keys.every(keys.contains);
-int _utf8Length(Object? value) => utf8.encode(jsonEncode(value)).length;
+int _utf8Length(Object? value) => utf8.encode(_encodeJson(value)).length;
+
+String _encodeJson(Object? value) {
+  try {
+    return jsonEncode(value);
+  } on Object {
+    throw const FormatException('Value is not JSON encodable');
+  }
+}
+
 void _need(bool invalid, String reason) {
   if (invalid) throw FormatException(reason);
 }

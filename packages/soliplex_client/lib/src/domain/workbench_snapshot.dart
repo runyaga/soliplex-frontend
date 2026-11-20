@@ -186,7 +186,13 @@ class WorkbenchPublicationPart {
     required this.partIndex,
     required this.partCount,
     required Map<String, dynamic> content,
-  }) : content = _freezeMap(content);
+  }) : content = _validatedPartContent(
+          recordId,
+          sequence,
+          partIndex,
+          partCount,
+          content,
+        );
 
   /// Parses a publication part from its closed JSON representation.
   factory WorkbenchPublicationPart.fromJson(Map<String, dynamic> json) {
@@ -206,19 +212,11 @@ class WorkbenchPublicationPart {
         json['content'] is! Map<String, dynamic>) {
       throw const FormatException('Malformed workbench publication part');
     }
-    final index = json['partIndex'] as int;
-    final count = json['partCount'] as int;
-    if ((json['sequence'] as int) < 0 ||
-        count < 1 ||
-        index < 0 ||
-        index >= count) {
-      throw const FormatException('Invalid workbench publication ordering');
-    }
     return WorkbenchPublicationPart(
       recordId: json['recordId'] as String,
       sequence: json['sequence'] as int,
-      partIndex: index,
-      partCount: count,
+      partIndex: json['partIndex'] as int,
+      partCount: json['partCount'] as int,
       content: json['content'] as Map<String, dynamic>,
     );
   }
@@ -243,6 +241,23 @@ class WorkbenchPublicationPart {
   String get identity => '$recordId:$partIndex/$partCount';
 }
 
+Map<String, dynamic> _validatedPartContent(
+  String recordId,
+  int sequence,
+  int partIndex,
+  int partCount,
+  Map<String, dynamic> content,
+) {
+  if (!_validId(recordId) ||
+      sequence < 0 ||
+      partCount < 1 ||
+      partIndex < 0 ||
+      partIndex >= partCount) {
+    throw const FormatException('Invalid workbench publication ordering');
+  }
+  return _freezeMap(content);
+}
+
 /// A coherent authenticated snapshot, including all publication parts.
 class WorkbenchSnapshot {
   /// Creates an immutable snapshot and orders its publication records.
@@ -251,7 +266,7 @@ class WorkbenchSnapshot {
     required Map<String, dynamic> layout,
     required List<WorkbenchRegistration> registrations,
     required List<WorkbenchPublicationPart> records,
-  })  : layout = _freezeMap(layout),
+  })  : layout = _validatedLayout(revision, layout, registrations),
         registrations = List<WorkbenchRegistration>.unmodifiable(
           registrations,
         ),
@@ -277,11 +292,9 @@ class WorkbenchSnapshot {
       for (final item in json['registrations']! as List)
         WorkbenchRegistration.fromJson(item as Map<String, dynamic>),
     ];
-    final layout = json['layout'] as Map<String, dynamic>;
-    validateWorkbenchLayout(layout, registrations);
     return WorkbenchSnapshot(
       revision: json['revision'] as int,
-      layout: layout,
+      layout: json['layout'] as Map<String, dynamic>,
       registrations: registrations,
       records: [
         for (final item in json['records']! as List)
@@ -301,6 +314,18 @@ class WorkbenchSnapshot {
 
   /// Holds publication parts in deterministic journal order.
   final List<WorkbenchPublicationPart> records;
+}
+
+Map<String, dynamic> _validatedLayout(
+  int revision,
+  Map<String, dynamic> layout,
+  List<WorkbenchRegistration> registrations,
+) {
+  if (revision < 0) {
+    throw const FormatException('Invalid workbench snapshot revision');
+  }
+  validateWorkbenchLayout(layout, registrations);
+  return _freezeMap(layout);
 }
 
 bool _validId(Object? value) =>
@@ -342,8 +367,14 @@ List<WorkbenchPublicationPart> _orderedRecords(
 }
 
 Map<String, dynamic> _freezeMap(Map<String, dynamic> value) {
-  final decoded = jsonDecode(jsonEncode(value));
-  return _deepFreezeMap(decoded as Map<String, dynamic>);
+  try {
+    final decoded = jsonDecode(jsonEncode(value));
+    return _deepFreezeMap(decoded as Map<String, dynamic>);
+  } on FormatException {
+    rethrow;
+  } on Object {
+    throw const FormatException('Value is not JSON encodable');
+  }
 }
 
 Map<String, dynamic> _deepFreezeMap(Map<String, dynamic> value) =>

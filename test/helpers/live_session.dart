@@ -7,7 +7,12 @@ import 'package:soliplex_agent/soliplex_agent.dart';
 // ignore: implementation_imports
 import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
 import 'package:soliplex_client/soliplex_client.dart'
-    show AgUiStreamClient, HttpTransport, SoliplexApi, UrlBuilder;
+    show
+        AgUiStreamClient,
+        HttpTransport,
+        SoliplexApi,
+        UrlBuilder,
+        WorkbenchRegistration;
 
 import 'package:soliplex_frontend/src/modules/room/execution_tracker_extension.dart';
 
@@ -182,20 +187,29 @@ typedef StoredRun = ({
 Future<ThreadHistory> storedHistory(
   List<StoredRun> runs, {
   RunFoldObserver? observer,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) =>
-    storedHistoryFromJson(observer: observer, [
-      for (final run in runs)
-        (
-          runId: run.runId,
-          parentRunId: null,
-          runInput: {
-            'messages': [
-              {'role': 'user', 'id': run.userMessageId, 'content': run.prompt},
-            ],
-          },
-          events: [for (final event in run.events) event.toJson()],
-        ),
-    ]);
+    storedHistoryFromJson(
+      observer: observer,
+      registeredWorkbenchActivities: registeredWorkbenchActivities,
+      [
+        for (final run in runs)
+          (
+            runId: run.runId,
+            parentRunId: null,
+            runInput: {
+              'messages': [
+                {
+                  'role': 'user',
+                  'id': run.userMessageId,
+                  'content': run.prompt
+                },
+              ],
+            },
+            events: [for (final event in run.events) event.toJson()],
+          ),
+      ],
+    );
 
 /// A run as the backend stores it, in JSON: its id, the run it was created
 /// with as its parent, the input it was sent, and its events, which may
@@ -213,6 +227,7 @@ typedef StoredRunJson = ({
 Future<ThreadHistory> storedHistoryFromJson(
   List<StoredRunJson> runs, {
   RunFoldObserver? observer,
+  List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
 }) async {
   final transport = _MockHttpTransport();
   final api = SoliplexApi(
@@ -260,7 +275,12 @@ Future<ThreadHistory> storedHistoryFromJson(
     });
   }
 
-  return api.getThreadHistory('r', 't', observer: observer);
+  return api.getThreadHistory(
+    'r',
+    't',
+    observer: observer,
+    registeredWorkbenchActivities: registeredWorkbenchActivities,
+  );
 }
 
 /// A backend whose thread history is [stored], served through the real
@@ -288,6 +308,10 @@ class StoredHistoryApi extends FakeSoliplexApi {
         registeredWorkbenchActivities: registeredWorkbenchActivities,
       );
     }
-    return storedHistory(runs, observer: observer);
+    return storedHistory(
+      runs,
+      observer: observer,
+      registeredWorkbenchActivities: registeredWorkbenchActivities,
+    );
   }
 }

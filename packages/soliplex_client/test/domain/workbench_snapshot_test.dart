@@ -87,6 +87,50 @@ void main() {
     }
   });
 
+  test('layout verdict is independent of node-list ordering', () {
+    for (final fixtureName in ['layout_tree_v1.json', 'nested_tree_v1.json']) {
+      final base =
+          jsonDecode(workbenchFixtures[fixtureName]!) as Map<String, dynamic>;
+      final sourceNodes = base['nodes'] as List;
+      for (var offset = 0; offset < sourceNodes.length; offset++) {
+        final layout =
+            jsonDecode(workbenchFixtures[fixtureName]!) as Map<String, dynamic>;
+        final nodes = layout['nodes'] as List;
+        layout['nodes'] = [
+          ...nodes.skip(offset),
+          ...nodes.take(offset),
+        ];
+        expect(() => _parseSnapshot(layout), returnsNormally,
+            reason: '$fixtureName rotated by $offset');
+      }
+      final reversed =
+          jsonDecode(workbenchFixtures[fixtureName]!) as Map<String, dynamic>;
+      reversed['nodes'] = (reversed['nodes'] as List).reversed.toList();
+      expect(() => _parseSnapshot(reversed), returnsNormally,
+          reason: '$fixtureName reversed');
+    }
+
+    final cases = (jsonDecode(workbenchFixtures['layout_rejections_v1.json']!)
+        as Map<String, dynamic>)['cases'] as List;
+    for (final name in cases.whereType<String>().where(
+          (name) => !name.startsWith('point_') && name != 'duplicate_point_id',
+        )) {
+      final layout = _rejectedLayout(name);
+      (layout['nodes'] as List).setAll(
+        0,
+        (layout['nodes'] as List).reversed.toList(),
+      );
+      expect(
+        () => _parseSnapshot(
+          layout,
+          excludeActivity: name == 'cross_scope_mount' ? 'activity_form' : null,
+        ),
+        throwsFormatException,
+        reason: '$name with reversed node order',
+      );
+    }
+  });
+
   test('enforces Python root identity and Unicode title length', () {
     final renamedRoot = jsonDecode(
       workbenchFixtures['layout_tree_v1.json']!,
@@ -106,6 +150,123 @@ void main() {
         .firstWhere((n) => n['id'] == 'wb_root') as Map;
     root['title'] = '😀' * 80;
     expect(() => _parseSnapshot(unicodeTitle), returnsNormally);
+  });
+
+  test('public constructor validates revision and layout', () {
+    final validLayout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    expect(
+      () => WorkbenchSnapshot(
+        revision: -1,
+        layout: validLayout,
+        registrations: const [],
+        records: const [],
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchSnapshot(
+        revision: 1,
+        layout: {'invalid': true},
+        registrations: const [],
+        records: const [],
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => WorkbenchSnapshot(
+        revision: 1,
+        layout: validLayout,
+        registrations: const [
+          WorkbenchRegistration(
+            role: WorkbenchRole.content,
+            activityMessageId: '',
+            surfaceId: 'surface_1',
+          ),
+        ],
+        records: const [],
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('public publication-part constructor validates ordering fields', () {
+    expect(
+      () => WorkbenchPublicationPart(
+        recordId: 'record_1',
+        sequence: -1,
+        partIndex: 0,
+        partCount: 1,
+        content: {},
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('surfaces require content mounts and program ancestry matches both ids',
+      () {
+    final nested = jsonDecode(workbenchFixtures['nested_tree_v1.json']!)
+        as Map<String, dynamic>;
+    final nodes = nested['nodes'] as List;
+    final chart = nodes.firstWhere((node) => node['id'] == 'chart_surface');
+    final chartPayload = chart['payload'] as Map<String, dynamic>;
+    final activityId = chartPayload['activityMessageId'] as String;
+    final registrations = _registrationsFor(nested);
+    final chartRegistration = registrations.firstWhere(
+      (registration) => registration['activityMessageId'] == activityId,
+    );
+    chartRegistration['role'] = 'layout';
+    expect(
+      () => _parseSnapshot(nested, registrations: registrations),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          contains('layout registration cannot mount'),
+        ),
+      ),
+    );
+
+    final programLayout = jsonDecode(
+      workbenchFixtures['nested_tree_v1.json']!,
+    ) as Map<String, dynamic>;
+    final programNodes = programLayout['nodes'] as List;
+    final chartNode = programNodes.firstWhere(
+      (node) => node['id'] == 'chart_surface',
+    );
+    final programNode = programNodes.firstWhere(
+      (node) => node['id'] == 'program_surface',
+    );
+    final chartData = chartNode['payload'] as Map<String, dynamic>;
+    final programData = programNode['payload'] as Map<String, dynamic>;
+    final programSurfaceId = programData['surfaceId'] as String;
+    programData['surfaceId'] = 'mounted_program';
+    chartData['surfaceId'] = programSurfaceId;
+    final explicitRegistrations = _registrationsFor(programLayout)
+      ..add({
+        'role': 'program',
+        'activityMessageId': 'unused_program',
+        'surfaceId': programSurfaceId,
+      });
+    expect(
+      () => _parseSnapshot(
+        programLayout,
+        registrations: explicitRegistrations,
+      ),
+      returnsNormally,
+    );
+  });
+
+  test('non-JSON shared data fails as a format error', () {
+    final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    layout['shared'] = {1: 'non-string key'};
+    expect(() => _parseSnapshot(layout), throwsFormatException);
+
+    final unsupported = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    (unsupported['shared'] as Map<String, dynamic>)['object'] = Object();
+    expect(() => _parseSnapshot(unsupported), throwsFormatException);
   });
 
   test(
@@ -220,11 +381,34 @@ WorkbenchSnapshot _parseSnapshot(
   Map<String, dynamic> layout, {
   String? excludeActivity,
   List<Map<String, Object?>> records = const [],
+  List<Map<String, dynamic>>? registrations,
 }) {
-  final registrations = [
-    for (final node in (layout['nodes'] as List).cast<Map<String, dynamic>>())
-      if (node['kind'] == 'surface')
-        if (node['payload']['activityMessageId'] != excludeActivity)
+  final resolvedRegistrations = registrations ??
+      [
+        for (final node
+            in (layout['nodes'] as List).cast<Map<String, dynamic>>())
+          if (node['kind'] == 'surface')
+            if (node['payload']['activityMessageId'] != excludeActivity)
+              {
+                'role':
+                    node['payload']['activityMessageId'] == 'activity_python'
+                        ? 'program'
+                        : 'content',
+                'activityMessageId': node['payload']['activityMessageId'],
+                'surfaceId': node['payload']['surfaceId'],
+              },
+      ];
+  return WorkbenchSnapshot.fromJson({
+    'revision': 1,
+    'layout': layout,
+    'registrations': resolvedRegistrations,
+    'records': records,
+  });
+}
+
+List<Map<String, dynamic>> _registrationsFor(Map<String, dynamic> layout) => [
+      for (final node in (layout['nodes'] as List).cast<Map<String, dynamic>>())
+        if (node['kind'] == 'surface')
           {
             'role': node['payload']['activityMessageId'] == 'activity_python'
                 ? 'program'
@@ -232,14 +416,7 @@ WorkbenchSnapshot _parseSnapshot(
             'activityMessageId': node['payload']['activityMessageId'],
             'surfaceId': node['payload']['surfaceId'],
           },
-  ];
-  return WorkbenchSnapshot.fromJson({
-    'revision': 1,
-    'layout': layout,
-    'registrations': registrations,
-    'records': records,
-  });
-}
+    ];
 
 Map<String, dynamic> _rejectedLayout(String name) {
   final base = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
