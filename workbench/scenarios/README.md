@@ -46,13 +46,14 @@
 | `followup` | Nonempty list of prompts sent after all actions, in the same thread |
 | Assertion `kind: reply` | `includes` is matched case-insensitively against the final assistant text of the most recent captured turn, which must finish successfully |
 | Computed reply expectation | `includes: {"pow": [7, 12345, 1000003]}` computes the modular power with BigInt in the harness. The result is never supplied in the prompt |
+| Assertion `kind: csv` | Public workdir listing must contain the receipt filename; an authenticated download must have a last row with the current submission ID and exact submitted values |
 | Assertion `kind: submission` | `name: workbench_intake` or `workbench_form` and exact `context` values must match a synthetic tool call/result pair in the action run's persisted input, read through its authenticated public GET endpoint |
 | `expectFail` | Optional nonempty reason recorded in evidence. Assertions still run and failures still exit nonzero. A passing case is marked `unexpectedPass` |
 
 | Added model case | Sequence |
 | --- | --- |
 | `submit_form` | Setup places the built-in intake in the left sidebar. Fill Question with Scenario zebra question, check North and Acknowledged, then Submit and await its turn. Require the stored workbench_intake pair, RUN_FINISHED and zebra in that turn's reply |
-| `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values and walrus in the reply |
+| `custom_form` | Publish Scenario survey in the left sidebar, fill Name, choose Blue from its radio list, check Subscribe and Submit. Require provenance, stored workbench_form values, walrus and scenario-survey.csv in the reply, and matching values in the downloaded CSV |
 | `credential_form` | Request a login form with a password field. Require the companion text panel and no password-like canvas field |
 | `repl_result` | Publish Scenario compute with `print(pow(7, 12345, 1000003))`, press Run and await its action turn, then ask what it printed. Require the computed value in the follow-up reply |
 
@@ -73,7 +74,7 @@
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
 | Scope limits | Region semantics replace geometry classification. Chart assertions require image semantics with title and series plus a PNG ink check. Selectors require live verification |
 | Execution | Deterministic programs and replay remain inert. Model counter cases deliberately press Run. The follow-up fix case checks replacement, not the host AI Fix repair chain |
-| Offline tests | Twenty-two JavaScript tests cover corpus validation, actions, turn capture, stored intake and custom form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Seven Python tests cover recipes, public-storage cleanup and persistence, including all nine seeded recipes |
+| Offline tests | Twenty-six JavaScript tests cover corpus validation, actions, turn capture, stored intake and custom form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Seven Python tests cover recipes, public-storage cleanup and persistence, including all nine seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |
 | Unverified | Claude must run the live suites. Docker, deployed PostgreSQL, browser semantics, screenshots and both models were unavailable here |
 | Flutter checks | Host widget tests cover region and window semantics, Python source and Run mounting, and a hittable form Submit. The socket-restricted sandbox uses direct `flutter_tester` execution |
@@ -113,3 +114,40 @@ semantics, current-value submission and finite region/window/split/tab bounds.
 The harness uses a radio action for Color because the basic catalog renders
 single choices without chips as radio lists. Widget semantics check that role.
 Live Chrome semantics and model runs still require the host suites.
+
+## Saved form results
+
+Each validated Submit appends one row to the thread workspace CSV before
+inference. Custom titles become lowercase ASCII slugs of at most 48 characters;
+empty slugs use `form`. Ordered field names determine file compatibility. A
+conflicting schema gets `-2`, `-3`, etc. The built-in template reserves
+`intake.csv`; a custom form titled Intake starts at `intake-2.csv`.
+
+Columns are `submitted_at` (server UTC), `submission_id`, then fields in
+definition order. Missing optional values are empty cells; booleans and lists
+use JSON. Cells beginning with `=`, `+`, `-`, `@`, tab or carriage return receive
+an apostrophe. The Python CSV writer handles quoting and newlines. A directory
+lock serializes writes across threads and backend processes; disk rows provide
+submission-ID deduplication across worker restarts. Writes are flushed and
+synced before the server reports the saved filename. CSV saving and run-history
+persistence are separate operations: a retry after a saved row reuses its receipt.
+
+`read_form_results(title)` is scoped to the authenticated thread and returns
+untrusted data, total row counts, columns, and recent rows. Output is limited to
+20 rows per file, 1000 characters per cell and 16 KiB overall, with `truncated`
+set when limits discard content. It never creates files. Room teaching explains
+that a synthetic form result is a just-completed user submission, and replies
+should briefly acknowledge values and the authoritative `savedFile` filename.
+
+Step3 sets `sandbox_config.workdirs_path` to `/data/workbench/workdirs` on the
+existing named Compose volume. Step6 creates that directory and assigns it to
+the backend user. Existing Compose isolation and deployment guards remain.
+The app already refreshes workdirs on thread open and run completion, shows CSV
+files in its Files panel, and offers the existing download action. No app
+feature flag or production Dart change is needed.
+
+Offline backend tests exercise actual public listing/download handlers with
+identity dependencies stubbed. A widget test verifies a saved survey CSV is
+visible and its download action selects it. Live authentication, deployed volume
+ownership, Chrome rendering, Glimmer wording and browser downloads remain host
+verification steps after deployment.

@@ -113,6 +113,25 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  testWidgets('a saved form CSV is visible and its download action selects it',
+      (tester) async {
+    final downloaded = <WorkdirFile>[];
+    final csv = _file('scenario-survey.csv');
+    await tester.pumpWidget(_section(
+      WorkdirFilesLoaded([csv]),
+      onDownload: (file) async {
+        downloaded.add(file);
+        return const DownloadSaved();
+      },
+    ));
+
+    expect(findFileName('scenario-survey.csv'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.download_outlined));
+    await tester.pump();
+    expect(downloaded, [csv]);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('Failed explains the failure without rendering the raw message',
       (tester) async {
     const error = NetworkException(message: 'down');

@@ -24,7 +24,7 @@ chmod 600 workbench/stack/workbench.env
 
 Fill in the copied file locally. It is an ignored shell env file, sourced by the script. Quote values as shell literals. Set `DEV_ROOT` to an absolute path without a trailing slash or symlink aliases. Set `MODEL_HOST` and `OLLAMA_HOST` to reachable hosts without a scheme or port. Choose `WB_ADMIN_USER` and `WB_ADMIN_PASSWORD`. The login also supplies the display name and email local part. `LOGFIRE_ENV_FILE` is optional and defaults to `$DEV_ROOT/.env`, which must contain `LOGFIRE_TOKEN`. Keep passwords and tokens out of review material.
 
-`SOLIPLEX_WORKBENCH_ROOMS` is an optional comma-separated allow-list of room IDs whose AG-UI run endpoint accepts workbench actions. It defaults to empty; add workbench room IDs explicitly and leave legacy `a2ui-lab` rooms out. The backend workbench database uses `SOLIPLEX_WORKBENCH_DB`, defaulting to `/data/workbench/workbench.sqlite3`; step3 mounts a named Compose volume at `/data/workbench`.
+`SOLIPLEX_WORKBENCH_ROOMS` is an optional comma-separated allow-list of room IDs whose AG-UI run endpoint accepts workbench actions. It defaults to empty; add workbench room IDs explicitly and leave legacy `a2ui-lab` rooms out. The backend workbench database uses `SOLIPLEX_WORKBENCH_DB`, defaulting to `/data/workbench/workbench.sqlite3`; step3 mounts a named Compose volume at `/data/workbench` and configures thread workdirs at `/data/workbench/workdirs`. Validated form submissions save CSV rows there; see [saved form results](scenarios/README.md#saved-form-results).
 
 Review the script, then run the steps in order:
 

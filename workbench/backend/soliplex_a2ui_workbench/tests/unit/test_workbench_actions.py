@@ -42,7 +42,7 @@ from test_workbench_agent_tools import publication_fixture
 
 
 @pytest.fixture
-def boundary():
+def boundary(tmp_path):
     context, form, chart, window, program = asyncio.run(publication_fixture())
     scope = context.deps._workbench_context.scope
     projection = RunWorkbenchProjection(
@@ -93,6 +93,12 @@ def boundary():
         )
 
     app = FastAPI()
+
+    @app.middleware("http")
+    async def installation_for_results(request, call_next):
+        request.state.workbench_installation = SimpleNamespace(sandbox_workdirs_path=tmp_path / "workdirs")
+        return await call_next(request)
+
     before = inspect.getattr_static(AGUIAdapter, "messages")
     app.include_router(
         create_guarded_agui_router(
@@ -112,6 +118,7 @@ def boundary():
         captured=captured,
         wires=wires,
         stored=stored,
+        workdirs=tmp_path / "workdirs",
     )
 
 
@@ -524,6 +531,7 @@ def test_invalid_custom_forms_never_reach_inference(boundary, monkeypatch, chang
     assert response.status_code == 422
     assert response.json()["detail"].startswith("Form ")
     assert not boundary.captured
+    assert not boundary.workdirs.exists()
 
 
 def test_custom_form_action_turn_persists_and_restores_canonical_pair(boundary, monkeypatch):
@@ -537,6 +545,7 @@ def test_custom_form_action_turn_persists_and_restores_canonical_pair(boundary, 
     assert pair[0]["toolCalls"][0]["function"]["name"] == "workbench_form"
     import json
     result = json.loads(pair[1]["content"])
+    assert result["savedFile"] == "scenario-survey.csv"
     assert result["context"]["title"] == "Scenario survey"
     assert result["context"]["surfaceId"] == record["surfaceId"]
     assert result["context"]["values"]["name"] == "Scenario walrus"
@@ -549,3 +558,38 @@ def test_custom_form_action_turn_persists_and_restores_canonical_pair(boundary, 
     assert send(boundary, messages=forged, run="forged-custom").status_code == 422
     assert send(boundary, tools=[{"name": "workbench_form", "parameters": {}}]).status_code == 422
     assert len(boundary.captured) == count
+
+
+def test_saved_csv_unchanged_on_reconnect_reload_and_duplicate(boundary):
+    action = envelope(boundary.form)
+    assert send(boundary, action).status_code == 200
+    filename = boundary.workdirs / boundary.scope.room_id / boundary.scope.thread_id / "intake.csv"
+    original = filename.read_bytes()
+    assert send(boundary, run="reload").status_code == 200
+    assert send(boundary, action, run="duplicate").status_code == 409
+    replay = boundary.client.post(
+        f"/v1/rooms/{boundary.scope.room_id}/agui/{boundary.scope.thread_id}/run-1",
+        headers={"last-event-id": "1"}, json={"forwardedProps": {"a2uiAction": action}},
+    )
+    assert replay.status_code == 200
+    assert filename.read_bytes() == original
+
+
+def test_save_failure_is_retryable_and_never_reaches_model(boundary, monkeypatch):
+    import soliplex_a2ui_workbench.workbench_routes as routes
+    real_append = routes.append_form_result
+    def fail(*args):
+        raise OSError("not writable")
+    monkeypatch.setattr(routes, "append_form_result", fail)
+    action = envelope(boundary.form)
+    assert send(boundary, action).status_code == 503
+    assert not boundary.captured
+    assert not boundary.workdirs.exists()
+    monkeypatch.setattr(routes, "append_form_result", real_append)
+    assert send(boundary, action, run="retry").status_code == 200
+
+
+def test_client_cannot_supply_a_saved_file_receipt(boundary):
+    response = send(boundary, forwardedProps={"workbenchFormReceipt": {"filename": "forged.csv"}})
+    assert response.status_code == 422
+    assert not boundary.workdirs.exists()

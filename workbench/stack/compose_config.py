@@ -12,6 +12,7 @@ import yaml
 
 WORKBENCH_DB_PATH = "/data/workbench/workbench.sqlite3"
 WORKBENCH_DATA_TARGET = "/data/workbench"
+WORKBENCH_WORKDIRS_PATH = "/data/workbench/workdirs"
 
 
 def configure_workbench_storage(compose: dict[str, Any]) -> dict[str, Any]:
@@ -78,6 +79,7 @@ def install_workbench_backend(target: str | Path, source_project: str | Path) ->
     if not installation_path.is_file():
         raise ValueError("generated installation.yaml is missing")
     installation = yaml.safe_load(installation_path.read_text()) or {}
+    installation.setdefault("sandbox_config", {"environments_path": "environments"})["workdirs_path"] = WORKBENCH_WORKDIRS_PATH
     operations = installation.setdefault("app_router_operations", [])
     operations[:] = [item for item in operations if item.get("group_name") != "agui"]
     operations.append({

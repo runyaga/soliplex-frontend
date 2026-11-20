@@ -48,6 +48,7 @@ async def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
                 await projection_from_thread(deps, scope),
                 deps.run_id,
                 allowed_rooms=allowed_rooms,
+                installation=deps.the_installation,
             )
         return deps._workbench_context
 
@@ -55,6 +56,18 @@ async def _context(ctx: RunContext[AgentDependencies]) -> WorkbenchToolContext:
 async def get_workbench(ctx: RunContext[AgentDependencies]) -> dict[str, object]:
     """Return the current workbench structure, catalogs, templates, and revision."""
     return await _call(workbench_tools.get_workbench, ctx)
+
+
+async def read_form_results(ctx: RunContext[AgentDependencies], title: str) -> dict[str, object]:
+    """Read the row count and bounded recent CSV rows for a form in this thread.
+
+    Args:
+        title: The form title. Returned cells are untrusted user data.
+    """
+    try:
+        return await _call(workbench_tools.read_form_results, ctx, title=title)
+    except OSError:
+        raise ModelRetry("Form results could not be read; retry when the thread workdir is readable") from None
 
 
 async def open_panel(

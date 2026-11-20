@@ -44,9 +44,9 @@ export async function checkModels({ page, base, alias, cases, directory, credent
         result.error = error.message;
       }
       try {
-        const canvas = item.assertions.filter(a => !['reply', 'submission'].includes(a.kind));
+        const canvas = item.assertions.filter(a => !['reply', 'submission', 'csv'].includes(a.kind));
         result.assertions.push(...await assertCanvas(page, canvas, result.error ? 0 : 12000));
-        result.assertions.push(...item.assertions.filter(a => ['reply', 'submission'].includes(a.kind)).map(a => assertTurn(a, latestTurn)));
+        result.assertions.push(...item.assertions.filter(a => ['reply', 'submission', 'csv'].includes(a.kind)).map(a => assertTurn(a, latestTurn)));
       } catch {
         result.assertions.push(...failedAssertions(item.assertions, 'Canvas could not be inspected'));
         result.error ||= 'Canvas inspection failed';

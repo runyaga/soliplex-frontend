@@ -501,6 +501,10 @@ class GetWorkbench(Closed):
     pass
 
 
+class ReadFormResults(Closed):
+    title: Title
+
+
 class OpenPanel(Closed):
     title: Title
     text: Annotated[str, Field(min_length=1, max_length=2000)]
@@ -695,6 +699,7 @@ class RepairProgram(Closed):
 MINIMUM_ROOM_TOOL_MANIFEST = MappingProxyType(
     {
         "get_workbench": GetWorkbench,
+        "read_form_results": ReadFormResults,
         "open_panel": OpenPanel,
         "place_form": PlaceForm,
         "show_chart": ShowChart,

@@ -249,6 +249,17 @@ def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, o
     }
 
 
+def read_form_results(ctx: WorkbenchToolContext, title: str) -> dict[str, object]:
+    """Read bounded saved rows in this authenticated thread, without writes."""
+    from .workbench_form_results import read_form_results as read_results
+
+    intake = any(
+        record.get("title") == title and record.get("template") == "intake"
+        for record in ctx.snapshot()["content"]
+    )
+    return read_results(ctx.installation, ctx.scope, "intake" if intake else title)
+
+
 def create_container(
     ctx: WorkbenchToolContext,
     parent_id: str,

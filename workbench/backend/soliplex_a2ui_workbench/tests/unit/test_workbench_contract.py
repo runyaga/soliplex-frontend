@@ -359,7 +359,7 @@ def test_minimum_tool_manifest_is_authoritative_and_closed() -> None:
     expected = {
         "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
-        "move_panel", "close_panel", "repair_program",
+        "move_panel", "close_panel", "repair_program", "read_form_results",
     }
     assert set(manifest) == expected
     for model in manifest.values():
@@ -575,7 +575,7 @@ def test_tool_schemas_are_closed_and_minimum_only() -> None:
     assert set(manifest) == {
         "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
-        "move_panel", "close_panel", "repair_program",
+        "move_panel", "close_panel", "repair_program", "read_form_results",
     }
     assert "show_table" not in manifest
     assert not any(

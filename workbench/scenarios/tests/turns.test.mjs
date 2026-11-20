@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { csvCell, parseCsv } from '../lib/csv.mjs';
 import { performActions } from '../lib/actions.mjs';
 import { captureTurn } from '../lib/turns.mjs';
 import { assertTurn, intakeSubmissions, loadCases, replyExpectation, validateCases } from '../lib/core.mjs';
@@ -9,13 +10,14 @@ const options = { room: 'workbench', threadId: 'thread-id', timeoutMs: 1000 };
 const url = 'https://example.invalid/api/v1/rooms/workbench/agui/thread-id/run-id';
 const context = { question: 'Scenario zebra question', districts: ['north'], acknowledged: true };
 const storedInput = {
+  forwardedProps: { workbenchFormReceipt: { filename: 'intake.csv' } },
   messages: [
     { role: 'assistant', toolCalls: [{ id: 'call-id', function: { name: 'workbench_intake' } }] },
     { role: 'tool', toolCallId: 'call-id', content: JSON.stringify({ kind: 'untrusted_user_submitted_data', actionSchemaVersion: 'intake.submit@1', context }) },
   ],
 };
 
-function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
+function fixture({ events, actionName = 'submit_intake', httpOk = true, csvStatus = 200, missingFile = false } = {}) {
   const operations = [];
   const nodes = [
     ['textbox', 'Scenario intake Question Districts'],
@@ -45,10 +47,19 @@ function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
     route: async (_pattern, callback) => { handler = callback; operations.push('route'); },
     unroute: async (_pattern, callback) => { assert.equal(callback, handler); operations.push('unroute'); },
     request: { get: async (address, options) => {
-      assert.equal(address, url);
-      assert.equal(options.headers.authorization, 'Bearer fake-token', 'the stored-run read carries the app bearer header');
-      operations.push('read-input');
-      return { ok: () => true, json: async () => ({ run_input: storedInput }) };
+      assert.equal(options.headers.authorization, 'Bearer fake-token', 'every public read carries the app bearer header');
+      if (address === url) {
+        operations.push('read-input');
+        return { ok: () => true, json: async () => ({ run_input: storedInput }) };
+      }
+      const base = 'https://example.invalid/api/v1/workdirs/workbench/thread/thread-id';
+      if (address === base) {
+        operations.push('list-files');
+        return { ok: () => true, json: async () => ({ files: missingFile ? [] : [{ filename: 'intake.csv', url: 'https://untrusted.invalid/avoid' }] }) };
+      }
+      assert.equal(address, base + '/file/intake.csv', 'download stays on the authenticated origin');
+      operations.push('download-csv');
+      return { ok: () => csvStatus === 200, status: () => csvStatus, text: async () => 'submitted_at,submission_id,question,districts,acknowledged\r\n2026-11-20T00:00:00+00:00,submit-id,Scenario zebra question,"[""north""]",true\r\n' };
     } },
     async trigger() {
       assert.ok(handler, 'capture is installed before clicking');
@@ -59,7 +70,7 @@ function fixture({ events, actionName = 'submit_intake', httpOk = true } = {}) {
         { type: 'RUN_FINISHED' },
       ]).map(e => `data: ${JSON.stringify(e)}\n\n`).join('');
       await handler({
-        request: () => ({ method: () => 'POST', url: () => url, allHeaders: async () => ({ authorization: 'Bearer fake-token' }), postDataJSON: () => ({ forwardedProps: { a2uiAction: { userAction: { name: actionName } } } }) }),
+        request: () => ({ method: () => 'POST', url: () => url, allHeaders: async () => ({ authorization: 'Bearer fake-token' }), postDataJSON: () => ({ forwardedProps: { a2uiAction: { submissionId: 'submit-id', userAction: { name: actionName } } } }) }),
         fetch: async () => ({ text: async () => body, status: () => httpOk ? 200 : 422, ok: () => httpOk }),
         fulfill: async response => { assert.equal(response.body, body); operations.push('fulfill'); },
         abort: async () => operations.push('abort'),
@@ -94,7 +105,7 @@ test('awaitTurn captures the action stream and server-authored intake input befo
   const { page, operations } = fixture();
   const turns = [];
   await performActions(page, [{ role: 'button', name: 'Submit', region: 'left', awaitTurn: true }], options, turn => turns.push(turn), noWait);
-  assert.deepEqual(operations, ['route', 'click:Submit', 'fulfill', 'read-input', 'unroute']);
+  assert.deepEqual(operations, ['route', 'click:Submit', 'fulfill', 'read-input', 'list-files', 'download-csv', 'unroute']);
   assert.equal(turns.length, 1);
   assert.ok(!JSON.stringify(turns).includes('fake-token'), 'the bearer header stays out of the turn record');
   assert.equal(turns[0].completed, true);
@@ -194,4 +205,46 @@ test('a custom form submit also reads the stored run input', async () => {
   await performActions(page, [{ role: 'button', name: 'Submit', region: 'left', awaitTurn: true }], options, turn => turns.push(turn), noWait);
   assert.ok(operations.includes('read-input'));
   assert.equal(turns[0].actionName, 'submit_form');
+});
+
+
+test('CSV assertions bind the downloaded last row to the action submission and values', async () => {
+  const { page } = fixture();
+  const turn = await captureTurn(page, options, () => page.trigger());
+  const assertion = { kind: 'csv', filename: 'intake.csv', values: context };
+  assert.equal(assertTurn(assertion, turn).pass, true);
+  for (const changes of [
+    { filename: 'other.csv' }, { rowCount: 0 }, { submissionId: 'other-id' },
+    { lastRow: { ...turn.savedCsv.lastRow, question: 'wrong' } },
+    { lastRow: { ...turn.savedCsv.lastRow, submitted_at: 'wrong' } },
+  ]) assert.equal(assertTurn(assertion, { ...turn, savedCsv: { ...turn.savedCsv, ...changes } }).pass, false);
+  assert.equal(assertTurn(assertion, { ...turn, completed: false }).pass, false);
+  assert.equal(assertTurn(assertion, { ...turn, runErrors: ['failed'] }).pass, false);
+  assert.equal(assertTurn(assertion, {}).pass, false);
+  for (const settings of [{ missingFile: true }, { csvStatus: 404 }]) {
+    const { page, operations } = fixture(settings);
+    await assert.rejects(captureTurn(page, options, () => page.trigger()), /CSV/);
+    assert.equal(operations.at(-1), 'unroute');
+  }
+});
+
+test('CSV parser handles escaped quotes, commas, CRLF, multiline cells and rejects corruption', () => {
+  assert.deepEqual(parseCsv('a,b,c\r\n"one,two","three""four","five\nline\rbreak"\r\n'), [
+    ['a', 'b', 'c'], ['one,two', 'three"four', 'five\nline\rbreak'],
+  ]);
+  assert.deepEqual(parseCsv('a,b\n1,""'), [['a', 'b'], ['1', '']]);
+  for (const invalid of ['a,b\n1', 'a,b\n"unterminated', 'a,b\n"x"oops,2', 'a,b\nquo"te,2']) assert.throws(() => parseCsv(invalid));
+  for (const value of ['=x', '+x', '-1', '@x', '\tx', '\rx']) assert.equal(csvCell(value), "'" + value);
+  assert.equal(csvCell(true), 'true');
+  assert.equal(csvCell(['north']), '["north"]');
+});
+
+test('custom form corpus requires a saved filename reply and exact downloaded CSV values', async () => {
+  const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  const custom = cases.find(c => c.id === 'custom_form');
+  assert.ok(custom.assertions.some(a => a.kind === 'reply' && a.includes === 'scenario-survey.csv'));
+  assert.deepEqual(custom.assertions.find(a => a.kind === 'csv').values, { name: 'Scenario walrus', color: 'Blue', subscribe: true });
+  for (const filename of ['../escape.csv', 'https://evil.invalid/x', '']) {
+    assert.throws(() => validateCases([{ ...custom, assertions: [{ kind: 'csv', filename, values: { name: 'x' } }] }], { prompts: true }));
+  }
 });

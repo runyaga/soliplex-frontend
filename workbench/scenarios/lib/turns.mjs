@@ -1,3 +1,4 @@
+import { parseCsv } from './csv.mjs';
 import { intakeSubmissions, parseSSE, summarizeEvents } from './core.mjs';
 
 export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) {
@@ -43,7 +44,23 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
       const headers = response.authorization ? { authorization: response.authorization } : {};
       const stored = await page.request.get(response.url, { timeout: timeoutMs, headers });
       if (!stored.ok()) throw new Error(`Stored run HTTP ${stored.status()}`);
-      summary.submissions = intakeSubmissions((await stored.json()).run_input);
+      const storedInput = (await stored.json()).run_input;
+      summary.submissions = intakeSubmissions(storedInput);
+      const filename = storedInput?.forwardedProps?.workbenchFormReceipt?.filename;
+      if (typeof filename !== 'string' || !/^[a-z0-9-]+\.csv$/.test(filename)) throw new Error('Missing saved CSV receipt');
+      const listingUrl = new URL(`/api/v1/workdirs/${encodeURIComponent(room)}/thread/${encodeURIComponent(threadId)}`, response.url);
+      const listing = await page.request.get(listingUrl.href, { timeout: timeoutMs, headers });
+      if (!listing.ok()) throw new Error(`Workdir listing HTTP ${listing.status()}`);
+      if (!(await listing.json()).files?.some(file => file.filename === filename)) throw new Error('Saved CSV absent from public workdir listing');
+      const download = await page.request.get(`${listingUrl.href}/file/${encodeURIComponent(filename)}`, { timeout: timeoutMs, headers });
+      if (!download.ok()) throw new Error(`CSV download HTTP ${download.status()}`);
+      const [columns, ...rows] = parseCsv(await download.text());
+      if (!columns || !rows.length) throw new Error('Saved CSV has no data rows');
+      summary.savedCsv = {
+        filename, rowCount: rows.length, columns,
+        lastRow: Object.fromEntries(columns.map((name, index) => [name, rows.at(-1)[index]])),
+        submissionId: response.input.forwardedProps.a2uiAction.submissionId,
+      };
     }
     return summary;
   } finally {

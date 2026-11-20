@@ -16,6 +16,7 @@ from .strict_json import DuplicateJSONKey, parse_json_no_duplicates
 from .workbench_actions import (
     WORKBENCH_FORM_TOOL_NAME, WORKBENCH_INTAKE_TOOL_NAME, SubmissionDedup, submission_messages, validate_submission,
 )
+from .workbench_form_results import append_form_result
 from .workbench_projection import projection_from_thread
 from .workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope, shared_repository
 
@@ -228,6 +229,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
         actor = claims.get("preferred_username")
         if not actor:
             raise HTTPException(401, "authenticated user required")
+        request.state.workbench_installation = the_installation
         request.state.workbench_scope = workbench_scope(
             the_installation, actor, request.path_params["room_id"], request.path_params["thread_id"])
 
@@ -293,6 +295,8 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 run_input.messages[index:index] = missing
                 ids.update(message.id for message in missing)
             props = run_input.forwarded_props
+            if isinstance(props, dict) and "workbenchFormReceipt" in props:
+                raise HTTPException(422, "workbenchFormReceipt is server-owned")
             if not isinstance(props, dict) or "a2uiAction" not in props:
                 return adapter
             raw_action = props["a2uiAction"]
@@ -336,7 +340,18 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 raise HTTPException(409, str(exc)) from exc
             if submission.userAction.name == "submit_form":
                 props["a2uiAction"] = submission.model_dump(mode="json", exclude_none=True)
-            run_input.messages.extend(submission_messages(submission))
+            saved_file = None
+            if submission.userAction.name in {"submit_form", "submit_intake"}:
+                try:
+                    saved_file = append_form_result(
+                        request.state.workbench_installation, scope, submission,
+                        projection.content[submission.activityMessageId],
+                    )
+                except (OSError, ValueError):
+                    dedup.release(scope, submission.submissionId)
+                    raise HTTPException(503, "Form results could not be saved; retry Submit") from None
+                props["workbenchFormReceipt"] = {"filename": saved_file}
+            run_input.messages.extend(submission_messages(submission, saved_file=saved_file))
             return adapter
 
     # Copy only execution routes, then let FastAPI rebuild their dependency

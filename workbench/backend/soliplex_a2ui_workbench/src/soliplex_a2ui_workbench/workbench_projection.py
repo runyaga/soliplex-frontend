@@ -172,7 +172,8 @@ def restore_submission_history(projection, run_input):
         return
     if submission.submissionId in projection.submission_ids:
         return
-    messages = submission_messages(submission)
+    receipt = props.get("workbenchFormReceipt", {})
+    messages = submission_messages(submission, saved_file=receipt.get("filename"))
     # Presence of the exact server projection distinguishes accepted inputs
     # from historical legacy/unvalidated action envelopes.
     index = next((i for i in range(len(run_input.messages))

@@ -378,6 +378,21 @@
       {
         "kind": "reply",
         "includes": "zebra"
+      },
+      {
+        "kind": "reply",
+        "includes": "intake.csv"
+      },
+      {
+        "kind": "csv",
+        "filename": "intake.csv",
+        "values": {
+          "question": "Scenario zebra question",
+          "districts": [
+            "north"
+          ],
+          "acknowledged": true
+        }
       }
     ]
   },
@@ -502,6 +517,19 @@
       {
         "kind": "reply",
         "includes": "walrus"
+      },
+      {
+        "kind": "reply",
+        "includes": "scenario-survey.csv"
+      },
+      {
+        "kind": "csv",
+        "filename": "scenario-survey.csv",
+        "values": {
+          "name": "Scenario walrus",
+          "color": "Blue",
+          "subscribe": true
+        }
       }
     ]
   },

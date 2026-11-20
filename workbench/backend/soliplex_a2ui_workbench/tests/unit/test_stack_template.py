@@ -63,6 +63,9 @@ def test_step3_installs_workbench_package_and_imports_configured_router(tmp_path
     source_project = Path(__file__).parents[2]
     router_name = module.install_workbench_backend(generated, source_project)
     configured = yaml.safe_load(installation.read_text())
+    assert configured["sandbox_config"]["workdirs_path"] == "/data/workbench/workdirs"
+    assert "mkdir -p /data/workbench/workdirs" in script
+    assert "chown soliplex:soliplex /data/workbench /data/workbench/workdirs" in script
     agui = [item for item in configured["app_router_operations"] if item.get("group_name") == "agui"]
     assert agui == [{"kind": "add", "group_name": "agui", "router_name": "soliplex_a2ui_workbench.workbench_routes.guarded_router", "replace_existing": True, "prefix": "/api"}]
     assert router_name == agui[0]["router_name"]
@@ -123,5 +126,5 @@ def test_step3_registers_manifest_tools_for_preview_rooms_only():
     assert set(MINIMUM_ROOM_TOOL_MANIFEST) == {
         "get_workbench", "open_panel", "place_form", "show_chart",
         "run_python_client", "run_python_server", "create_container",
-        "move_panel", "close_panel", "repair_program",
+        "move_panel", "close_panel", "repair_program", "read_form_results",
     }

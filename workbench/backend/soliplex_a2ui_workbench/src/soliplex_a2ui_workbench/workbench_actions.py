@@ -54,7 +54,7 @@ def validate_submission(payload: object, projection) -> CanvasSubmission:
     return submission
 
 
-def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, object]]:
+def synthetic_intake_messages(envelope: Mapping[str, object], *, saved_file=None) -> list[dict[str, object]]:
     """One deterministic, non-callable form pair, preserving the intake wire shape."""
     submission_id = envelope["submissionId"]
     context = envelope["userAction"]["context"]
@@ -66,6 +66,7 @@ def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, 
         "actionSchemaVersion": "form.submit@1" if custom else "intake.submit@1",
         "submissionId": submission_id,
         "context": context,
+        **({"savedFile": saved_file} if saved_file else {}),
     }
     return [
         {"id": f"{call_id}-assistant", "role": "assistant", "toolCalls": [{
@@ -79,10 +80,10 @@ def synthetic_intake_messages(envelope: Mapping[str, object]) -> list[dict[str, 
     ]
 
 
-def submission_messages(submission: CanvasSubmission) -> list[Message]:
+def submission_messages(submission: CanvasSubmission, *, saved_file=None) -> list[Message]:
     envelope = submission.model_dump(mode="json", exclude_none=True)
     if submission.userAction.name in {"submit_intake", "submit_form"}:
-        wire = synthetic_intake_messages(envelope)
+        wire = synthetic_intake_messages(envelope, saved_file=saved_file)
     else:
         wire = [{
             "id": "workbench-result-" + hashlib.sha256(submission.submissionId.encode()).hexdigest()[:24],
@@ -112,3 +113,8 @@ class SubmissionDedup:
             if len(self._keys) >= self.capacity:
                 raise ValueError("workbench submission capacity reached")
             self._keys.add(key)
+
+    def release(self, scope, submission_id):
+        """A failed disk write is retryable, without releasing accepted IDs."""
+        with self._lock:
+            self._keys.discard((*scope.key(), submission_id))

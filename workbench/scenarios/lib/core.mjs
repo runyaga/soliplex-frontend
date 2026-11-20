@@ -1,3 +1,4 @@
+import { csvCell } from './csv.mjs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { isDeepStrictEqual } from 'node:util';
 
@@ -81,6 +82,10 @@ export function validateCases(data, { prompts = false } = {}) {
         replyExpectation(a.includes);
         continue;
       }
+      if (a?.kind === 'csv') {
+        if (!prompts || typeof a.filename !== 'string' || !/^[a-z0-9-]+\.csv$/.test(a.filename) || !a.values || typeof a.values !== 'object' || Array.isArray(a.values) || !Object.keys(a.values).length) throw new Error('Invalid CSV assertion');
+        continue;
+      }
       if (a?.kind === 'submission') {
         const intake = a.name === 'workbench_intake' && typeof a.context?.question === 'string' && Array.isArray(a.context.districts) && a.context.districts.every(d => ['north', 'south'].includes(d)) && a.context.acknowledged === true;
         const custom = a.name === 'workbench_form' && typeof a.context?.title === 'string' && a.context.title.trim() && a.context.values && typeof a.context.values === 'object' && !Array.isArray(a.context.values);
@@ -151,11 +156,20 @@ export function regionSelector(region = 'workspace') {
 
 export function assertionLabel(a) {
   if (a.kind === 'reply') return `Latest assistant reply containing ${replyExpectation(a.includes)}`;
+  if (a.kind === 'csv') return `Public workdir CSV ${a.filename} contains submitted values`;
   if (a.kind === 'submission') return `Run input contains ${a.name} submission`;
   return `${a.absent ? 'Absent ' : ''}${a.kind === 'role' ? a.role : a.kind} ${a.name} in ${a.region ?? 'workspace'}${a.includes ? ` containing ${a.includes}` : ''}${a.count ? ` count ${a.count}` : ''}`;
 }
 
 export function assertTurn(a, turn) {
+  if (a.kind === 'csv') {
+    const csv = turn?.savedCsv;
+    const matches = csv?.filename === a.filename && csv.rowCount > 0 &&
+      csv.submissionId && csv.lastRow.submission_id === csvCell(csv.submissionId) &&
+      !Number.isNaN(Date.parse(csv.lastRow.submitted_at)) &&
+      Object.entries(a.values).every(([key, value]) => csv.lastRow[key] === csvCell(value));
+    return { label: assertionLabel(a), pass: Boolean(turn?.completed && !turn.runErrors?.length && matches), detail: csv ? `${csv.filename}: ${csv.rowCount} rows` : 'No downloaded CSV' };
+  }
   if (a.kind === 'reply') return {
     label: assertionLabel(a),
     pass: Boolean(turn?.completed && !turn.runErrors?.length && turn.finalMessage?.toLowerCase().includes(replyExpectation(a.includes).toLowerCase())),

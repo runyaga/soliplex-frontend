@@ -526,7 +526,8 @@ PY
   check_compose
   dc up -d --wait
   # The workbench_data volume is created root-owned. The backend runs as soliplex.
-  dc exec -T -u root backend chown soliplex:soliplex /data/workbench
+  dc exec -T -u root backend mkdir -p /data/workbench/workdirs
+  dc exec -T -u root backend chown soliplex:soliplex /data/workbench /data/workbench/workdirs
   for room in a2ui-lab a2ui-lab-e4b workbench workbench-e4b; do
     dc run --rm -T --quiet-build soliplex-dev /app/.venv/bin/soliplex-cli \
       room-authz from-yaml /environment "$room" < "$TARGET/backend/environment/rooms/$room/authz.yaml"
