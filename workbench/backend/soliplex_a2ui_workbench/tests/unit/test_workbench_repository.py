@@ -1,3 +1,4 @@
+from soliplex_a2ui_workbench.workbench_repository import default_layout
 """Durable workbench snapshot storage tests."""
 
 import json
@@ -141,7 +142,7 @@ def test_explicit_empty_negotiation_does_not_fall_back_to_builtin_catalogs(tmp_p
     ])
     with pytest.raises(ValueError, match="negotiated"):
         repo.publish(scope, "empty-negotiation", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity-chart", "surface-chart")})
-    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.load_snapshot(scope)["layout"] == default_layout()
     assert repo.get_receipt(scope, "empty-negotiation") is None
     repo.close()
 
@@ -200,7 +201,7 @@ def test_default_catalog_validator_rejects_malformed_chart_before_commit(tmp_pat
     mutate(record["spec"])
     with pytest.raises(ValueError):
         repo.publish(scope, "malformed", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("activity_chart", "surface_chart")})
-    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.load_snapshot(scope)["layout"] == default_layout()
     assert repo.get_receipt(scope, "malformed") is None
     repo.close()
 
@@ -218,7 +219,7 @@ def test_dangling_emitted_component_reference_rejects_before_repository_commit(t
     record = {"activityMessageId": "card", "surfaceId": "card_surface", "catalogId": BASIC_CATALOG, "component": "Card", "properties": {"children": ["missing-child"]}}
     with pytest.raises(ValueError, match="component reference"):
         repo.publish(scope, "dangling", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("card", "card_surface")})
-    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.load_snapshot(scope)["layout"] == default_layout()
     assert repo.get_receipt(scope, "dangling") is None
     repo.close()
 

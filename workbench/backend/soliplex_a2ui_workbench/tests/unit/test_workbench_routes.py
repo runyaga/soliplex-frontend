@@ -72,7 +72,7 @@ def test_production_scope_checks_room_write_permission(tmp_path):
     app = FastAPI()
     app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     response = _test_client(app, repo, policy, threads).post(
-        "/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-a"}
+        "/v1/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-a"}
     )
     assert response.status_code == 403
     assert policy.checks == [("room-a", "alice", authz.Permission.WRITE)]
@@ -85,7 +85,7 @@ def test_workbench_routes_fail_closed_when_room_is_not_configured(tmp_path):
     app.include_router(build_router(repository=repo, workbench_rooms=set()))
     policy = MemoryRoomPolicy(set())
     threads = MemoryThreadStorage()
-    response = _test_client(app, repo, policy, threads).get("/rooms/unlisted/threads/thread-a/workbench")
+    response = _test_client(app, repo, policy, threads).get("/v1/rooms/unlisted/threads/thread-a/workbench")
     assert response.status_code == 503
     assert response.json()["detail"] == "workbench room is not configured in SOLIPLEX_WORKBENCH_ROOMS"
 
@@ -96,7 +96,7 @@ def test_production_scope_checks_thread_ownership(tmp_path):
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.READ)})
     app = FastAPI()
     app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
-    response = _test_client(app, repo, policy, threads).get("/rooms/room-a/threads/foreign-thread/workbench")
+    response = _test_client(app, repo, policy, threads).get("/v1/rooms/room-a/threads/foreign-thread/workbench")
     assert response.status_code == 404
     assert policy.checks == [("room-a", "alice", authz.Permission.READ)]
     assert threads.thread_checks == [("alice", "room-a", "foreign-thread")]
@@ -116,11 +116,11 @@ def test_snapshot_loads_only_authenticated_actor_room_thread(tmp_path):
     app.include_router(build_router(repository=repo, workbench_rooms={"room-a"}))
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.READ)})
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
-    response = _test_client(app, repo, policy, threads).get("/rooms/room-a/threads/thread-a/workbench")
+    response = _test_client(app, repo, policy, threads).get("/v1/rooms/room-a/threads/thread-a/workbench")
     assert response.status_code == 200
     assert response.json()["revision"] == 1
-    assert [item["activityMessageId"] for item in response.json()["content"]] == ["only-thread-a"]
-    assert response.json()["content"][0]["source"] == "print('a')"
+    assert [item["content"]["activityMessageId"] for item in response.json()["records"]] == ["only-thread-a"]
+    assert response.json()["records"][0]["content"]["source"] == "print('a')"
     assert threads.thread_checks == [("alice", "room-a", "thread-a")]
 
 
@@ -354,7 +354,7 @@ def test_stale_action_revision_is_http_409(tmp_path):
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.WRITE)})
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
     payload = {"v": 1, "submissionId": "stale", "activityMessageId": "activity-form", "surfaceRevision": 0, "actionSchemaVersion": "intake.submit@1", "userAction": {"question": "Q", "districts": ["north"], "acknowledged": True}}
-    response = _test_client(app, repo, policy, threads).post("/rooms/room-a/threads/thread-a/workbench/actions", json=payload)
+    response = _test_client(app, repo, policy, threads).post("/v1/rooms/room-a/threads/thread-a/workbench/actions", json=payload)
     assert response.status_code == 409
 
 
@@ -370,7 +370,7 @@ def test_restore_route_restores_owned_closed_layout_node(tmp_path):
     policy = MemoryRoomPolicy({("room-a", "alice", authz.Permission.WRITE)})
     threads = MemoryThreadStorage({("alice", "room-a", "thread-a")})
     response = _test_client(app, repo, policy, threads).post(
-        "/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-closed"}
+        "/v1/rooms/room-a/threads/thread-a/workbench/actions/restore", json={"nodeId": "panel-closed"}
     )
     assert response.status_code == 200
     assert response.json() == {"status": "restored", "nodeId": "panel-closed", "revision": 2, "sequence": 2}

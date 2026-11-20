@@ -44,12 +44,30 @@ def _build_tool_table():
     return {name: ToolRegistration(getattr(impl, name), schema) for name, schema in MINIMUM_ROOM_TOOL_MANIFEST.items()}
 
 
-MINIMUM_ROOM_TOOLS = MappingProxyType(_build_tool_table())
-# Both configured minimum rooms consume this very same immutable mapping.
-MINIMUM_ROOM_REGISTRATIONS = (MINIMUM_ROOM_TOOLS, MINIMUM_ROOM_TOOLS)
+_TOOL_TABLE: MappingProxyType | None = None
 
 
-def validate_room_registrations(registrations=MINIMUM_ROOM_REGISTRATIONS) -> None:
+def __getattr__(name: str) -> object:
+    """Build the tool table on first use.
+
+    workbench_tools imports this module, so building the table at import time
+    is a circular import whenever workbench_tools is imported first, which is
+    how Soliplex resolves configured tool names.
+    """
+    global _TOOL_TABLE
+    if name not in ("MINIMUM_ROOM_TOOLS", "MINIMUM_ROOM_REGISTRATIONS"):
+        raise AttributeError(name)
+    if _TOOL_TABLE is None:
+        _TOOL_TABLE = MappingProxyType(_build_tool_table())
+    if name == "MINIMUM_ROOM_TOOLS":
+        return _TOOL_TABLE
+    # Both configured minimum rooms consume this very same immutable mapping.
+    return (_TOOL_TABLE, _TOOL_TABLE)
+
+
+def validate_room_registrations(registrations=None) -> None:
+    if registrations is None:
+        registrations = __getattr__("MINIMUM_ROOM_REGISTRATIONS")
     """Fail startup/tests if either actual callable registration drifts from U01."""
     expected = set(MINIMUM_ROOM_TOOL_MANIFEST)
     for tools in registrations:

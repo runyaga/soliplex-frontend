@@ -200,6 +200,24 @@ async def _read_agui_json(request: Request) -> dict[str, object]:
     return _normalize_agui_aliases(await _read_request_json(request))
 
 
+def _snapshot_records(content: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Number the content parts a snapshot ships, per commit record.
+
+    A commit also writes a layout part, which the snapshot carries in its
+    layout field, so each record's count and indexes cover content parts only.
+    """
+    by_record: dict[str, list[dict[str, object]]] = {}
+    for item in content:
+        by_record.setdefault(str(item["workbenchCommit"]["recordId"]), []).append(item)
+    records = []
+    for record_id, items in by_record.items():
+        items.sort(key=lambda item: item["workbenchCommit"]["index"])
+        for index, item in enumerate(items):
+            records.append({"recordId": record_id, "sequence": item["workbenchCommit"]["sequence"],
+                            "partIndex": index, "partCount": len(items), "content": item})
+    return records
+
+
 def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_sink=None, workbench_rooms: set[str] | None = None) -> APIRouter:
     """Build routes with the installed Soliplex 0.93 public dependencies."""
     from soliplex import agui, authz, installation, views
@@ -237,25 +255,27 @@ def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_s
         )
         return WorkbenchScope(str(username), str(server_id), room_id, thread_id)
 
-    @router.get("/rooms/{room_id}/threads/{thread_id}/workbench")
+    @router.get("/v1/rooms/{room_id}/threads/{thread_id}/workbench")
     async def snapshot(room_id: str, thread_id: str, request: Request, scope=Depends(scope_dependencies)):
         data = _repository_for(request, repository).load_snapshot(scope)
+        layout_registration = {
+            "role": "layout",
+            "activityMessageId": f"wb-layout-{__import__('hashlib').sha256('/'.join(scope.key()).encode()).hexdigest()[:24]}",
+            "surfaceId": f"wb-control-{__import__('hashlib').sha256('/'.join(scope.key()).encode()).hexdigest()[:24]}",
+        }
+        content = data["content"]
+        registrations = [layout_registration, *[
+            {"role": "content", "activityMessageId": item["activityMessageId"], "surfaceId": item["surfaceId"]}
+            for item in content
+        ]]
         return {
             "revision": data["revision"],
             "layout": data["layout"],
-            "content": data["content"],
-            "registrations": [
-                {
-                    "activityMessageId": item.get("activityMessageId"),
-                    "surfaceId": item.get("surfaceId"),
-                    "catalogId": item.get("catalogId"),
-                    "component": item.get("component"),
-                }
-                for item in data["content"]
-            ],
+            "registrations": registrations,
+            "records": _snapshot_records(content),
         }
 
-    @router.post("/rooms/{room_id}/threads/{thread_id}/workbench/actions")
+    @router.post("/v1/rooms/{room_id}/threads/{thread_id}/workbench/actions")
     async def action(room_id: str, thread_id: str, request: Request, scope=Depends(scope_dependencies)):
         raw_payload = await _read_request_json(request)
         try:
@@ -270,7 +290,7 @@ def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_s
         except (ValidationError, ValueError) as exc:
             raise HTTPException(422, "invalid workbench action") from exc
 
-    @router.post("/rooms/{room_id}/threads/{thread_id}/workbench/actions/restore")
+    @router.post("/v1/rooms/{room_id}/threads/{thread_id}/workbench/actions/restore")
     async def restore(room_id: str, thread_id: str, request: Request, scope=Depends(scope_dependencies)):
         try:
             body = RestoreBody.model_validate(await _read_request_json(request))

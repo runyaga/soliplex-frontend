@@ -144,7 +144,7 @@ def test_raw_action_json_rejects_duplicate_keys(tmp_path):
     app.dependency_overrides[views.depend_the_room_authz_policy.dependency] = lambda: Policy()
     app.dependency_overrides[views.depend_the_user_claims.dependency] = lambda: {"preferred_username": "alice"}
     payload = '{"v":1,"submissionId":"first","submissionId":"second","activityMessageId":"activity-1","surfaceRevision":1,"actionSchemaVersion":"intake.submit@1","userAction":{"question":"Q","districts":["north"],"acknowledged":true}}'
-    response = client.post(f"/rooms/{scope.room_id}/threads/{scope.thread_id}/workbench/actions", content=payload, headers={"content-type": "application/json"})
+    response = client.post(f"/v1/rooms/{scope.room_id}/threads/{scope.thread_id}/workbench/actions", content=payload, headers={"content-type": "application/json"})
     assert response.status_code == 400
 
 

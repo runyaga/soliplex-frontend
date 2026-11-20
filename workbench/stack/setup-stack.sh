@@ -51,7 +51,7 @@ for key, expected in [('TARGET', os.environ['DEV_ROOT'] + '/soliplex-a2ui-workbe
                 assert not q.is_symlink(), f'Refusing output tree symlink {q}'
 PY
 }
-py() { uv run --no-project --python 3.12 --with pyyaml --with mako python - "$@"; }
+py() { uv run --no-project --python 3.12 --with pyyaml --with pydantic --with mako python - "$@"; }
 need_stack() {
   guard
   test -f "$TARGET/.workbench-generated" || fail 'Run step1 first. Partial generation needs host review.'
@@ -243,7 +243,7 @@ for room_id, agent in [('a2ui-lab','default_chat'), ('a2ui-lab-e4b','alternate_c
     acl = yaml.safe_load((source/'authz.yaml').read_text())
     acl['room_id'] = room_id
     save(p/'backend/environment/rooms'/room_id/'authz.yaml', acl)
-sys.path.insert(0, str(Path(os.environ['WORKBENCH_PACKAGE'])/'src/soliplex_a2ui_workbench/src'))
+sys.path.insert(0, str(Path(os.environ['WORKBENCH_PACKAGE'])/'src'))
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 for room_id, agent, model in [('workbench','default_chat','Glimmer'),
                               ('workbench-e4b','alternate_chat','Gemma 4 E4B')]:
@@ -257,22 +257,47 @@ for room_id, agent, model in [('workbench','default_chat','Glimmer'),
     acl = yaml.safe_load((lab/'backend/environment/rooms/a2ui-lab/authz.yaml').read_text())
     acl['room_id'] = room_id
     save(p/'backend/environment/rooms'/room_id/'authz.yaml', acl)
-    skill = p/'backend/environment/skills'/f'{room_id}-workbench'
+    skill_name = f'{room_id}-workbench'
+    # Workbench rooms load only their own skill: the lab skills teach tools these rooms do not register.
+    room['skills'] = {'installation_skill_names': [{'name': skill_name, 'defer_loading': False}]}
+    save(p/'backend/environment/rooms'/room_id/'room_config.yaml', room)
+    skill = p/'backend/environment/skills'/skill_name
     skill.mkdir(parents=True, exist_ok=True)
-    (skill/'SKILL.md').write_text('''# Workbench room guide (hand-written for preview)
+    tools = ', '.join(MINIMUM_ROOM_TOOL_MANIFEST)
+    (skill/'SKILL.md').write_text(f"""---
+name: {skill_name}
+description: |
+    How to arrange the workbench canvas in this room with the workbench tools
+    and the layout tree rules. Hand-written for the preview.
+---
 
-Use get_workbench before changing the canvas. Use open_panel, place_form,
-show_chart, create_container, move_panel, close_panel, and repair_program to
-act on registered nodes. run_python_client runs user-visible code;
-run_python_server is disabled.
+# Workbench room guide
 
-Layout rules: preserve returned stable IDs; create children with a parent ID
-and node kind; use only declared node kinds and keep the tree within the server
-depth limit. Closing a parent closes its descendants. The layout tree owns
-placement; A2UI surfaces carry content.
-''')
-    if not any(x['skill_name'] == f'{room_id}-workbench' for x in data['skill_configs']):
-        data['skill_configs'].append({'skill_name': f'{room_id}-workbench', 'kind': 'filesystem'})
+The tools in this room are: {tools}.
+
+Call get_workbench first to read the current layout tree and its stable ids.
+Place content with a parent id and a node kind. Forms go in a panel. Charts
+and mini programs go in panels or windows on the canvas. run_python_client
+shows Python source the user runs with the Run button. run_python_server is
+disabled and returns not_enabled.
+
+Layout rules: keep returned stable ids, never invent them. Windows sit under
+the canvas and never inside another window. Splits hold at most 3 children,
+tabs at most 12. Closing a parent hides its children. The user can move,
+minimize and pin what you place, and the user's changes win.
+""")
+installation = yaml.safe_load((p/'backend/environment/installation.yaml').read_text())
+for room_id in ('workbench', 'workbench-e4b'):
+    if not any(x['skill_name'] == f'{room_id}-workbench' for x in installation['skill_configs']):
+        installation['skill_configs'].append({'skill_name': f'{room_id}-workbench', 'kind': 'filesystem'})
+data = installation
+# persist SOLIPLEX_WORKBENCH_ROOMS in the stack .env so a plain `docker compose up` keeps it.
+env_path = p/'.env'
+lines = env_path.read_text().splitlines() if env_path.exists() else []
+lines = [l for l in lines if not l.startswith('SOLIPLEX_WORKBENCH_ROOMS=')]
+lines.append('SOLIPLEX_WORKBENCH_ROOMS=' + os.environ['SOLIPLEX_WORKBENCH_ROOMS'])
+with env_path.open('w') as f:
+    f.write('\n'.join(lines) + '\n')
 save(p/'backend/environment/installation.yaml', data)
 q = p/'nginx/nginx.conf'
 s = q.read_text()
@@ -514,6 +539,8 @@ with p.open('w') as f:
 PY
   check_compose
   dc up -d --wait
+  # The workbench_data volume is created root-owned. The backend runs as soliplex.
+  dc exec -T -u root backend chown soliplex:soliplex /data/workbench
   for room in a2ui-lab a2ui-lab-e4b workbench workbench-e4b; do
     dc run --rm -T --quiet-build soliplex-dev /app/.venv/bin/soliplex-cli \
       room-authz from-yaml /environment "$room" < "$TARGET/backend/environment/rooms/$room/authz.yaml"

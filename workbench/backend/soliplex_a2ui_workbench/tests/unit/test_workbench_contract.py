@@ -32,6 +32,8 @@ from soliplex_a2ui_workbench import workbench_schemas
 
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "workbench"
 EXPECTED = {
+    "snapshot_content_v1.json": "32c52154c5e36a3474faa4742f19f6ddebb475bace80fda1130f4ae9a78cea84",
+    "snapshot_fresh_v1.json": "cfb1c76e3cced37771b26483fdff0d4e3d847cffd6b2e7db18aeb122fabcc886",
     "content_v1.json": "cdafd25c553cf668cf02e7f91fbe1e8c61d3af9dc99c4385d3729478610e90eb",
     "export_action_v1.json": "a855f678939f4c955576a19be3a7902df45bc70e7ae9e4460ecc47a9f2452606",
     "handoff_pointer_v1.json": "257e670dc3261bce37ececea2ed2744a5bdef4ef052014907e37ac4b95659936",

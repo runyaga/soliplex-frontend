@@ -52,6 +52,22 @@ class PublicationResult:
     events: list[dict[str, object]]
 
 
+_RESERVED_REGIONS = (("r_chat", "Chat", "chat"), ("r_left", "Left", "left"), ("r_right", "Right", "right"),
+                     ("r_canvas", "Canvas", "canvas"), ("r_tray", "Tray", "tray"))
+
+
+def default_layout() -> dict[str, object]:
+    """Return the empty layout a thread has before anything is placed: root and the reserved regions."""
+    regions = [
+        {"id": node_id, "parentId": "wb_root", "children": [], "kind": "region", "title": title,
+         "size": "medium", "visibility": "open", "payload": {"role": role}}
+        for node_id, title, role in _RESERVED_REGIONS
+    ]
+    root = {"id": "wb_root", "parentId": None, "children": [r["id"] for r in regions], "kind": "workspace",
+            "title": "Workspace", "size": "medium", "visibility": "open", "payload": {}}
+    return {"schemaVersion": 1, "layoutRevision": 0, "rootId": "wb_root", "shared": {}, "nodes": [root, *regions]}
+
+
 class SQLiteWorkbenchRepository:
     """Single-backend transactional store; caller supplies authenticated scope."""
 
@@ -239,7 +255,7 @@ class SQLiteWorkbenchRepository:
             result = {
                 "revision": row["revision"] if row else 0,
                 "sequence": row["sequence"] if row else 0,
-                "layout": json.loads(row["layout_json"]) if row else None,
+                "layout": json.loads(row["layout_json"]) if row else default_layout(),
                 "content": [json.loads(item["record_json"]) for item in content_rows],
             }
             self._db.execute("COMMIT")
