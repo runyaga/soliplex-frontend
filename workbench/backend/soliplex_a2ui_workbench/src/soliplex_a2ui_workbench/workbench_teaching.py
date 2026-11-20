@@ -220,3 +220,25 @@ through the signatures above and publish it with run_python_client.
 
 {generated["catalogTeaching"]}
 """
+
+
+WELCOME_MESSAGE = (
+    "Click an example or describe what to put on the workbench. "
+    "Programs run only when you press Run."
+)
+
+# One click sends each suggestion as the user's message. Each is self-contained
+# and matches a flow checked live on the deployed workbench.
+ROOM_SUGGESTIONS = (
+    "Show a bar chart titled Regions with North 80 and South 76 on the canvas.",
+    "Show a line chart titled Weekly visits with Mon 12, Tue 18, Wed 9, Thu 22, Fri 30 in the right sidebar.",
+    "Show a pie chart titled Budget with Rent 50, Food 30 and Fun 20 on the canvas.",
+    "Put a form titled Team survey in the left sidebar with a text field Name, a single choice Color "
+    "(Red, Green, Blue), a number Age from 1 to 120 and a checkbox Subscribe.",
+    "Place the built-in intake form in the left sidebar.",
+    "Make a Python program in a window titled Primes that prints the sum of all primes below 50000.",
+    "Create a tally counter program in a window titled Tally with +1, -1 and Reset buttons.",
+    "Split the canvas into two text panels titled Alpha and Beta.",
+    "Create tabs on the canvas with two text panels titled Notes and Ideas.",
+    "Put a login form on the canvas with Username and Password fields.",
+)

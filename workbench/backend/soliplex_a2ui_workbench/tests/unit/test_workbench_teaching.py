@@ -101,3 +101,15 @@ def test_generated_move_close_teaching_matches_executable_content_id_rules():
     assert nodes[owner]["parentId"] == "r_right"
     assert nodes[owner]["visibility"] == "closed"
     assert nodes[chart["nodeId"]]["parentId"] == owner
+
+
+def test_room_suggestions_are_distinct_short_and_wired_into_the_stack():
+    from pathlib import Path
+
+    from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, WELCOME_MESSAGE
+
+    assert len(ROOM_SUGGESTIONS) == len(set(ROOM_SUGGESTIONS)) >= 8
+    assert all(10 < len(s) <= 200 and s.endswith(".") for s in ROOM_SUGGESTIONS)
+    assert "Run" in WELCOME_MESSAGE
+    script = (Path(__file__).parents[4] / "stack/setup-stack.sh").read_text()
+    assert "room['suggestions'] = list(ROOM_SUGGESTIONS)" in script

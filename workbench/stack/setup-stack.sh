@@ -250,6 +250,9 @@ for room_id, agent, model in [('workbench','default_chat','Glimmer'),
     room = yaml.safe_load((lab/'backend/environment/rooms/a2ui-lab/room_config.yaml').read_text())
     room['id'] = room_id
     room['name'] = f'Workbench ({model})'
+    from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, WELCOME_MESSAGE
+    room['welcome_message'] = WELCOME_MESSAGE
+    room['suggestions'] = list(ROOM_SUGGESTIONS)
     room['agent']['template_id'] = agent
     room['tools'] = [{'tool_name': f"soliplex_a2ui_workbench.workbench_agent_tools.{name}"}
                      for name in MINIMUM_ROOM_TOOL_MANIFEST]
