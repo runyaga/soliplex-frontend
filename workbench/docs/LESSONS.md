@@ -6,6 +6,9 @@ Newest first. Each entry: what happened, the evidence, what changed.
 
 | Lesson | Evidence | What changed |
 | --- | --- | --- |
+| Locate regions by label, not by geometry | The first live harness run reported 0 matches for widgets visible in the screenshot. It placed regions relative to the composer, which is centred on the page while the chat column sits to its left | Each workbench region carries a semantics label and the harness scopes its lookups to it |
+| Click Flutter's semantics placeholder from JavaScript | A pointer click on `flt-semantics-placeholder` throws because Flutter keeps it off-screen. The harness sign-in failed on its first step and hid the error | The harness dispatches `element.click()`. Sign-in failures name the step and error class |
+| A pixel check catches what the accessibility tree hides | The form's Submit button was in the semantics tree at y=333 but clipped by its card, and the pixel check found it blank | Keep pixel checks on every canvas assertion |
 | The owner should not be the test harness | The owner found `ui.Label`, "content parent must be empty" and a blank program window before any check did | Deterministic scenario script and a two-model prompt suite run after every deploy (`workbench/scenarios/`) |
 | Separate platform bugs from model mistakes | A failed run looked the same whether Glimmer guessed an API or the workbench was broken | No-model scenarios test the platform. The model suite tests skills and prompts |
 | Unit tests and review rounds missed every seam bug | Ten bugs surfaced only in the deployed app: circular import, missing `/v1` prefix, root-owned volume, null default layout, snapshot envelope mismatch, tool signature against Soliplex `RunContext`, digit-first run ids, blank panels, the guard rejecting normal actions, the empty-parent rule blocking fixes | Each fix adds a test across the seam where it hid. Drive the deployed app early, not after the plan's last unit |

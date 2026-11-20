@@ -1,0 +1,179 @@
+[
+  {
+    "id": "form_in_left_sidebar",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      }
+    ]
+  },
+  {
+    "id": "chart_on_canvas",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "North: 80",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "South: 76",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "program_in_window",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "source",
+        "name": "Python source",
+        "includes": "scenario original",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario program window",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "fix_program_in_window",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "source",
+        "name": "Python source",
+        "includes": "scenario fixed",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario program window",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "second_window",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Python source",
+        "region": "canvas"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario program window",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Scenario second window",
+        "region": "canvas"
+      },
+      {
+        "kind": "text",
+        "name": "Second window is populated",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "move_panel",
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "North: 80",
+        "region": "right"
+      },
+      {
+        "kind": "text",
+        "name": "South: 76",
+        "region": "right"
+      }
+    ]
+  },
+  {
+    "id": "close_panel",
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "workspace",
+        "absent": true
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "workspace",
+        "absent": true
+      },
+      {
+        "kind": "text",
+        "name": "Retained canvas content",
+        "region": "canvas"
+      }
+    ]
+  },
+  {
+    "id": "reload_replay",
+    "reload": true,
+    "assertions": [
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Question",
+        "region": "left"
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Submit",
+        "region": "left"
+      }
+    ]
+  }
+]
