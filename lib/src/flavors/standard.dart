@@ -11,6 +11,7 @@ import '../core/status_message_config.dart';
 import '../modules/auth/consent_notice.dart';
 import '../modules/auth/platform/callback_params.dart';
 import '../modules/room/document_browser_url.dart';
+import '../interfaces/workbench_presentation.dart';
 import 'standard_kit.dart';
 
 /// Builds the standard [Flavor]: the full module set on shared session
@@ -43,6 +44,7 @@ Future<Flavor> standardFlavor({
   DocumentBrowserUrlResolver? documentBrowserUrl,
   List<AppModule> Function(StandardKit kit)? extraModules,
   List<CatalogImplementation> surfaceCatalogs = const [],
+  WorkbenchPresentation? workbenchPresentation,
 }) async {
   final effectiveIdentity = identity ?? AppIdentity.soliplex;
   final kit = await buildStandardKit(
@@ -58,6 +60,7 @@ Future<Flavor> standardFlavor({
     statusMessageFilePath: statusMessageFilePath,
     statusMessagePollInterval: statusMessagePollInterval,
     surfaceCatalogs: surfaceCatalogs,
+    workbenchPresentation: workbenchPresentation,
   );
   return Flavor(
     identity: effectiveIdentity,

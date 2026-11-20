@@ -12,6 +12,7 @@ import '../core/routes.dart';
 import '../core/status_message_config.dart';
 import '../core/storage_migration.dart';
 import '../interfaces/auth_state.dart' show Authenticated;
+import '../interfaces/workbench_presentation.dart';
 import '../modules/auth/auth_module.dart';
 import '../modules/auth/consent_notice.dart';
 import '../modules/auth/default_backend_url.dart';
@@ -78,6 +79,7 @@ Future<StandardKit> buildStandardKit({
   Duration statusMessagePollInterval = StatusMessageConfig.defaultPollInterval,
   // A2UI catalogs that chat surfaces render beside the basic catalog.
   List<CatalogImplementation> surfaceCatalogs = const [],
+  WorkbenchPresentation? workbenchPresentation,
 }) async {
   final brandLogo = BrandLogo(identity: identity);
 
@@ -142,8 +144,9 @@ Future<StandardKit> buildStandardKit({
     logger: LogManager.instance.getLogger('room'),
     extensionFactory: () async => [
       ExecutionTrackerExtension(
-        logger: LogManager.instance
-            .getLogger('soliplex_frontend.execution_tracker'),
+        logger: LogManager.instance.getLogger(
+          'soliplex_frontend.execution_tracker',
+        ),
       ),
       HumanApprovalExtension(),
     ],
@@ -204,6 +207,7 @@ Future<StandardKit> buildStandardKit({
         logo: brandLogo,
         enableDocumentFilter: enableDocumentFilter,
         surfaceCatalogs: surfaceCatalogs,
+        workbenchPresentation: workbenchPresentation,
       ),
       QuizAppModule(serverManager: serverManager),
       VersionsAppModule(
