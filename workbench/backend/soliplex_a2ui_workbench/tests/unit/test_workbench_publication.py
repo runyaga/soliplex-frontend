@@ -119,6 +119,15 @@ def test_basic_choice_picker_requires_renderer_option_objects():
         build_publication([invalid], validator, {BASIC_CATALOG: {"ChoicePicker"}}, layout=layout)
 
 
+def test_basic_container_cannot_reference_unemitted_component():
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG
+
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    record = {"activityMessageId": "card", "surfaceId": "card_surface", "catalogId": BASIC_CATALOG, "component": "Card", "properties": {"children": ["missing-child"]}}
+    with pytest.raises(ValueError, match="component reference"):
+        build_publication([record], WorkbenchCatalogValidator(), {BASIC_CATALOG: {"Card"}}, layout=layout)
+
+
 @pytest.mark.parametrize("mutate", [
     lambda spec: spec["series"][0].update(id={"bad": "id"}),
     lambda spec: spec["series"][0]["points"][0].update(label={"bad": "label"}),

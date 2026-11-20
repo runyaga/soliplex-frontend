@@ -161,6 +161,45 @@ async def _read_request_json(request: Request) -> dict[str, object]:
     return value
 
 
+def _normalize_agui_aliases(payload: dict[str, object]) -> dict[str, object]:
+    """Normalize accepted AG-UI snake/camel aliases before guard inspection."""
+    changed = False
+
+    def normalize(mapping: dict[str, object], camel: str, snake: str) -> None:
+        nonlocal changed
+        if camel in mapping and snake in mapping:
+            raise HTTPException(400, f"conflicting AG-UI fields: {camel} and {snake}")
+        if snake in mapping:
+            mapping[camel] = mapping.pop(snake)
+            changed = True
+
+    for camel, snake in (
+        ("threadId", "thread_id"),
+        ("runId", "run_id"),
+        ("parentRunId", "parent_run_id"),
+        ("forwardedProps", "forwarded_props"),
+    ):
+        normalize(payload, camel, snake)
+    messages = payload.get("messages")
+    if isinstance(messages, list):
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            normalize(message, "toolCalls", "tool_calls")
+            normalize(message, "toolCallId", "tool_call_id")
+            calls = message.get("toolCalls")
+            if isinstance(calls, list):
+                for call in calls:
+                    if isinstance(call, dict):
+                        normalize(call, "encryptedValue", "encrypted_value")
+            normalize(message, "encryptedValue", "encrypted_value")
+    return payload
+
+
+async def _read_agui_json(request: Request) -> dict[str, object]:
+    return _normalize_agui_aliases(await _read_request_json(request))
+
+
 def build_router(*, repository: SQLiteWorkbenchRepository | None = None, trace_sink=None, workbench_rooms: set[str] | None = None) -> APIRouter:
     """Build routes with the installed Soliplex 0.93 public dependencies."""
     from soliplex import agui, authz, installation, views
@@ -342,14 +381,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             return
         if not is_workbench_run(request):
             room_id = request.path_params.get("room_id")
-            try:
-                legacy_payload = parse_json_no_duplicates(await request.body())
-            except DuplicateJSONKey as exc:
-                raise HTTPException(400, "duplicate JSON object key") from exc
-            except (ValueError, UnicodeDecodeError):
-                return
-            if not isinstance(legacy_payload, dict):
-                return
+            legacy_payload = await _read_agui_json(request)
             _reject_client_workbench_fields(legacy_payload)
             forwarded_props = legacy_payload.get("forwardedProps")
             action_envelope = forwarded_props.get("a2uiAction") if isinstance(forwarded_props, dict) else None
@@ -385,7 +417,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
                 or not getattr(request.state, "workbench_replay_authorized", scope_provider is not None)
             ):
                 raise HTTPException(404, "replay run is not authorized")
-            payload = await _read_request_json(request)
+            payload = await _read_agui_json(request)
             _reject_client_workbench_intake_tool(payload)
             if payload.get("threadId") != request.path_params.get("thread_id") or payload.get("runId") != request.path_params.get("run_id"):
                 raise HTTPException(400, "AG-UI URL and body identifiers do not match")
@@ -398,7 +430,7 @@ def create_guarded_agui_router(agui_router=None, *, scope_provider: Callable | N
             await _validate_full_agui_request(request)
             _validate_issued_intake_history(payload, _repository_for(request, None).issued_intake_submissions(scope))
             return
-        payload = await _read_request_json(request)
+        payload = await _read_agui_json(request)
         path_thread_id = request.path_params.get("thread_id")
         path_run_id = request.path_params.get("run_id")
         if payload.get("threadId") != path_thread_id or payload.get("runId") != path_run_id:

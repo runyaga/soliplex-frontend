@@ -6,6 +6,7 @@ umask 077
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 readonly ENV_FILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/workbench.env"
 readonly STACK_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+readonly WORKBENCH_PACKAGE="$(cd -- "$STACK_SCRIPT_DIR/../backend/soliplex_a2ui_workbench" && pwd)"
 test -f "$ENV_FILE" || fail 'Missing workbench/stack/workbench.env. Copy workbench.env.example and fill in the required values.'
 # This is a trusted shell env file. Suppress diagnostics that could contain secrets.
 source "$ENV_FILE" >/dev/null 2>&1 || fail 'Could not load workbench/stack/workbench.env. Check its shell syntax locally.'
@@ -15,7 +16,7 @@ for name in DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMI
 done
 LOGFIRE_ENV_FILE="${LOGFIRE_ENV_FILE:-$DEV_ROOT/.env}"
 SOLIPLEX_WORKBENCH_ROOMS="${SOLIPLEX_WORKBENCH_ROOMS:-}"
-export DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMIN_PASSWORD LOGFIRE_ENV_FILE SOLIPLEX_WORKBENCH_ROOMS STACK_SCRIPT_DIR
+export DEV_ROOT MODEL_HOST OLLAMA_HOST WB_ADMIN_USER WB_ADMIN_EMAIL WB_ADMIN_PASSWORD LOGFIRE_ENV_FILE SOLIPLEX_WORKBENCH_ROOMS STACK_SCRIPT_DIR WORKBENCH_PACKAGE
 readonly PROJECT=soliplex-a2ui-workbench
 readonly TARGET="$DEV_ROOT/soliplex-a2ui-workbench"
 readonly TEMPLATE="$DEV_ROOT/soliplex-template"
@@ -166,7 +167,7 @@ from pathlib import Path
 import yaml
 import sys
 sys.path.insert(0, os.environ['STACK_SCRIPT_DIR'])
-from compose_config import configure_workbench_storage
+from compose_config import configure_workbench_storage, install_workbench_backend
 p = Path(os.environ['TARGET'])
 lab = Path(os.environ['LAB'])
 def write(q, text):
@@ -178,6 +179,8 @@ def save(q, value):
 compose_path = p/'docker-compose.yml'
 compose = yaml.safe_load(compose_path.read_text())
 save(compose_path, configure_workbench_storage(compose))
+router_name = install_workbench_backend(p, os.environ['WORKBENCH_PACKAGE'])
+assert router_name == 'soliplex_a2ui_workbench.workbench_routes.guarded_router'
 for rel, expected in [('backend/Dockerfile', 2), ('soliplex-dev/Dockerfile', 1)]:
     q = p/rel
     s = q.read_text()
@@ -187,11 +190,6 @@ for rel, expected in [('backend/Dockerfile', 2), ('soliplex-dev/Dockerfile', 1)]
     write(q, s)
 q = p/'backend/environment/installation.yaml'
 data = yaml.safe_load(q.read_text())
-router_ops = data.setdefault('app_router_operations', [])
-router_ops[:] = [op for op in router_ops if op.get('group_name') != 'agui']
-router_ops.append({'kind': 'add', 'group_name': 'agui',
-    'router_name': 'soliplex_a2ui_workbench.workbench_routes.guarded_router',
-    'replace_existing': True, 'prefix': '/api'})
 for a in data['agent_configs']:
     for old in ('usage_limits', 'run_timeout_seconds'):
         a.pop(old, None)

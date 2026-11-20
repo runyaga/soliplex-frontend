@@ -141,6 +141,24 @@ def test_default_catalog_validator_rejects_malformed_chart_before_commit(tmp_pat
     repo.close()
 
 
+def test_dangling_emitted_component_reference_rejects_before_repository_commit(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / "dangling.sqlite")
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    layout = json.loads((FIXTURES / "layout_tree_v1.json").read_text())
+    layout["nodes"][2]["children"] = ["panel-card"]
+    layout["nodes"].extend([
+        {"id": "panel-card", "parentId": "r_left", "children": ["surface-card"], "kind": "panel", "title": "Card", "size": "medium", "visibility": "open", "payload": {}},
+        {"id": "surface-card", "parentId": "panel-card", "children": [], "kind": "surface", "title": "Card", "size": "medium", "visibility": "open", "payload": {"activityMessageId": "card", "surfaceId": "card_surface"}},
+    ])
+    from soliplex_a2ui_workbench.workbench_publication import BASIC_CATALOG
+    record = {"activityMessageId": "card", "surfaceId": "card_surface", "catalogId": BASIC_CATALOG, "component": "Card", "properties": {"children": ["missing-child"]}}
+    with pytest.raises(ValueError, match="component reference"):
+        repo.publish(scope, "dangling", 0, layout, [record], registered_program_surfaces=set(), registered_mounts={("card", "card_surface")})
+    assert repo.load_snapshot(scope)["layout"] is None
+    assert repo.get_receipt(scope, "dangling") is None
+    repo.close()
+
+
 def test_overlapping_repository_transactions_are_serialized(tmp_path):
     repo = fixture_repo(tmp_path / "concurrent.sqlite")
     first = WorkbenchScope("actor", "server", "room", "thread-one")

@@ -1,8 +1,14 @@
 """Generated Compose persistence wiring used by the stack setup template."""
 
 import importlib.util
+import os
+import subprocess
 import sqlite3
+import sys
 from pathlib import Path
+
+import yaml
+import pytest
 
 
 def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
@@ -36,3 +42,63 @@ def test_generated_backend_compose_mounts_named_workbench_volume(tmp_path):
         conn.execute("INSERT INTO marker VALUES ('persisted')")
     with sqlite3.connect(db) as recreated_backend:
         assert recreated_backend.execute("SELECT value FROM marker").fetchone() == ("persisted",)
+
+
+def test_step3_installs_workbench_package_and_imports_configured_router(tmp_path):
+    helper = Path(__file__).parents[4] / "stack/compose_config.py"
+    step3 = helper.parent / "setup-stack.sh"
+    script = step3.read_text()
+    assert "install_workbench_backend" in script
+    assert "install_workbench_backend(p, os.environ['WORKBENCH_PACKAGE'])" in script
+    spec = importlib.util.spec_from_file_location("workbench_stack_compose_config_install", helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    generated = tmp_path / "generated"
+    (generated / "backend").mkdir(parents=True)
+    (generated / "backend/requirements.txt").write_text("# generated requirements\n")
+    environment = generated / "backend/environment"
+    environment.mkdir()
+    installation = environment / "installation.yaml"
+    installation.write_text(yaml.safe_dump({"app_router_operations": [{"kind": "add", "group_name": "agui", "router_name": "stock", "replace_existing": False}]}))
+    source_project = Path(__file__).parents[2]
+    router_name = module.install_workbench_backend(generated, source_project)
+    configured = yaml.safe_load(installation.read_text())
+    agui = [item for item in configured["app_router_operations"] if item.get("group_name") == "agui"]
+    assert agui == [{"kind": "add", "group_name": "agui", "router_name": "soliplex_a2ui_workbench.workbench_routes.guarded_router", "replace_existing": True, "prefix": "/api"}]
+    assert router_name == agui[0]["router_name"]
+    requirements = (generated / "backend/requirements.txt").read_text()
+    for dependency in ("fastapi", "soliplex", "pydantic"):
+        assert dependency in requirements
+    package_path = generated / "src/soliplex_a2ui_workbench/src"
+    assert (package_path / "soliplex_a2ui_workbench/workbench_routes.py").is_file()
+    import_env = os.environ.copy()
+    import_env["PYTHONPATH"] = str(package_path)
+    result = subprocess.run(
+        [sys.executable, "-c", "import importlib; m=importlib.import_module('soliplex_a2ui_workbench.workbench_routes'); assert hasattr(m, 'guarded_router')"],
+        cwd=tmp_path,
+        env=import_env,
+        text=True,
+        capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_step3_refuses_router_configuration_without_workbench_module(tmp_path):
+    helper = Path(__file__).parents[4] / "stack/compose_config.py"
+    spec = importlib.util.spec_from_file_location("workbench_stack_compose_config_missing", helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    generated = tmp_path / "generated-missing"
+    (generated / "backend").mkdir(parents=True)
+    (generated / "backend/requirements.txt").write_text("# generated requirements\n")
+    environment = generated / "backend/environment"
+    environment.mkdir()
+    installation = environment / "installation.yaml"
+    stock = {"app_router_operations": [{"kind": "add", "group_name": "agui", "router_name": "stock"}]}
+    installation.write_text(yaml.safe_dump(stock))
+    broken_source = tmp_path / "broken-package"
+    (broken_source / "src/soliplex_a2ui_workbench").mkdir(parents=True)
+    (broken_source / "pyproject.toml").write_text('[project]\nname="soliplex-a2ui-workbench"\ndependencies=["fastapi"]\n')
+    with pytest.raises(ValueError, match="source is incomplete"):
+        module.install_workbench_backend(generated, broken_source)
+    assert yaml.safe_load(installation.read_text()) == stock

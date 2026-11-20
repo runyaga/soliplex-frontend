@@ -60,9 +60,14 @@ class WorkbenchCatalogValidator:
             components = update.get("components")
             if not isinstance(components, list):
                 raise ValueError("emitted component list is invalid")
+            component_ids: set[str] = set()
             for item in components:
                 if not isinstance(item, dict):
                     raise ValueError("emitted component must be an object")
+                component_id = item.get("id")
+                if not isinstance(component_id, str) or not component_id or component_id in component_ids:
+                    raise ValueError("emitted component IDs must be unique")
+                component_ids.add(component_id)
                 name = item.get("component")
                 catalog_id = item.get("@catalogId", BASIC_CATALOG)
                 negotiated = negotiated_manifests.get(catalog_id)
@@ -71,6 +76,11 @@ class WorkbenchCatalogValidator:
                     raise ValueError("emitted component is not in a negotiated catalog")
                 if catalog_id == BASIC_CATALOG:
                     _validate_basic_component(item)
+            for item in components:
+                if item.get("component") in {"Card", "Column", "Row", "List"}:
+                    children = item.get("children")
+                    if not isinstance(children, list) or any(child not in component_ids for child in children):
+                        raise ValueError("emitted component reference does not resolve in its surface")
 
     @staticmethod
     def _validate_record(catalog_id: str, component: str, record: Mapping[str, object]) -> None:

@@ -76,7 +76,8 @@ def test_malformed_last_event_id_does_not_skip_unreserved_action_guard(tmp_path)
     assert calls == []
 
 
-def test_run_result_reservation_cannot_dispatch_to_model(tmp_path):
+@pytest.mark.parametrize("forwarded_key", ["forwardedProps", "forwarded_props"])
+def test_run_result_reservation_cannot_dispatch_to_model(tmp_path, forwarded_key):
     repo, scope, _ = _registered_repo(tmp_path, "PythonRepl")
     class TraceCapture:
         def emit(self, _event):
@@ -88,7 +89,7 @@ def test_run_result_reservation_cannot_dispatch_to_model(tmp_path):
     client, calls = _guard_app(repo, scope)
     response = client.post(
         "/v1/rooms/agui/agui/thread-1/run-2",
-        json={"threadId": scope.thread_id, "runId": "run-2", "forwardedProps": {"a2uiAction": envelope}},
+        json={"threadId": scope.thread_id, "runId": "run-2", "state": {}, "messages": [], "tools": [], "context": [], forwarded_key: {"a2uiAction": envelope}},
     )
     assert response.status_code in {409, 422}
     assert calls == []
@@ -199,14 +200,15 @@ def test_run_result_emits_one_server_trace_for_duplicate_invocation(tmp_path):
     assert sink.events[0]["python.engine"] == "monty-1.3.0"
 
 
-def test_workbench_room_rejects_legacy_action_without_reservation(tmp_path):
+@pytest.mark.parametrize("forwarded_key", ["forwardedProps", "forwarded_props"])
+def test_workbench_room_rejects_legacy_action_without_reservation(tmp_path, forwarded_key):
     repo, scope, _ = _registered_repo(tmp_path)
     client, calls = _guard_app(repo, scope)
     payload = {
         "threadId": scope.thread_id, "runId": "run-legacy", "state": {},
         "messages": [{"id": "old", "role": "user", "content": "old"}],
         "tools": [], "context": [],
-        "forwardedProps": {"a2uiAction": {"afterMessageId": "old", "userAction": {"name": "submit_intake", "surfaceId": "unregistered", "context": {}}}},
+        forwarded_key: {"a2uiAction": {"afterMessageId": "old", "userAction": {"name": "submit_intake", "surfaceId": "unregistered", "context": {}}}},
     }
     first = client.post("/v1/rooms/agui/agui/thread-1/run-legacy", json=payload)
     second = client.post("/v1/rooms/agui/agui/thread-1/run-legacy-2", json=payload | {"runId": "run-legacy-2"})
@@ -277,7 +279,8 @@ def test_malformed_agui_body_does_not_consume_reserved_intake(tmp_path):
     assert WorkbenchActionService(repo).consume_dispatch(scope, {"forwardedProps": {"a2uiAction": envelope}}) == envelope
 
 
-def test_unconfigured_room_rejects_workbench_envelope_closed(tmp_path, monkeypatch):
+@pytest.mark.parametrize("forwarded_key", ["forwardedProps", "forwarded_props"])
+def test_unconfigured_room_rejects_workbench_envelope_closed(tmp_path, monkeypatch, forwarded_key):
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "")
     repo, scope, _ = _registered_repo(tmp_path)
     envelope = _envelope()
@@ -294,9 +297,18 @@ def test_unconfigured_room_rejects_workbench_envelope_closed(tmp_path, monkeypat
     app = client.app
     app.state.workbench_repository = repo
     app.include_router(create_guarded_agui_router(upstream, scope_provider=scope, workbench_rooms={"some-configured-room"}))
-    payload = {"threadId": scope.thread_id, "runId": "unconfigured", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {"a2uiAction": envelope}}
+    payload = {"threadId": scope.thread_id, "runId": "unconfigured", "state": {}, "messages": [], "tools": [], "context": [], forwarded_key: {"a2uiAction": envelope}}
     response = TestClient(app).post("/v1/rooms/agui/agui/thread-1/unconfigured", json=payload)
     assert response.status_code == 503
+    assert calls == []
+
+
+def test_guard_rejects_conflicting_agui_alias_spellings(tmp_path):
+    repo, scope, _ = _registered_repo(tmp_path)
+    client, calls = _guard_app(repo, scope)
+    payload = {"threadId": scope.thread_id, "runId": "conflict", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {}, "forwarded_props": {}}
+    response = client.post("/v1/rooms/agui/agui/thread-1/conflict", json=payload)
+    assert response.status_code == 400
     assert calls == []
 
 
