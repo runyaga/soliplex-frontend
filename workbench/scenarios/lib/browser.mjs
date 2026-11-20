@@ -108,8 +108,12 @@ export async function sendPrompt(page, room, prompt, timeoutMs, threadId) {
   }, { timeout: timeoutMs });
   // Install rejection handling before any UI action can fail.
   responsePromise.catch(() => {});
-  await composer(page).fill(prompt);
-  await composer(page).press('Enter');
+  // Flutter web keeps the text area read-only until it has focus, and only
+  // keyboard input reaches its editing state.
+  await composer(page).click();
+  await pause(300);
+  await page.keyboard.type(prompt);
+  await page.keyboard.press('Enter');
   const response = await responsePromise;
   if (!response.ok()) throw new Error(`Agent HTTP ${response.status()}`);
   const body = await bounded(response.text(), timeoutMs, 'Agent stream timed out');

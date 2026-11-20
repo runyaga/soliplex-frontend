@@ -60,8 +60,11 @@ async function main() {
     console.log('Usage: workbench/scenarios/run.sh --deterministic | --models | --all');
     return;
   }
-  const deterministic = await loadCases(`${root}/deterministic/cases.json`);
-  const prompts = await loadCases(`${root}/model/prompts.yaml`, { prompts: true });
+  // WB_CASES=id1,id2 runs only those cases.
+  const only = new Set((process.env.WB_CASES || '').split(',').map(id => id.trim()).filter(Boolean));
+  const pick = cases => (only.size ? cases.filter(item => only.has(item.id)) : cases);
+  const deterministic = pick(await loadCases(`${root}/deterministic/cases.json`));
+  const prompts = pick(await loadCases(`${root}/model/prompts.yaml`, { prompts: true }));
   const timestamp = new Date().toISOString();
   const stamp = timestamp.replace('T', '-').replace(/:/g, '').replace('.', '-');
   const directory = `${repository}/workbench/docs/evidence/scenarios/${stamp}`;

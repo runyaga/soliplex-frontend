@@ -8,7 +8,9 @@ export const MODELS = [
 
 export async function checkModels({ page, base, alias, cases, directory, credentials, timeoutMs, record, recordThread }) {
   const createdThreads = new Set();
-  for (const model of MODELS) {
+  // WB_MODELS=workbench-e4b runs only those rooms.
+  const rooms = new Set((process.env.WB_MODELS || '').split(',').map(room => room.trim()).filter(Boolean));
+  for (const model of MODELS.filter(m => !rooms.size || rooms.has(m.room))) {
     for (const item of cases) {
       const result = { id: item.id, model: model.name, assertions: [], runErrors: [], toolCalls: [], timelineTools: [], turns: [] };
       try {
