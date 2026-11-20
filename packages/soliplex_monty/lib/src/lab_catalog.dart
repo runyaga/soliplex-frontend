@@ -20,6 +20,11 @@ import 'package:soliplex_monty/src/workspace_files.dart';
 
 const labCatalogId = 'urn:soliplex:catalog:lab:1';
 
+/// The failure of a [ReplMode.run] program that finished without `ui.show`.
+const noUiMessage =
+    'The program never called ui.show, so nothing appears on screen. '
+    'Build the interface with the ui module and end with ui.show(root).';
+
 /// Starts the interpreter that one `PythonRepl` instance owns.
 typedef ReplRuntimeStarter =
     Future<MontyRuntime> Function(
@@ -479,7 +484,10 @@ class _PythonReplViewState extends State<PythonReplView> {
       _arena = PythonUiArena();
       var (output, ok) = await _execute(runtime, code, limits);
       if (_disposed) return;
-      if (ok) {
+      if (ok && _runMode && _arena.staged == null) {
+        output = _join(output, noUiMessage);
+        ok = false;
+      } else if (ok) {
         final rejected = _commit(_arena.staged);
         if (rejected != null) {
           output = _join(output, 'Surface rejected: $rejected');

@@ -48,6 +48,15 @@ except NameError:
 print("count", n)
 ''';
 
+const uiCounter = '''
+import ui
+try:
+    n += 1
+except NameError:
+    n = 1
+ui.show(ui.Text(f"count {n}"))
+''';
+
 final Finder runButton = find.byKey(const ValueKey('python-repl-run'));
 final Finder editor = find.byKey(const ValueKey('python-repl-editor'));
 final Finder showCode = find.byKey(const ValueKey('python-repl-show-code'));
@@ -136,7 +145,7 @@ void main() {
   testWidgets(
     'run mode starts each run fresh and shows only the latest result',
     (tester) async {
-      await mount(tester, surface(counter, props: {'mode': 'run'}));
+      await mount(tester, surface(uiCounter, props: {'mode': 'run'}));
       await run(tester);
       expect(find.text('count 1'), findsOneWidget);
       await run(tester);
@@ -148,4 +157,14 @@ void main() {
     },
     skip: skipWithoutMonty != false,
   );
+
+  testWidgets('run mode fails a program that never calls ui.show', (
+    tester,
+  ) async {
+    await mount(tester, surface('print("hello")', props: {'mode': 'run'}));
+    await run(tester);
+    expect(find.text('Run 1 · ok'), findsNothing);
+    expect(find.textContaining('never called ui.show'), findsOneWidget);
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
 }
