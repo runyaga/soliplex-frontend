@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdir, readlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { cleanEvidence, cleanupCreatedThreads, failedAssertions, regionSelector, loadCases, parseCredentials, parseSSE, redactor, renderReport, summarizeEvents, validateCases, writeReport } from '../lib/core.mjs';
+import { cleanEvidence, cleanupCreatedThreads, failedAssertions, regionSelector, loadCases, parseCredentials, parseSSE, redactor, renderReport, summarizeEvents, validateCases, writeReport, isProgramOutputError } from '../lib/core.mjs';
 import { hasVisibleInk } from '../lib/png.mjs';
 
 const root = new URL('../', import.meta.url);
@@ -287,4 +287,12 @@ test('counter and demo corpus scope live controls to the app at its initial view
   }
   assert.equal(demo.actions[0].window, 'Monty GUI demo');
   assert.equal(demo.assertions.find(a => a.name === 'Python source').window, 'Monty GUI demo');
+});
+
+test('program tracebacks inside a workbench window are output, app errors are not', () => {
+  const traceback = 'Traceback (most recent call last):\nValueError: scenario deliberate failure';
+  assert.equal(isProgramOutputError(traceback, true), true);
+  assert.equal(isProgramOutputError(traceback, false), false);
+  assert.equal(isProgramOutputError('Run failed: workbenchAction is server-owned', true), false);
+  assert.equal(isProgramOutputError('Workbench is unavailable', true), false);
 });
