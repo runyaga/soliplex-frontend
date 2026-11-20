@@ -8,10 +8,20 @@ This module exposes ``router``, referenced there as
 
 from fastapi import APIRouter
 
-router = APIRouter()
+from .workbench_routes import build_router
+
+try:
+    router = build_router()
+except ModuleNotFoundError as exc:
+    # Allows schema and repository tests to run outside a Soliplex installation.
+    if exc.name != "soliplex":
+        raise
+    router = APIRouter()
 
 
 @router.get("/custom/ping")
 def ping() -> dict[str, str]:
     """A trivial endpoint contributed by this project's own package."""
     return {"ping": "pong"}
+
+

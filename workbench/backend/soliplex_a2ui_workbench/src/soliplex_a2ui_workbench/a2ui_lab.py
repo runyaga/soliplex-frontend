@@ -12,11 +12,6 @@ from ag_ui.core import ActivitySnapshotEvent
 from pydantic_ai import RunContext, ToolReturn
 from soliplex.agents import AgentDependencies
 
-from soliplex_a2ui_workbench import a2ui_action
-
-# Action-only runs reach the model as one user message per run.
-a2ui_action.install()
-
 ACTIVITY_TYPE = "a2ui-surface"
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 LAB_CATALOG = "urn:soliplex:catalog:lab:1"
@@ -171,3 +166,4 @@ async def show_python_repl(
     )
     event = _event(ctx, "dojo-python", ops)
     return ToolReturn({"shown": "python_repl"}, metadata=event)
+
