@@ -1,8 +1,8 @@
 import 'package:dart_monty/core.dart';
 
 import 'package:soliplex_monty/src/chart_module.dart';
-import 'package:soliplex_monty/src/lab_chart_api.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
+import 'package:soliplex_monty/src/ui_chart.dart';
 import 'package:soliplex_monty/src/worker_location.dart';
 
 /// Checks a whole program on a fresh worker without running any user statement.
@@ -67,7 +67,7 @@ def handle_event(name: str, context: dict[str, Any]) -> None: ...
 Map<String, Object?> _modules() {
   final arena = PythonUiArena(workbenchEnabled: true);
   final ui = PythonUiArena.moduleFor(() => arena);
-  final constructors = {...basicSignatures, ...labChartSignatures};
+  final constructors = {...basicSignatures, ...uiChartSignatures};
   final stubs = StringBuffer(
     'from typing import Any\nfrom . import workbench, graphics\n',
   );

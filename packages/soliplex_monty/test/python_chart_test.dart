@@ -45,7 +45,10 @@ void main() {
                 key: key,
                 source:
                     'import chart\nimport ui\n'
-                    'ui.show(ui.graphics.Chart(${entry.value}, [], "Counts"))',
+                    'ui.show(ui.Column(['
+                    'ui.Card(ui.graphics.Chart(${entry.value}, [], "Counts")), '
+                    'ui.Button(ui.Text("Refresh"), '
+                    'action=ui.Event("refresh"))]))',
                 limits: const ReplLimits(),
                 startRuntime: starter.call,
               ),
@@ -62,6 +65,7 @@ void main() {
           () => find.bySemanticsLabel(label).evaluate().isNotEmpty,
         );
         expect(starter.starts, 1);
+        expect(find.text('Refresh'), findsOneWidget);
         expect(find.textContaining('Invalid chart'), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(app(const ValueKey('reload')));

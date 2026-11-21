@@ -15,8 +15,6 @@ import 'package:soliplex_design/soliplex_design.dart';
 
 import 'package:soliplex_monty/src/chart_module.dart';
 
-import 'package:soliplex_monty/src/lab_chart.dart';
-import 'package:soliplex_monty/src/lab_chart_api.dart';
 import 'package:soliplex_monty/src/program_type_check.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
 import 'package:soliplex_monty/src/repair_chain.dart';
@@ -889,15 +887,11 @@ class _PythonReplViewState extends State<PythonReplView> {
     final next = MessageProcessor<ComponentImplementation>(
       catalogs: [
         _pythonBasicCatalog(),
-        labChartCatalog(),
         chartGraphicsCatalog(),
       ],
       validationConfig: ValidationConfig.strict,
     );
-    final errors = <String>[
-      for (final component in staged.components)
-        ?chartComponentError(component),
-    ];
+    final errors = <String>[];
     final sub = next.model.onError.subscribe((e) => errors.add('$e'));
     try {
       next.processMessages(staged.messages('python'));

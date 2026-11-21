@@ -156,3 +156,20 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
         assert any(
             assertion["kind"] in {"file", "reply"} for assertion in case["assertions"]
         )
+
+
+def test_ui_and_chart_teaching_describes_one_embeddable_chart_system():
+    from soliplex_a2ui_workbench import workbench_teaching
+
+    generated = json.loads(
+        Path(workbench_teaching.__file__).with_name("catalog_teaching.json").read_text()
+    )
+    assert not any("lab-chart" in catalog["catalogId"] for catalog in generated["catalogs"])
+    assert "BarChart" in generated["pythonSignatures"]
+    assert "LineChart" in generated["pythonSignatures"]
+    text = room_skill("workbench")
+    assert "same soliplex_catalogs chart system" in text
+    assert "Column, Row or Card beside controls" in text
+    assert 'context["label"]' in text
+    assert "None to leave a gap" in text
+    assert "standalone chart" not in text

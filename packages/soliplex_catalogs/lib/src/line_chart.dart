@@ -41,62 +41,71 @@ class StaticLineChart extends StatelessWidget {
       container: true,
       label: chartSemanticsLabel(spec, description),
       image: true,
-      excludeSemantics: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerLow,
-          border: Border.all(color: colors.outlineVariant),
-          borderRadius: BorderRadius.circular(context.radii.lg),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(SoliplexSpacing.s6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (spec['title'] case final String title)
-                Text(
-                  title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              if (spec['ylabel'] case final String caption)
-                Text(caption, style: theme.textTheme.bodySmall),
-              const SizedBox(height: SoliplexSpacing.s3),
-              if (categories.isEmpty)
-                const Text('No data')
-              else ...[
-                Wrap(
-                  spacing: SoliplexSpacing.s4,
-                  runSpacing: SoliplexSpacing.s2,
-                  children: [
-                    for (var i = 0; i < series.length; i++)
-                      _Legend(
-                        color: palette[i],
-                        label:
-                            (series[i]['label'] ?? series[i]['id'])! as String,
+      explicitChildNodes: true,
+      child: Semantics(
+        container: true,
+        label: _lineSummary(spec, series, points),
+        child: ExcludeSemantics(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerLow,
+              border: Border.all(color: colors.outlineVariant),
+              borderRadius: BorderRadius.circular(context.radii.lg),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(SoliplexSpacing.s6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (spec['title'] case final String title)
+                    Text(
+                      title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  if (spec['ylabel'] case final String caption)
+                    Text(caption, style: theme.textTheme.bodySmall),
+                  const SizedBox(height: SoliplexSpacing.s3),
+                  if (categories.isEmpty)
+                    const Text('No data')
+                  else ...[
+                    Wrap(
+                      spacing: SoliplexSpacing.s4,
+                      runSpacing: SoliplexSpacing.s2,
+                      children: [
+                        for (var i = 0; i < series.length; i++)
+                          _Legend(
+                            color: palette[i],
+                            label:
+                                (series[i]['label'] ?? series[i]['id'])!
+                                    as String,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: SoliplexSpacing.s4),
+                    SizedBox(
+                      key: const ValueKey('line-chart'),
+                      height: height,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => _plot(
+                          context,
+                          points,
+                          categories,
+                          palette,
+                          constraints.maxWidth,
+                        ),
+                      ),
+                    ),
+                    if (spec['xlabel'] case final String caption)
+                      Center(
+                        child: Text(caption, style: theme.textTheme.bodySmall),
                       ),
                   ],
-                ),
-                const SizedBox(height: SoliplexSpacing.s4),
-                SizedBox(
-                  height: height,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) => _plot(
-                      context,
-                      points,
-                      categories,
-                      palette,
-                      constraints.maxWidth,
-                    ),
-                  ),
-                ),
-                if (spec['xlabel'] case final String caption)
-                  Center(
-                    child: Text(caption, style: theme.textTheme.bodySmall),
-                  ),
-              ],
-            ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -118,7 +127,9 @@ class StaticLineChart extends StatelessWidget {
     var hasPositive = false;
     for (final series in points) {
       for (final point in series) {
-        final value = (point['value']! as num).toDouble();
+        final raw = point['value'];
+        if (raw == null) continue;
+        final value = (raw as num).toDouble();
         magnitude = math.max(magnitude, value.abs());
         hasNegative |= value < 0;
         hasPositive |= value > 0;
@@ -194,10 +205,13 @@ class StaticLineChart extends StatelessWidget {
             LineChartBarData(
               spots: [
                 for (var j = 0; j < points[i].length; j++)
-                  FlSpot(
-                    j.toDouble(),
-                    (points[i][j]['value']! as num) / magnitude,
-                  ),
+                  if (points[i][j]['value'] == null)
+                    FlSpot.nullSpot
+                  else
+                    FlSpot(
+                      j.toDouble(),
+                      (points[i][j]['value']! as num) / magnitude,
+                    ),
               ],
               color: palette[i],
               barWidth: 2.5,
@@ -237,4 +251,23 @@ String _tick(double value) {
   return value == value.truncateToDouble()
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(1);
+}
+
+// Keep the ui.LineChart summary alongside the graphics chart's data label.
+String _lineSummary(
+  Map<Object?, Object?> spec,
+  List<Map<Object?, Object?>> series,
+  List<List<Map<Object?, Object?>>> points,
+) {
+  final values = [
+    for (final line in points)
+      for (final point in line)
+        if (point['value'] case final num value) value.toDouble(),
+  ];
+  if (values.isEmpty) return 'Line chart: No data';
+  final title = spec['title'];
+  return 'Line chart${title == null ? '' : ' $title'}: '
+      '${series.length} series over ${points.first.length} points, '
+      'from ${chartNumber(values.reduce(math.min))} '
+      'to ${chartNumber(values.reduce(math.max))}';
 }

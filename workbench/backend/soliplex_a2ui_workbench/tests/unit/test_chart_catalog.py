@@ -58,3 +58,23 @@ def test_gauge_custom_scale_and_schema_drift_are_checked():
     bad["spec"]["invented"] = 1
     with pytest.raises(ValueError, match="catalog constraint"):
         validate_chart(bad)
+
+
+def test_line_gaps_use_the_shared_catalog_and_bar_values_stay_numeric():
+    line = {
+        "spec": {
+            "kind": "line",
+            "series": [{"id": "visits", "points": [
+                {"id": "mon", "label": "Mon", "value": 2},
+                {"id": "tue", "label": "Tue", "value": None},
+                {"id": "wed", "label": "Wed", "value": -4},
+            ]}],
+        },
+        "selection": [],
+        "description": "Weekly visits",
+    }
+    validate_chart(line)
+    bar = deepcopy(line)
+    bar["spec"] = {"kind": "bar", "points": line["spec"]["series"][0]["points"]}
+    with pytest.raises(ValueError, match="catalog constraint"):
+        validate_chart(bar)

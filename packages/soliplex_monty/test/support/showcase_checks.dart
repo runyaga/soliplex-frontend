@@ -54,7 +54,10 @@ void require(bool condition, String message) {
   if (!condition) throw StateError(message);
 }
 
-Future<void> checkShowcase(String name) async {
+Future<void> checkShowcase(
+  String name, {
+  void Function(StagedSurface surface)? onSurface,
+}) async {
   var source = demoSource(name);
   if (name == 'syntax_error') source = '$source)';
   if (name == 'name_error') source = source.replaceFirst('prnt(', 'print(');
@@ -110,6 +113,7 @@ Future<void> checkShowcase(String name) async {
     final sub = handle.events.listen((_) {});
     try {
       await handle.result;
+      if (arena.staged case final surface?) onSurface?.call(surface);
     } finally {
       await sub.cancel();
     }

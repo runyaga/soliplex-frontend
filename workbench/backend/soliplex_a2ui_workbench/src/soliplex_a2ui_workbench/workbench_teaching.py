@@ -222,16 +222,30 @@ Same-title forms with different field lists use separate suffixed CSV files.
 {chart_examples}
 
 Bar and line accept signed values. Pie values are nonnegative. Gauge uses exactly
-one point; its default scale is 0..100. Set scale={{"min_value":0,"max_value":100,"target":80}} to change that scale. Charts are static; selection is an empty list.
+one point; its default scale is 0..100. Set scale={{"min_value":0,"max_value":100,"target":80}} to change that scale. show_chart publishes a static chart; selection is an empty list.
 
-Programs can use import chart and import ui, then publish a standalone chart:
+Programs use the same soliplex_catalogs chart system. Import chart and ui,
+then embed a Chart in a Column, Row or Card beside controls, or show it alone:
 `ui.show(ui.graphics.Chart(chart.bar([{{"id":"a","label":"A","value":2}}], title="Counts"), [], "Counts"))`.
 The chart module also provides line(series), pie(slices), gauge(value,
 min_value=0, max_value=100), scatter(series), radar(axes, series), and
 candlestick(candles). All return specs for ui.graphics.Chart. Each series has
 an id, optional label, and points (bar/line: id, label, value; scatter: id, x, y).
 Radar values align with axes and range from 0 to 100; candles use id, x, open,
-high, low, close. Client charts appear only after the user presses Run.
+high, low, close. Line values may be None to leave a gap. Client charts appear
+only after the user presses Run. The height (default 280) sizes the plot; narrow
+windows scroll chart content when needed.
+ui.BarChart(bars, title, action, weight) and ui.LineChart(labels, series, title,
+weight) are convenience constructors for that same Chart renderer. BarChart
+accepts 1..32 nonnegative bars (label, value); numeric bar labels become strings.
+LineChart accepts 2..500 string labels and 1..6 series (label, values), each with
+one signed number or None per label and at least one numeric value overall.
+A bar tap writes its label to /_ui/<id>/label, then dispatches action with that
+label added to context; handle_event(name, context) reads context["label"].
+Bar buttons are named "Bar <label>: <value>" for accessibility.
+For ui.graphics.Chart, keep selection=[] and optionally set selected=ui.bind(path)
+and action=ui.Event(name, {{"label": ui.bind(path)}}) for bar selection. Without
+an explicit selected binding, a bar action uses the same /_ui/<id>/label context.
 
 ## Python ui API
 
