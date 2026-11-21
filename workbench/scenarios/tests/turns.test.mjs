@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { csvCell, parseCsv } from '../lib/csv.mjs';
-import { performActions } from '../lib/actions.mjs';
+import { narrowToExact, performActions } from '../lib/actions.mjs';
 import { captureProgramTurns, captureTurn } from '../lib/turns.mjs';
 import { assertTurn, intakeSubmissions, loadCases, replyExpectation, validateCases } from '../lib/core.mjs';
 
@@ -442,4 +442,13 @@ test('repair success is bound to its program, chain and visible window assertion
   page.trigger = async () => {};
   await assert.rejects(performActions(page, [{ kind: 'run_program', name: 'Submit', expectRepair: false,
     assertions: [{ kind: 'text', name: 'Run 2' }] }], options, undefined, noWait, async () => [{ pass: false }]), /Action assertions failed/);
+});
+
+test('an action prefers the one exact name when looser matches also qualify', async () => {
+  const fake = label => ({ target: { getAttribute: async () => label, innerText: async () => label } });
+  const run = fake('Run');
+  const narrowed = await narrowToExact([fake('Show run history (2)'), run], 'Run');
+  assert.deepEqual(narrowed, [run]);
+  const both = [fake('Run'), fake('Run')];
+  assert.equal((await narrowToExact(both, 'Run')).length, 2);
 });
