@@ -522,3 +522,11 @@ def test_custom_form_uses_chrome_title_and_displays_constraints():
     assert "Name * (max 30 characters)" in labels
     assert "Notes (max 100 characters)" in labels
     assert "Age (1–120)" in labels
+
+
+def test_text_field_without_a_set_limit_shows_no_length_hint():
+    from soliplex_a2ui_workbench.workbench_forms import field_label
+    from soliplex_a2ui_workbench.workbench_schemas import FormField
+
+    field = FormField.model_validate({"name": "city", "label": "City", "kind": "text"})
+    assert field_label(field) == "City"

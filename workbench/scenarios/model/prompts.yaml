@@ -1029,11 +1029,11 @@
         "region": "canvas",
         "window": "Syntax error example",
         "expectRepair": true,
-        "expectedOutput": "766228",
+        "expectedOutput": "Route distance: 14 km",
         "assertions": [
           {
             "kind": "text",
-            "name": "766228",
+            "name": "Route distance: 14 km",
             "region": "canvas",
             "window": "Syntax error example"
           },
@@ -1055,7 +1055,7 @@
     "assertions": [
       {
         "kind": "text",
-        "name": "766228",
+        "name": "Route distance: 14 km",
         "region": "canvas",
         "window": "Syntax error example"
       }
@@ -1077,11 +1077,11 @@
         "region": "canvas",
         "window": "NameError example",
         "expectRepair": true,
-        "expectedOutput": "766228",
+        "expectedOutput": "Ticket total: 24",
         "assertions": [
           {
             "kind": "text",
-            "name": "766228",
+            "name": "Ticket total: 24",
             "region": "canvas",
             "window": "NameError example"
           },
@@ -1105,13 +1105,13 @@
         "region": "canvas",
         "window": "NameError example",
         "expectRepair": false,
-        "expectedOutput": "766228"
+        "expectedOutput": "Ticket total: 24"
       }
     ],
     "assertions": [
       {
         "kind": "text",
-        "name": "766228",
+        "name": "Ticket total: 24",
         "region": "canvas",
         "window": "NameError example"
       },
@@ -1145,11 +1145,11 @@
         "region": "canvas",
         "window": "Type check example",
         "expectRepair": true,
-        "expectedOutput": "766228",
+        "expectedOutput": "Stock after delivery: 4",
         "assertions": [
           {
             "kind": "text",
-            "name": "766228",
+            "name": "Stock after delivery: 4",
             "region": "canvas",
             "window": "Type check example"
           },
@@ -1171,7 +1171,7 @@
     "assertions": [
       {
         "kind": "text",
-        "name": "766228",
+        "name": "Stock after delivery: 4",
         "region": "canvas",
         "window": "Type check example"
       },
