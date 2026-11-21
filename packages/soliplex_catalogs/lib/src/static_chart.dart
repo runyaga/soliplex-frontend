@@ -11,6 +11,7 @@ import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
 import 'chart_color.dart';
+
 import 'package:json_schema_builder/json_schema_builder.dart'
     hide ValidationResult;
 import 'package:soliplex_catalogs/src/extended_chart.dart';
@@ -379,6 +380,9 @@ class _BarChart extends StatelessWidget {
     final start = diverges ? -1.0 : low / magnitude;
     final end = diverges || low == high ? 1.0 : high / magnitude;
 
+    // The subtitle repeats nothing: Python charts default description to title.
+    final caption = (spec['xlabel'] ?? spec['ylabel'] ?? description) as String;
+    final subtitle = caption == spec['title'] ? null : caption;
     return Semantics(
       container: true,
       label: chartSemanticsLabel(spec, description),
@@ -392,7 +396,7 @@ class _BarChart extends StatelessWidget {
           borderRadius: BorderRadius.circular(context.radii.lg),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(SoliplexSpacing.s6),
+          padding: const EdgeInsets.all(SoliplexSpacing.s4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -400,18 +404,20 @@ class _BarChart extends StatelessWidget {
               if (spec['title'] case final String title)
                 Text(
                   title,
-                  style: textTheme.titleLarge?.copyWith(
+                  style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              const SizedBox(height: SoliplexSpacing.s2),
-              Text(
-                (spec['xlabel'] ?? spec['ylabel'] ?? description) as String,
-                style: textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
+              if (subtitle != null) ...[
+                const SizedBox(height: SoliplexSpacing.s1),
+                Text(
+                  subtitle,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
-              ),
-              const SizedBox(height: SoliplexSpacing.s4),
+              ],
+              const SizedBox(height: SoliplexSpacing.s3),
               if (points.isEmpty)
                 const Text('No data')
               else

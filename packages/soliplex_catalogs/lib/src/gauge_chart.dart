@@ -42,12 +42,12 @@ class StaticGaugeChart extends StatelessWidget {
           borderRadius: BorderRadius.circular(context.radii.lg),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(SoliplexSpacing.s6),
+          padding: const EdgeInsets.all(SoliplexSpacing.s4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (spec['title'] case final String title)
-                Text(title, style: theme.textTheme.titleLarge),
+                Text(title, style: theme.textTheme.titleMedium),
               const SizedBox(height: SoliplexSpacing.s3),
               SizedBox(
                 height: height,
