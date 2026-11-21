@@ -1,3 +1,4 @@
+/// The chart kind, title, author description and data points for screen readers.
 String chartSemanticsLabel(Map<Object?, Object?> spec, String description) {
   final entries = <String>[];
   void points(Object? data) {
@@ -25,7 +26,12 @@ String chartSemanticsLabel(Map<Object?, Object?> spec, String description) {
       '${_value(spec['value'])}${spec['unit'] ?? ''}, scale ${_value(spec['min_value'])} to ${_value(spec['max_value'])}',
     );
   }
-  return '${spec['kind']} chart: ${spec['title'] ?? description}; ${entries.join(', ')}';
+  final title = spec['title'];
+  final note = description.trim().replaceFirst(RegExp(r'\.$'), '');
+  final heading = title == null || note.isEmpty || note == title
+      ? '${title ?? note}'
+      : '$title. $note';
+  return '${spec['kind']} chart: $heading; ${entries.join(', ')}';
 }
 
 String _value(Object? value) =>
