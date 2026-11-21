@@ -45,6 +45,23 @@ def test_generated_catalog_contains_actual_component_schemas():
     assert {"Text", "Button", "PythonRepl", "Chart"} <= names
 
 
+def test_room_and_repair_guide_include_the_exact_type_check_stubs():
+    from soliplex_a2ui_workbench import workbench_teaching
+
+    stubs = Path(workbench_teaching.__file__).with_name("binding_stubs")
+    assert {p.stem for p in stubs.glob("*.pyi")} == {
+        "ui",
+        "ui.workbench",
+        "ui.graphics",
+        "chart",
+    }
+    guide = room_skill("workbench")
+    for stub in stubs.glob("*.pyi"):
+        assert stub.read_text() in guide
+    assert "*args: Any" not in guide
+    assert "**kwargs: Any" not in guide
+
+
 def test_generated_teaching_routes_static_content_to_panels():
     text = room_skill("workbench")
     assert (

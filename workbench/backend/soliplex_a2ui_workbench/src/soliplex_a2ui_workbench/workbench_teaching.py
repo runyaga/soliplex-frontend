@@ -103,8 +103,9 @@ def room_skill(skill_name):
     )
     basic = next(c for c in generated["catalogs"] if "Text" in c["components"])
     variants = ", ".join(basic["components"]["Text"]["properties"]["variant"]["enum"])
-    signatures = "\n".join(
-        f"- `{signature}`" for signature in generated["pythonSignatures"].values()
+    signatures = "\n\n".join(
+        f"### {stub.stem}\n\n```python\n{stub.read_text()}\n```"
+        for stub in sorted(Path(__file__).with_name("binding_stubs").glob("*.pyi"))
     )
     return f"""---
 name: {skill_name}

@@ -5,7 +5,7 @@ import ui
 import ui.workbench
 
 count = 3
-points = [{"id": "p0", "label": "Start", "value": 3}]
+points: "list[chart.BarPointsItem]" = [{"id": "p0", "label": "Start", "value": 3}]
 last_event = "run"
 history = ["last event: run, count 3"]
 notice = "Stock starts at 3. +1 adds stock; -1 removes stock until empty."

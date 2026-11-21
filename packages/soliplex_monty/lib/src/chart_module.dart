@@ -1,63 +1,32 @@
 import 'package:dart_monty/core.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 
-/// Creates the Monty `chart` module. Builders return plain chart spec dicts.
-ExternalModule chartModule() => ExternalModule({
-  'bar': _builder('bar', 'points', color: true),
-  'line': _builder('line', 'series'),
-  'gauge': _builder('gauge', 'value'),
-  'scatter': _builder('scatter', 'series'),
-  'pie': _builder('pie', 'slices'),
-  'radar': _builder('radar', 'series'),
-  'candlestick': _builder('candlestick', 'candles'),
-});
+import 'package:soliplex_monty/src/bindings/registered_module.dart';
 
-MontyHostFunction _builder(String kind, String dataKey, {bool color = false}) =>
+/// Creates the Monty `chart` module. Builders return plain chart spec dicts.
+ExternalModule chartModule() => registerBindings(
+  'chart',
+  ExternalModule({
+    'bar': _builder('bar'),
+    'line': _builder('line'),
+    'gauge': _builder('gauge'),
+    'scatter': _builder('scatter'),
+    'pie': _builder('pie'),
+    'radar': _builder('radar'),
+    'candlestick': _builder('candlestick'),
+  }),
+);
+
+MontyHostFunction _builder(String kind) =>
     MontyHostFunction(kind, (positional, keywords) {
-      final name = 'chart.$kind';
-      final gauge = kind == 'gauge';
-      final optional = {
-        'title',
-        if (gauge) 'unit',
-        if (!gauge && kind != 'pie' && kind != 'radar') ...['xlabel', 'ylabel'],
-        if (color) 'color',
+      final args = {
+        for (final entry in keywords.entries) entry.key: entry.value.dartValue,
       };
-      final numeric = {
-        if (gauge) ...['min_value', 'max_value', 'target'],
-      };
-      final dataKeys = [if (kind == 'radar') 'axes', dataKey];
-      if (positional.length > dataKeys.length ||
-          dataKeys.take(positional.length).any(keywords.containsKey)) {
-        throw ExternalException(
-          'TypeError',
-          '$name expects ${dataKeys.join(', ')}.',
-        );
-      }
       final spec = <String, Object?>{
         'kind': kind,
-        for (var i = 0; i < positional.length; i++)
-          dataKeys[i]: positional[i].dartValue,
+        for (final entry in args.entries)
+          if (entry.value != null) entry.key: entry.value,
       };
-      for (final MapEntry(:key, :value) in keywords.entries) {
-        if (dataKeys.contains(key)) {
-          spec[key] = value.dartValue;
-        } else if (numeric.contains(key)) {
-          if (key != 'target' || value.dartValue != null) {
-            spec[key] = value.dartValue;
-          }
-        } else if (optional.contains(key)) {
-          switch (value.dartValue) {
-            case null:
-              break;
-            case final String text:
-              spec[key] = text;
-            default:
-              throw ExternalException('TypeError', '$name: $key must be text.');
-          }
-        } else {
-          throw ExternalException('TypeError', '$name has no $key argument.');
-        }
-      }
       try {
         validateStaticChartSpec(spec);
       } on FormatException catch (error) {

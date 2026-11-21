@@ -12,7 +12,7 @@ def checked_total(value: int) -> int:
 
 
 raw = "month,total\nJan,10\nFeb,BROKEN\nMar,30\n"
-clean = []
+clean: "list[ui.BarChartBarsItem]" = []
 dropped = 0
 for row in csv.DictReader(raw.splitlines()):
     amount = int(row["total"])  # Deliberate runtime error (attempt 2).

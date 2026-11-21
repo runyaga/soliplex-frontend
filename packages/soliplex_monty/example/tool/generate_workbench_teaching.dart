@@ -4,9 +4,7 @@ import 'dart:io';
 import 'package:a2ui_agent/a2ui_agent.dart';
 import 'package:a2ui_flutter/basic_catalog.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
-import 'package:soliplex_monty/soliplex_monty.dart';
-import 'package:soliplex_monty/src/python_workbench.dart';
-import 'package:soliplex_monty/src/ui_chart.dart';
+import 'package:soliplex_monty/src/bindings/host_bindings.dart';
 import 'package:soliplex_monty_app/workbench_catalogs.dart';
 
 /// Generated from the same implementations the host and Python arena register.
@@ -21,17 +19,10 @@ Map<String, Object?> workbenchTeaching() {
     'catalogs': [for (final catalog in catalogs) catalog.toJson()],
     'catalogTeaching': ExpressFormat(catalogs).promptGenerator.generate(),
     'pythonSignatures': {
-      for (final entry in {...basicSignatures, ...uiChartSignatures}.entries)
-        entry.key: 'ui.${entry.key}(${entry.value.join(', ')}, id=...)',
-      'graphics.Chart':
-          'ui.graphics.Chart(spec, selection=[], description=..., '
-          'height=280, selected=..., action=..., weight=...)',
-      'bind': 'ui.bind(path)',
-      'Event': 'ui.Event(name, context={})',
-      'show': 'ui.show(root, data={})',
-      for (final entry in PythonWorkbench.signatures.entries)
-        'workbench.${entry.key}':
-            'ui.workbench.${entry.key}(${entry.value.join(', ')})',
+      for (final module in moduleBindings.values)
+        for (final binding in module.functions)
+          '${module.name == 'ui' ? '' : '${module.name.replaceFirst('ui.', '')}.'}${binding.name}':
+              binding.stub,
     },
   };
 }

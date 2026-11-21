@@ -1,50 +1,14 @@
 import 'dart:math';
-
 import 'package:a2ui_core/a2ui_core.dart';
 import 'package:dart_monty/core.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
-
+import 'package:soliplex_monty/src/bindings/host_bindings.dart';
+import 'package:soliplex_monty/src/bindings/positional_signatures.dart';
+import 'package:soliplex_monty/src/bindings/registered_module.dart';
 import 'package:soliplex_monty/src/python_workbench.dart';
 import 'package:soliplex_monty/src/ui_chart.dart';
 
-/// Positional order of every v1.0 basic-catalog constructor, from the Track B
-/// binding contract. Each name is also accepted as a keyword.
-const basicSignatures = <String, List<String>>{
-  'Text': ['text', 'variant', 'weight'],
-  'Image': ['url', 'description', 'fit', 'variant', 'weight'],
-  'Icon': ['name', 'weight'],
-  'Video': ['url', 'posterUrl', 'weight'],
-  'AudioPlayer': ['url', 'description', 'weight'],
-  'Row': ['children', 'justify', 'align', 'weight'],
-  'Column': ['children', 'justify', 'align', 'weight'],
-  'List': ['children', 'direction', 'align', 'weight'],
-  'Card': ['child', 'weight'],
-  'Tabs': ['tabs', 'weight'],
-  'Modal': ['trigger', 'content', 'weight'],
-  'Divider': ['axis', 'weight'],
-  'Button': ['child', 'variant', 'action', 'weight'],
-  'TextField': ['label', 'value', 'placeholder', 'variant', 'weight'],
-  'CheckBox': ['label', 'value', 'weight'],
-  'ChoicePicker': [
-    'label',
-    'variant',
-    'options',
-    'value',
-    'displayStyle',
-    'filterable',
-    'weight',
-  ],
-  'Slider': ['label', 'min', 'max', 'value', 'steps', 'weight'],
-  'DateTimeInput': [
-    'value',
-    'enableDate',
-    'enableTime',
-    'min',
-    'max',
-    'label',
-    'weight',
-  ],
-};
+export 'bindings/positional_signatures.dart' show basicSignatures;
 
 /// Bounds on what one execution may stage.
 const _maxNodes = 20000;
@@ -116,112 +80,114 @@ class PythonUiArena {
       value.contains(':$_nonce:');
 
   /// The `ui` module given to Monty; every call goes to [current]'s arena.
-  static ExternalModule moduleFor(PythonUiArena Function() current) =>
-      ExternalModule({
-        'workbench': ExternalModule({
-          for (final name in PythonWorkbench.signatures.keys)
+  static ExternalModule moduleFor(
+    PythonUiArena Function() current,
+  ) => registerBindings(
+    'ui',
+    ExternalModule({
+      'workbench': registerBindings(
+        'ui.workbench',
+        ExternalModule({
+          for (final name in PythonWorkbench.functionNames)
             name: MontyHostFunction(name, (positional, keywords) {
               final function =
                   current().workbench.module.attrs[name]! as MontyHostFunction;
               return function.fn(positional, keywords);
             }),
         }),
-        for (final MapEntry(key: name, value: params) in {
-          ...basicSignatures,
-          ...uiChartSignatures,
-        }.entries)
-          name: MontyHostFunction(name, (positional, keywords) {
-            return MontyString(
-              current()._construct(name, params, positional, keywords),
-            );
-          }),
-        'graphics': ExternalModule({
+      ),
+      for (final MapEntry(key: name, value: params) in {
+        ...basicSignatures,
+        ...uiChartSignatures,
+      }.entries)
+        name: MontyHostFunction(name, (positional, keywords) {
+          return MontyString(
+            current()._construct(name, params, positional, keywords),
+          );
+        }),
+      'graphics': registerBindings(
+        'ui.graphics',
+        ExternalModule({
           'Chart': MontyHostFunction('Chart', (positional, keywords) {
             return MontyString(
               current()._construct(
                 'Chart',
-                const [
-                  'spec',
-                  'selection',
-                  'description',
-                  'height',
-                  'selected',
-                  'action',
-                  'weight',
-                ],
+                graphicsSignature,
                 positional,
                 keywords,
               ),
             );
           }),
         }),
-        'bind': MontyHostFunction('bind', (positional, keywords) {
-          final path = current()._single(positional, keywords, 'path', 'bind');
-          if (path is! String ||
-              path.isEmpty ||
-              path.length > _maxPathLength ||
-              path.contains('~')) {
-            throw const ExternalException(
-              'ValueError',
-              'bind() takes a JSON Pointer path such as "/form/name".',
-            );
-          }
-          final arena = current();
-          final token = arena._token('bind');
-          arena._values[token] = {'@path': path};
-          return MontyString(token);
-        }),
-        'Event': MontyHostFunction('Event', (positional, keywords) {
-          final name = positional.isNotEmpty
-              ? positional.first.dartValue
-              : keywords['name']?.dartValue;
-          if (name is! String || name.isEmpty || name.length > 64) {
-            throw const ExternalException(
-              'ValueError',
-              'Event() takes a non-empty name of at most 64 characters.',
-            );
-          }
-          final context = positional.length > 1
-              ? positional[1].dartValue
-              : keywords['context']?.dartValue;
-          if (context != null && context is! Map) {
-            throw const ExternalException(
-              'TypeError',
-              'Event() context must be a dict.',
-            );
-          }
-          final arena = current();
-          final token = arena._token('event');
-          arena._values[token] = {
-            'event': {'name': name, 'context': ?context},
-          };
-          return MontyString(token);
-        }),
-        'show': MontyHostFunction('show', (positional, keywords) {
-          final root = positional.isNotEmpty
-              ? positional.first.dartValue
-              : keywords['root']?.dartValue;
-          final arena = current();
-          final node = root is String ? arena._nodes[root] : null;
-          if (node == null) {
-            throw const ExternalException(
-              'TypeError',
-              'show() takes a component built in this run.',
-            );
-          }
-          final data = positional.length > 1
-              ? positional[1].dartValue
-              : keywords['data']?.dartValue;
-          if (data != null && data is! Map) {
-            throw const ExternalException(
-              'TypeError',
-              'show() data must be a dict.',
-            );
-          }
-          arena.staged = arena._stage(root! as String, data);
-          return const MontyNone();
-        }),
-      });
+      ),
+      'bind': MontyHostFunction('bind', (positional, keywords) {
+        final path = current()._single(positional, keywords, 'path', 'bind');
+        if (path is! String ||
+            path.isEmpty ||
+            path.length > _maxPathLength ||
+            path.contains('~')) {
+          throw const ExternalException(
+            'ValueError',
+            'bind() takes a JSON Pointer path such as "/form/name".',
+          );
+        }
+        final arena = current();
+        final token = arena._token('bind');
+        arena._values[token] = {'@path': path};
+        return MontyString(token);
+      }),
+      'Event': MontyHostFunction('Event', (positional, keywords) {
+        final name = positional.isNotEmpty
+            ? positional.first.dartValue
+            : keywords['name']?.dartValue;
+        if (name is! String || name.isEmpty || name.length > 64) {
+          throw const ExternalException(
+            'ValueError',
+            'Event() takes a non-empty name of at most 64 characters.',
+          );
+        }
+        final context = positional.length > 1
+            ? positional[1].dartValue
+            : keywords['context']?.dartValue;
+        if (context != null && context is! Map) {
+          throw const ExternalException(
+            'TypeError',
+            'Event() context must be a dict.',
+          );
+        }
+        final arena = current();
+        final token = arena._token('event');
+        arena._values[token] = {
+          'event': {'name': name, 'context': ?context},
+        };
+        return MontyString(token);
+      }),
+      'show': MontyHostFunction('show', (positional, keywords) {
+        final root = positional.isNotEmpty
+            ? positional.first.dartValue
+            : keywords['root']?.dartValue;
+        final arena = current();
+        final node = root is String ? arena._nodes[root] : null;
+        if (node == null) {
+          throw const ExternalException(
+            'TypeError',
+            'show() takes a component built in this run.',
+          );
+        }
+        final data = positional.length > 1
+            ? positional[1].dartValue
+            : keywords['data']?.dartValue;
+        if (data != null && data is! Map) {
+          throw const ExternalException(
+            'TypeError',
+            'show() data must be a dict.',
+          );
+        }
+        arena.staged = arena._stage(root! as String, data);
+        return const MontyNone();
+      }),
+    }),
+  );
 
   Object? _single(
     List<MontyValue> positional,
@@ -273,7 +239,11 @@ class PythonUiArena {
         id = v;
         continue;
       }
-      if (!params.contains(key)) {
+      if (!moduleBindings[component == 'Chart' ? 'ui.graphics' : 'ui']!
+          .functions
+          .singleWhere((b) => b.name == component)
+          .parameters
+          .any((p) => p.name == key)) {
         throw ExternalException(
           'TypeError',
           "$component() got an unexpected keyword argument '$key'.",
