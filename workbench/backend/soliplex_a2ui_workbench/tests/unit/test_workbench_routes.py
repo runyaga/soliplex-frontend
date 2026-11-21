@@ -229,12 +229,16 @@ def test_program_files_use_authenticated_thread_and_write_permission(tmp_path):
     install = MemoryInstallation()
     install.sandbox_workdirs_path = tmp_path / 'files'
     app.dependency_overrides[installation.depend_the_installation.dependency] = lambda: install
+    from soliplex_a2ui_workbench.program_files import MAX_BYTES, MAX_REQUEST_BYTES
     base = '/v1/rooms/room-a/threads/thread-a/workbench/files/'
     assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'saved'}).json() == {'saved': True}
     assert client.post(base + 'read', json={'filename': 'notes.md'}).json() == {'text': 'saved'}
     assert client.post(base + 'write', json={'filename': '../secret.md', 'text': 'bad'}).status_code == 422
-    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * 400001}).status_code == 413
-    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * 65537}).status_code == 422
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * (MAX_REQUEST_BYTES + 1)}).status_code == 413
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * (MAX_BYTES + 1)}).status_code == 422
+    payload = '\0' * MAX_BYTES
+    assert client.post(base + 'write', json={'filename': 'full.txt', 'text': payload}).json() == {'saved': True}
+    assert client.post(base + 'read', json={'filename': 'full.txt'}).json() == {'text': payload}
     foreign = base.replace('thread-a', 'foreign')
     assert client.post(foreign + 'read', json={'filename': 'notes.md'}).status_code == 404
     policy.permissions = {('room-a', 'alice', authz.Permission.READ)}

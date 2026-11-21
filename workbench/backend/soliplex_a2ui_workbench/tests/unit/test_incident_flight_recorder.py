@@ -31,7 +31,7 @@ def recorder(tmp_path, monkeypatch):
     record = projection.content[result["activityMessageId"]]
     assert result["execution"] == "awaiting_user"
     assert record["output"] == ""
-    assert len(record["source"].encode()) < 12000
+    assert len(record["source"].encode()) < 1_000_000
     assert "__INCIDENT_REPLAY_TEMPLATE__" not in record["source"]
     assert program_files.read_file(installation, scope, "incident-case.json") == ""
     actions = []

@@ -11,7 +11,10 @@ import stat
 
 from .workbench_form_results import METADATA_COLUMNS, _thread_directory
 
-MAX_BYTES = 65_536
+MAX_BYTES = 8 * 1024 * 1024
+# JSON may escape each UTF-8 byte as six ASCII bytes (e.g. \u0000),
+# plus the filename and object framing. The decoded text is checked separately.
+MAX_REQUEST_BYTES = 6 * MAX_BYTES + 1024
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}\.(?:csv|md|txt|json)")
 
 
@@ -32,11 +35,11 @@ def _read(directory, filename):
             or info.st_size > MAX_BYTES
         ):
             raise ValueError(
-                "File must be a regular, unlinked file of at most 65536 bytes"
+                f"File must be a regular, unlinked file of at most {MAX_BYTES} bytes"
             )
         content = source.read(MAX_BYTES + 1)
         if len(content) > MAX_BYTES:
-            raise ValueError("File exceeds 65536 bytes")
+            raise ValueError(f"File exceeds {MAX_BYTES} bytes")
         return content.decode("utf-8")
 
 
@@ -54,7 +57,7 @@ def write_file(installation, scope, filename, text):
     """Atomic replacement under the form writer's directory lock; never edit receipts."""
     _name(filename)
     if not isinstance(text, str) or len(text.encode("utf-8")) > MAX_BYTES:
-        raise ValueError("Write exceeds 65536 UTF-8 bytes")
+        raise ValueError(f"Write exceeds {MAX_BYTES} UTF-8 bytes")
     # read_form_results trusts the metadata header as server-validated rows.
     if (
         filename.endswith(".csv")

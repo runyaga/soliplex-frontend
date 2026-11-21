@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:dart_monty/dart_monty.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soliplex_monty/soliplex_monty.dart' show ReplLimits;
 import 'package:soliplex_monty/src/program_type_check.dart';
 
 import 'support/monty.dart';
@@ -25,9 +26,10 @@ void main() {
   test(
     'stubs accept GUI demo and tally; checker refuses annotated error',
     () async {
-      const limits = ResourceLimits(
-        maxMemory: 32 * 1024 * 1024,
-        maxFeedDuration: Duration(seconds: 5),
+      const defaults = ReplLimits();
+      final limits = ResourceLimits(
+        maxMemory: defaults.maxMemory,
+        maxFeedDuration: defaults.maxFeedDuration,
       );
       Future<String?> check(String code) =>
           checkProgramTypes(code, limits, workerLocation: montyWorker);

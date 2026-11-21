@@ -12,6 +12,8 @@ from ag_ui.core import ActivitySnapshotEvent
 from pydantic_ai import RunContext, ToolReturn
 from soliplex.agents import AgentDependencies
 
+from .workbench_limits import MAX_EDITOR_SOURCE_CHARS
+
 ACTIVITY_TYPE = "a2ui-surface"
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
 LAB_CATALOG = "urn:soliplex:catalog:lab:1"
@@ -78,7 +80,7 @@ def basic_surface_operations() -> list[dict]:
 
 
 DEFAULT_SOURCE = "x = sum(range(10))\nprint(x)\nx * 2"
-MAX_SOURCE = 20000
+MAX_SOURCE = MAX_EDITOR_SOURCE_CHARS
 # Repair rounds the client requests without asking. The client clamps it.
 REPAIR_ROUNDS = 2
 MODES = ("repl", "run")

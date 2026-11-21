@@ -1,8 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
-
-from soliplex_a2ui_workbench.program_files import read_file, write_file
+from soliplex_a2ui_workbench.program_files import MAX_BYTES, read_file, write_file
 from soliplex_a2ui_workbench.workbench_repository import WorkbenchScope
 
 
@@ -50,7 +49,7 @@ def test_limits_symlinks_and_receipt_csv_are_protected(files, tmp_path):
     installation, scope = files
     write_file(installation, scope, "notes.md", "old")
     with pytest.raises(ValueError):
-        write_file(installation, scope, "notes.md", "é" * 40000)
+        write_file(installation, scope, "notes.md", "é" * (MAX_BYTES // 2 + 1))
     assert read_file(installation, scope, "notes.md") == "old"
     directory = tmp_path / "room" / "thread"
     receipt = directory / "team-survey.csv"
@@ -62,7 +61,7 @@ def test_limits_symlinks_and_receipt_csv_are_protected(files, tmp_path):
         read_file(installation, scope, "link.md")
     with pytest.raises((OSError, ValueError)):
         write_file(installation, scope, "link.md", "overwrite")
-    (directory / "huge.txt").write_text("x" * 65537)
+    (directory / "huge.txt").write_text("x" * (MAX_BYTES + 1))
     with pytest.raises(ValueError):
         read_file(installation, scope, "huge.txt")
 
@@ -71,8 +70,8 @@ def test_exact_utf8_limit_and_special_files(files, tmp_path):
     import os
 
     installation, scope = files
-    write_file(installation, scope, "full.txt", "é" * 32768)
-    assert read_file(installation, scope, "full.txt") == "é" * 32768
+    write_file(installation, scope, "full.txt", "é" * (MAX_BYTES // 2))
+    assert read_file(installation, scope, "full.txt") == "é" * (MAX_BYTES // 2)
     directory = tmp_path / "room" / "thread"
     os.link(directory / "full.txt", directory / "hard.md")
     with pytest.raises(ValueError):

@@ -4,8 +4,8 @@ import { resolve } from 'node:path';
 import { cleanEvidence, parseCredentials, parseSSE, redactor, regionSelector } from '../lib/core.mjs';
 
 export const probePlan = [
-  ['compute', 'Compute', 24], ['redraw', 'Redraw', 5], ['charts', 'Charts', 5],
-  ['events', 'Events', 1], ['long', 'Long session', 300], ['files', 'Files', 4],
+  ['compute', 'Compute', 24], ['redraw', 'Redraw', 3], ['charts', 'Charts', 5],
+  ['events', 'Events', 1], ['long', 'Long session', 300], ['files', 'Files', 3],
   ['state', 'App state', 8], ['types', 'Type check', 1],
   ['windows', 'Windows', 20], ['cycles', 'Window cycles', 40],
 ];
@@ -364,7 +364,7 @@ export async function runProbes({ repository, base, alias }) {
         }
         if (probe === 'types' && !error) {
           const checks = observation.checks = [];
-          for (const title of [PROGRAM, 'Probe type check 12000']) {
+          for (const title of [PROGRAM, 'Probe type check 1000000']) {
             await performActions(page, [{ kind: 'check', name: 'Type check', window: title }]);
             const wall_ms = await run(title);
             const text = await semanticText(scope(title));

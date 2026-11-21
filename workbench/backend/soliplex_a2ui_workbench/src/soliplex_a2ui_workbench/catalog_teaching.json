@@ -1500,7 +1500,7 @@
                   },
                   "source": {
                     "type": "string",
-                    "maxLength": 20000
+                    "maxLength": 2000000
                   }
                 },
                 "required": [

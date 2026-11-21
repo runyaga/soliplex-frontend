@@ -33,12 +33,12 @@ typedef ReplRuntimeStarter =
 /// Bounds for one REPL instance.
 class ReplLimits {
   const ReplLimits({
-    this.maxMemory = 32 * 1024 * 1024,
-    this.maxFeedDuration = const Duration(seconds: 1),
-    this.deadline = const Duration(seconds: 5),
+    this.maxMemory = 512 * 1024 * 1024,
+    this.maxFeedDuration = const Duration(seconds: 30),
+    this.deadline = const Duration(seconds: 60),
     this.maxEntries = 20,
-    this.maxOutputChars = 4000,
-    this.maxSourceChars = 20000,
+    this.maxOutputChars = 20000,
+    this.maxSourceChars = 2000000,
     this.retries = 2,
     this.maxRetries = 5,
     this.maxErrorChars = 2000,
@@ -219,7 +219,10 @@ CatalogImplementation labCatalog({
               'type': 'object',
               'properties': {
                 'label': {'type': 'string', 'minLength': 1, 'maxLength': 40},
-                'source': {'type': 'string', 'maxLength': 20000},
+                'source': {
+                  'type': 'string',
+                  'maxLength': limits.maxSourceChars,
+                },
               },
               'required': ['label', 'source'],
               'additionalProperties': false,

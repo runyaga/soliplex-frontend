@@ -1,5 +1,7 @@
 """Small, closed schemas exposed by minimum workbench tools."""
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
+
+
 def test_manifest_schemas_are_closed_and_have_no_more_than_five_fields():
     for model in MINIMUM_ROOM_TOOL_MANIFEST.values():
         schema = model.model_json_schema()
@@ -20,4 +22,4 @@ def test_chart_and_program_schemas_reject_bad_values():
     with pytest.raises(ValidationError):
         ShowChart.model_validate({"title":"Counts", "kind":"bar", "parent_id":"r_canvas", "points":[{"id":"x", "label":"X", "value":1}, {"id":"x", "label":"Duplicate", "value":2}]})
     with pytest.raises(ValidationError):
-        RunPythonClient.model_validate({"title":"Program", "parent_id":"p", "source":"é" * 7000})
+        RunPythonClient.model_validate({"title":"Program", "parent_id":"p", "source":"é" * 500_001})

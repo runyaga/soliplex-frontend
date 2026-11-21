@@ -71,6 +71,16 @@ Future<void> typeSource(WidgetTester tester, String text) async {
 }
 
 void main() {
+  test('default limits support large programs with finite safety budgets', () {
+    const limits = ReplLimits();
+    expect(limits.maxMemory, 512 * 1024 * 1024);
+    expect(limits.maxFeedDuration, const Duration(seconds: 30));
+    expect(limits.deadline, const Duration(seconds: 60));
+    expect(limits.maxSourceChars, 2000000);
+    expect(limits.maxOutputChars, 20000);
+    expect(limits.maxSuspensions, 1000000);
+  });
+
   late MontyStarter starter;
   late List<Map<String, Object?>> actions;
   late LabSurfaceController controller;
@@ -439,7 +449,7 @@ void main() {
   }, skip: skipWithoutMonty != false);
 
   testWidgets('a runaway loop is stopped by the feed limit', (tester) async {
-    create();
+    create(limits: const ReplLimits(maxFeedDuration: Duration(seconds: 1)));
     await mount(tester);
     await typeSource(tester, 'while True:\n    pass');
     final clock = Stopwatch()..start();
@@ -457,7 +467,6 @@ void main() {
   ) async {
     create(
       limits: const ReplLimits(
-        maxFeedDuration: Duration(seconds: 30),
         deadline: Duration(milliseconds: 500),
       ),
     );
@@ -490,7 +499,6 @@ void main() {
   ) async {
     create(
       limits: const ReplLimits(
-        maxFeedDuration: Duration(seconds: 30),
         deadline: Duration(seconds: 30),
       ),
     );

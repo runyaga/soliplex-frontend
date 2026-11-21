@@ -399,7 +399,7 @@ def _load_a2ui_lab_for_test(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType
     monkeypatch.setattr(sys.modules["ag_ui"], "core", sys.modules["ag_ui.core"], raising=False)
     monkeypatch.setattr(sys.modules["soliplex"], "agents", sys.modules["soliplex.agents"], raising=False)
     path = Path(__file__).parents[2] / "src/soliplex_a2ui_workbench/a2ui_lab.py"
-    spec = importlib.util.spec_from_file_location("isolated_a2ui_lab", path)
+    spec = importlib.util.spec_from_file_location("soliplex_a2ui_workbench.isolated_a2ui_lab", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -625,7 +625,7 @@ def test_python_side_and_handoff_fixtures_validate() -> None:
 
 def test_source_and_envelope_bounds_are_utf8_aware() -> None:
     with pytest.raises(ValidationError):
-        RunPythonClient.model_validate({"title": "Unicode", "source": "é" * 6001, "parent_id": "panel"})
+        RunPythonClient.model_validate({"title": "Unicode", "source": "é" * 500_001, "parent_id": "panel"})
     action = {
         "submissionId": "oversized", "activityMessageId": "activity_form",
         "userAction": {"name": "submit_intake", "surfaceId": "surface_form",

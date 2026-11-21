@@ -12,7 +12,6 @@ from pydantic_ai import Agent, ModelRetry, RunContext, ToolReturn
 from pydantic_ai.usage import RunUsage
 from soliplex.agents import AgentDependencies, make_ai_tool
 from soliplex.config.tools import ToolConfig
-
 from soliplex_a2ui_workbench import workbench_tools
 from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
@@ -210,9 +209,9 @@ def test_dart_fixture_is_exact_tool_metadata():
 
 
 def test_adapter_rebuilds_from_authenticated_thread_storage(monkeypatch):
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from soliplex.agui.persistence import ThreadStorage
     from soliplex.agui.schema import Base
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
 
@@ -286,10 +285,10 @@ def test_layout_failure_is_a_model_retry_with_corrective_text(monkeypatch):
 
 
 def test_layout_retry_reaches_the_model_and_agui_as_an_error(monkeypatch):
+    from ag_ui.core import ToolCallResultEvent
     from pydantic_ai.messages import FunctionToolResultEvent, ToolReturnPart
     from pydantic_ai.models.function import DeltaToolCall, FunctionModel
     from pydantic_ai.ui.ag_ui import AGUIEventStream
-    from ag_ui.core import ToolCallResultEvent
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
     retries = []
@@ -350,7 +349,7 @@ def test_argument_validation_retry_does_not_echo_source(monkeypatch):
             await _tool("run_python_client").function(
                 _context(),
                 title="Tally",
-                source="private_source" * 1000,
+                source="private_source" + "x" * 1_000_000,
                 parent_id="r_canvas",
             )
         assert "private_source" not in failure.value.message
