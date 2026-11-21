@@ -57,3 +57,22 @@ test('survey and pipeline selectors match the rendered catalog', async () => {
   const pipeline = cases.find(item => item.id === 'pipeline_saved_csv');
   assert.ok(pipeline.assertions.some(a => a.kind === 'text' && a.name === 'Monthly sales'));
 });
+
+test('JSON file assertions compare typed fields, arrays and nested objects exactly', async () => {
+  const expected = { kind: 'file', filename: 'case.json', json: { status: 'pass', result: { value: 6 }, ids: ['fault-4', 'fault-5'], cleared: 0 } };
+  const validate = a => validateCases([{ id: 'receipt', prompt: 'Read', assertions: [a] }], { prompts: true });
+  assert.doesNotThrow(() => validate(expected));
+  for (const json of [null, [], {}, 'pass']) assert.throws(() => validate({ ...expected, json }));
+  assert.throws(() => validate({ ...expected, filename: 'case.txt' }));
+  assert.throws(() => validate({ ...expected, includes: 'pass' }));
+  for (const [text, pass] of [
+    [JSON.stringify({ ...expected.json, extra: 'allowed' }), true],
+    [JSON.stringify({ ...expected.json, cleared: '0' }), false],
+    [JSON.stringify({ ...expected.json, result: { value: 6, unchecked: true } }), false],
+    [JSON.stringify({ ...expected.json, ids: ['fault-5', 'fault-4'] }), false],
+    ['{"status":"pass"}', false], ['null', false], ['[]', false], ['not JSON', false],
+  ]) {
+    const page = { request: { post: async () => ({ ok: () => true, json: async () => ({ text }) }) } };
+    assert.equal((await assertSavedFile(page, 'https://example.test', 'room', 'thread', expected, 'Bearer memory')).pass, pass, text);
+  }
+});

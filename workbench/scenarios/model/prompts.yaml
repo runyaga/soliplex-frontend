@@ -1590,5 +1590,211 @@
     "followup": [
       "What is the total in my Pipeline app? Reply with the number only."
     ]
+  },
+  {
+    "id": "incident_counterfactuals",
+    "prompt": "Investigate a retry-storm incident and hand it off.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Incident Flight Recorder",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Replay observed incident",
+        "window": "Incident Flight Recorder app",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Bar T5: 6",
+        "window": "Incident Flight Recorder app",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Freeze before tick 6",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "role": "button",
+        "name": "Compare mitigations",
+        "window": "Incident Flight Recorder app"
+      }
+    ],
+    "followup": [
+      "Compare capacity 12 with disabling retries. Give each final backlog and the clearing tick from the app only."
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Capacity 12: final backlog 6",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "kind": "text",
+        "name": "Retries disabled: backlog 0 at tick 7",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "kind": "reply",
+        "includes": "7"
+      },
+      {
+        "kind": "file",
+        "filename": "incident-case.json",
+        "json": {
+          "capacity_final_backlog": 6,
+          "retry_disabled_final_backlog": 0,
+          "cleared_at_tick": 7,
+          "observed": [
+            0,
+            0,
+            0,
+            2,
+            6,
+            8,
+            12,
+            16,
+            20,
+            24,
+            28,
+            32
+          ]
+        }
+      },
+      {
+        "kind": "reply",
+        "includes": "6"
+      },
+      {
+        "kind": "reply",
+        "includes": "0"
+      }
+    ]
+  },
+  {
+    "id": "incident_capsule_handoff",
+    "prompt": "Open Incident Flight Recorder.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Incident Flight Recorder",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Replay observed incident",
+        "window": "Incident Flight Recorder app",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Bar T5: 6",
+        "window": "Incident Flight Recorder app",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Freeze before tick 6",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "role": "button",
+        "name": "Compare mitigations",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "role": "button",
+        "name": "Minimize triggering events",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "role": "button",
+        "name": "Build replay capsule",
+        "window": "Incident Flight Recorder app",
+        "awaitTurn": true
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "window": "Incident replay capsule",
+        "expectRepair": false,
+        "expectedOutput": "Verified independent-v1 / queue-v1"
+      },
+      {
+        "role": "button",
+        "name": "Load verification and save handoff",
+        "window": "Incident Flight Recorder app"
+      }
+    ],
+    "followup": [
+      "What does the capsule establish? Use the verified app facts and state the simulation assumption."
+    ],
+    "assertions": [
+      {
+        "kind": "text",
+        "name": "Verification: verified",
+        "window": "Incident Flight Recorder app"
+      },
+      {
+        "kind": "file",
+        "filename": "incident-case.json",
+        "json": {
+          "verification_status": "verified",
+          "minimal_trigger": [
+            "fault-4",
+            "fault-5"
+          ],
+          "capacity_final_backlog": 6,
+          "retry_disabled_final_backlog": 0,
+          "cleared_at_tick": 7
+        }
+      },
+      {
+        "kind": "file",
+        "filename": "replay-verification.json",
+        "json": {
+          "status": "pass",
+          "verifier_revision": "independent-v1",
+          "results": {
+            "observed": [
+              0,
+              0,
+              0,
+              2,
+              6,
+              8,
+              12,
+              16,
+              20,
+              24,
+              28,
+              32
+            ],
+            "restore_final_backlog": 32,
+            "capacity_final_backlog": 6,
+            "retry_disabled_final_backlog": 0,
+            "cleared_at_tick": 7,
+            "minimal_trigger": [
+              "fault-4",
+              "fault-5"
+            ]
+          }
+        }
+      },
+      {
+        "kind": "file",
+        "filename": "incident-handoff.md",
+        "includes": "Status: verified"
+      },
+      {
+        "kind": "reply",
+        "includes": "simulation"
+      }
+    ]
   }
 ]

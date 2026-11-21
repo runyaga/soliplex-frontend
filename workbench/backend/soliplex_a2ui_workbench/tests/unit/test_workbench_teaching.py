@@ -135,7 +135,6 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
     import json
     from pathlib import Path
 
-
     text = room_skill("workbench")
     for literal in [
         "ui.workbench.read_file(filename)",
@@ -165,7 +164,9 @@ def test_ui_and_chart_teaching_describes_one_embeddable_chart_system():
     generated = json.loads(
         Path(workbench_teaching.__file__).with_name("catalog_teaching.json").read_text()
     )
-    assert not any("lab-chart" in catalog["catalogId"] for catalog in generated["catalogs"])
+    assert not any(
+        "lab-chart" in catalog["catalogId"] for catalog in generated["catalogs"]
+    )
     assert "BarChart" in generated["pythonSignatures"]
     assert "LineChart" in generated["pythonSignatures"]
     text = room_skill("workbench")
@@ -187,6 +188,7 @@ def test_room_suggestions_show_only_the_advanced_demos():
         "Hot-patch a crashing button without losing data.",
         "Reproduce an anomaly in a runnable script.",
         "Watch a pipeline heal through two repairs.",
+        "Investigate a retry-storm incident and hand it off.",
     )
     # Culled demos still open when typed; only their buttons are gone.
     assert DEMO_SUGGESTIONS["Fix a syntax error with AI."] == "syntax_error"

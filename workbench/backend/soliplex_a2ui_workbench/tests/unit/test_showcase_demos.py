@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 from pydantic_ai.ui.ag_ui import AGUIAdapter
-
 from soliplex_a2ui_workbench import workbench_tools as tools
 from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
 from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
@@ -16,6 +15,7 @@ from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, room_sk
 @pytest.mark.parametrize(
     "name",
     [
+        "incident_flight_recorder",
         "survey_results",
         "notes",
         "todo",
@@ -35,10 +35,17 @@ def test_curated_demo_is_exact_inert_source(name):
     record = next(
         r for r in ctx.snapshot()["content"] if r["surfaceId"] == result["surfaceId"]
     )
-    assert (
-        record["source"]
-        == Path(tools.__file__).with_name(f"{name}_demo.py").read_text()
-    )
+    source = Path(tools.__file__).with_name(f"{name}_demo.py").read_text()
+    if name == "incident_flight_recorder":
+        source = source.replace(
+            '"__INCIDENT_REPLAY_TEMPLATE__"',
+            repr(
+                Path(tools.__file__)
+                .with_name("incident_replay_template.py")
+                .read_text()
+            ),
+        )
+    assert record["source"] == source
     assert record.get("typeCheck", False) == (name == "healing_pipeline")
 
 
@@ -48,10 +55,11 @@ def test_every_suggestion_has_a_user_case_and_curated_teaching():
     )
     from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
 
-    assert len(DEMO_SUGGESTIONS) == 11
+    assert len(DEMO_SUGGESTIONS) == 12
     for suggestion in (*ROOM_SUGGESTIONS, *DEMO_SUGGESTIONS):
         assert any(case["prompt"] == suggestion for case in cases), suggestion
     for name in [
+        "incident_flight_recorder",
         "survey_results",
         "notes",
         "todo",
@@ -72,7 +80,6 @@ def test_form_receipt_streams_before_model_reply_and_survives_replay(tmp_path):
     from pydantic_ai import Agent
     from pydantic_ai.messages import ModelResponse, TextPart
     from pydantic_ai.models.function import FunctionModel
-
     from soliplex_a2ui_workbench.workbench_actions import validate_submission
     from soliplex_a2ui_workbench.workbench_form_results import append_form_result
     from soliplex_a2ui_workbench.workbench_routes import create_guarded_agui_router
@@ -160,7 +167,7 @@ def test_suggestions_are_short_and_have_an_exact_demo_mapping():
     from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
 
     assert set(ROOM_SUGGESTIONS[1:]) <= set(DEMO_SUGGESTIONS)
-    assert len(set(DEMO_SUGGESTIONS.values())) == 11
+    assert len(set(DEMO_SUGGESTIONS.values())) == 12
     for text, name in DEMO_SUGGESTIONS.items():
         assert len(text) <= 65
         assert f'{text} -> open_demo("{name}")' in room_skill("workbench")
@@ -173,6 +180,7 @@ def test_suggestions_are_short_and_have_an_exact_demo_mapping():
         "syntax_error",
         "name_error",
         "type_check",
+        "incident_flight_recorder",
         "survey_results",
         "notes",
         "todo",
