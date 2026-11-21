@@ -159,6 +159,13 @@ class ChatSurfaceStore extends ChangeNotifier {
         List.generate(previous.length, (i) => i)
             .every((i) => encoded[i] == previous[i]);
     final unchanged = encoded.length == previous.length && extendsPrevious;
+    if (!extendsPrevious &&
+        !_invalid.contains(messageId) &&
+        _controllers[messageId]?.updateProgram(messages) == true) {
+      _controllers[messageId]!.live = live;
+      _wire[messageId] = encoded;
+      return _controllers[messageId]!;
+    }
     if (!extendsPrevious || (_invalid.contains(messageId) && !unchanged)) {
       _controllers.remove(messageId)?.dispose();
       _wire.remove(messageId);

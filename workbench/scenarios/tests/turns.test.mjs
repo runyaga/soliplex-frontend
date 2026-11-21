@@ -21,7 +21,7 @@ test('demo corpus checks Run, each counter click, window open and close in order
   const model = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
   const deterministic = await loadCases(new URL('../deterministic/cases.json', import.meta.url));
   const demo = model.find(c => c.id === 'monty_demo');
-  assert.ok(demo.prompt.startsWith('Open the Monty GUI demo. I will press Run')); 
+  assert.equal(demo.prompt, 'Explore a Python app with buttons and charts.'); 
   assert.deepEqual(demo.actions, deterministic.find(c => c.id === 'monty_demo').actions);
   assert.deepEqual(demo.actions.map(a => a.name), ['Run', '+1', 'Add point', 'Bar Start: 3', 'Open log window', 'Close log window', 'Open log window', 'Close log window']);
   assert.ok(demo.actions[0].assertions.some(a => a.role === 'button' && a.name === 'Bar Start: 3'));

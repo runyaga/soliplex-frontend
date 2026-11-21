@@ -87,10 +87,10 @@ def test_unknown_demo_is_corrective_and_publishes_nothing(monkeypatch):
 
 def test_demo_tool_accepts_only_a_name_and_suggestion_teaches_exact_call():
     assert set(MINIMUM_ROOM_TOOL_MANIFEST["open_demo"].model_fields) == {"name"}
-    assert any(s.startswith("Open the Monty GUI demo.") for s in ROOM_SUGGESTIONS)
+    assert "Explore a Python app with buttons and charts." in ROOM_SUGGESTIONS
     teaching = room_skill("workbench")
     assert 'call open_demo("monty_gui")' in teaching
-    assert "press Run, then click the buttons" in teaching
+    assert "reply with only its confirmation field, one sentence" in teaching
     assert "keep its curated source unchanged" in teaching
 
 

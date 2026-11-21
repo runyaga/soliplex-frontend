@@ -150,3 +150,44 @@ def test_form_receipt_streams_before_model_reply_and_survives_replay(tmp_path):
     assert append_form_result(
         installation, scope, submission, record, with_receipt=True
     ) == {"filename": "team-survey.csv", "row": 1}
+
+
+def test_suggestions_are_short_and_have_an_exact_demo_mapping():
+    from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
+
+    assert set(ROOM_SUGGESTIONS[1:]) == set(DEMO_SUGGESTIONS)
+    assert len(set(DEMO_SUGGESTIONS.values())) == 11
+    for text, name in DEMO_SUGGESTIONS.items():
+        assert len(text) <= 65
+        assert f'{text} -> open_demo("{name}")' in room_skill("workbench")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "monty_gui",
+        "syntax_error",
+        "name_error",
+        "type_check",
+        "survey_results",
+        "notes",
+        "todo",
+        "sales_pipeline",
+        "hot_patch",
+        "reproducer",
+        "healing_pipeline",
+    ],
+)
+def test_every_demo_returns_one_user_confirmation_separate_from_guidance(name):
+    scope = WorkbenchScope("actor", "server", "room", "thread")
+    ctx = WorkbenchToolContext(
+        scope, RunWorkbenchProjection(scope), "run", allowed_rooms=frozenset({"room"})
+    )
+    result = tools.open_demo(ctx, name)
+    confirmation = result["confirmation"]
+    assert confirmation.count(".") == 1
+    assert "Run" in confirmation
+    assert not any(
+        word in confirmation for word in ["STATE", "pending", "division", "repairing"]
+    )
+    assert "Reply with only" in result["instruction"]

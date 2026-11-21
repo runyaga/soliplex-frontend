@@ -141,7 +141,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final demo in ['syntax_error', 'name_error', 'type_check']) {
     testWidgets(
-      'real canvas $demo repair waits for preferences and runs once',
+      'real canvas $demo repair retains preferences and runtime and runs once',
       (tester) async {
         final canvas = _Canvas(tester, demo);
         await canvas.mount(
@@ -176,8 +176,9 @@ void main() {
         semantics.dispose();
         canvas.turn.value = 'repair';
         await tester.pump();
-        // A replacement remounts the editor. Hold the actual preference read
-        // across both that mount and completion of the model's streaming turn.
+        // A replacement retains the editor and its loaded preferences. A new
+        // preference read must not delay the authorized rerun, even when the
+        // replacement and completion of the model turn share a frame.
         SharedPreferences.resetStatic();
         final preferences = _DelayedPreferences({
           'flutter.soliplex.python.aiFix.surface_2': true,
@@ -195,7 +196,8 @@ void main() {
         await tester.pump();
         canvas.turn.value = null;
         await tester.pump();
-        expect(canvas.scheduled, isEmpty);
+        expect(canvas.scheduled, hasLength(1));
+        expect(canvas.starter.starts, 1);
         preferences.ready.complete();
         await settleFor(tester, const Duration(milliseconds: 150));
         expect(canvas.scheduled, hasLength(1));
@@ -209,6 +211,7 @@ void main() {
         );
         expect(canvas.actions, hasLength(2));
         final result = canvas.actions.last['context']! as Map;
+        expect(canvas.starter.starts, 1);
         expect(result['outcome'], 'success');
         expect(result['output'], contains(expectedOutput(demo)));
         expect(find.text(expectedOutput(demo)), findsOneWidget);

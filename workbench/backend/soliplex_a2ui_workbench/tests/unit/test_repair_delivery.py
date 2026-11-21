@@ -20,17 +20,17 @@ DEMOS = {
     "syntax_error": (
         "Syntax error example",
         "syntax_error_demo.py.txt",
-        "Open the syntax error example.",
+        "Fix a syntax error with AI.",
     ),
     "name_error": (
         "NameError example",
         "name_error_demo.py",
-        "Open the NameError example.",
+        "Fix a misspelled Python name with AI.",
     ),
     "type_check": (
         "Type check example",
         "type_check_demo.py",
-        "Open the type check example.",
+        "Fix a Python type error with AI.",
     ),
 }
 
@@ -87,10 +87,7 @@ def test_demo_source_is_curated_and_preserves_type_preference_on_repair(name):
             assert data["source"] == (BASE / DEMOS[name][1]).read_text()
     assert any(s.startswith(DEMOS[name][2]) for s in ROOM_SUGGESTIONS)
     assert f'open_demo("{name}")' in room_skill("workbench")
-    assert (
-        "The example is open. Enable AI Fix, then press Run to try the repair."
-        in room_skill("workbench")
-    )
+    assert "Reply with only the tool confirmation." in room_skill("workbench")
     assert "Reply: tick AI Fix" not in room_skill("workbench")
 
 
