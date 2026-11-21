@@ -1,2 +1,3 @@
-# Fix the missing closing parenthesis, then read the value from the run log.
-print(pow(7, 12345, 1000003)
+# Add the missing closing parenthesis to show the route distance.
+legs = [4, 7, 3]
+print(f"Route distance: {sum(legs)} km"

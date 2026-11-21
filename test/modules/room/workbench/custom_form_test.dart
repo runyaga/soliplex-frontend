@@ -34,19 +34,24 @@ void main() {
     expect(controller.error, isNull);
     expect(actions, isEmpty);
     expect(find.text('Form created by the assistant'), findsOneWidget);
-    for (final label in ['Name', 'Notes', 'Age']) {
+    for (final label in [
+      'Name * (max 30 characters)',
+      'Notes (max 100 characters)',
+      'Age (1–120)'
+    ]) {
       final field = find.widgetWithText(TextField, label);
       expect(tester.getSemantics(field).label, label);
       expect(tester.getSize(field).isFinite, isTrue);
     }
     expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Notes'))
+            .widget<TextField>(
+                find.widgetWithText(TextField, 'Notes (max 100 characters)'))
             .maxLines,
         isNull);
     expect(
         tester
-            .widget<TextField>(find.widgetWithText(TextField, 'Age'))
+            .widget<TextField>(find.widgetWithText(TextField, 'Age (1–120)'))
             .keyboardType,
         const TextInputType.numberWithOptions(signed: true, decimal: true));
     // This is the role used by the model harness. Multiple choice remains a
@@ -80,10 +85,12 @@ void main() {
             .label,
         'Subscribe');
     await tester.enterText(
-        find.widgetWithText(TextField, 'Name'), 'Scenario walrus');
+        find.widgetWithText(TextField, 'Name * (max 30 characters)'),
+        'Scenario walrus');
     await tester.enterText(
-        find.widgetWithText(TextField, 'Notes'), 'Current notes');
-    await tester.enterText(find.widgetWithText(TextField, 'Age'), '42');
+        find.widgetWithText(TextField, 'Notes (max 100 characters)'),
+        'Current notes');
+    await tester.enterText(find.widgetWithText(TextField, 'Age (1–120)'), '42');
     await tester.tap(blue);
     await tester.tap(find.widgetWithText(CheckboxListTile, 'North'));
     await tester.tap(find.text('Subscribe'));
@@ -146,8 +153,8 @@ void main() {
           });
     surface.dataModel.set('/values', values);
     await tester.pumpAndSettle();
-    final name =
-        tester.widget<TextField>(find.widgetWithText(TextField, 'Name'));
+    final name = tester.widget<TextField>(
+        find.widgetWithText(TextField, 'Name * (max 30 characters)'));
     expect(name.controller!.text, 'Sample visitor');
     expect(
         tester

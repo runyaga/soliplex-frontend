@@ -8,7 +8,6 @@ import pytest
 from ag_ui.core import RunAgentInput
 from pydantic import ValidationError
 from pydantic_ai import ModelRetry
-
 from soliplex_a2ui_workbench.workbench_actions import (
     submission_messages,
     validate_submission,
@@ -324,6 +323,7 @@ def test_flutter_fixture_matches_actual_custom_tool_metadata(monkeypatch):
     import itertools
     from pathlib import Path
     from unittest.mock import patch
+
     from soliplex_a2ui_workbench import workbench_tools
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
@@ -445,10 +445,11 @@ def test_numbers_accept_valid_catalog_edits_and_inclusive_bounds(
 
 def test_custom_submission_survives_database_reload_without_resubmitting(monkeypatch):
     from types import SimpleNamespace
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
     from soliplex.agui.persistence import ThreadStorage
     from soliplex.agui.schema import Base
     from soliplex_a2ui_workbench.workbench_projection import projection_from_thread
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
 
@@ -471,12 +472,12 @@ def test_custom_submission_survives_database_reload_without_resubmitting(monkeyp
                 thread.thread_id = scope.thread_id
                 await session.flush()
                 run = (await thread.list_runs())[0]
-                identity = dict(
-                    user_name=scope.actor_id,
-                    room_id=scope.room_id,
-                    thread_id=scope.thread_id,
-                    run_id=run.run_id,
-                )
+                identity = {
+                    "user_name": scope.actor_id,
+                    "room_id": scope.room_id,
+                    "thread_id": scope.thread_id,
+                    "run_id": run.run_id,
+                }
                 for event in result.metadata:
                     await storage.save_single_event(**identity, event=event)
                 await storage.add_run_input(
@@ -506,3 +507,18 @@ def test_custom_submission_survives_database_reload_without_resubmitting(monkeyp
             await engine.dispose()
 
     asyncio.run(exercise())
+
+
+def test_custom_form_uses_chrome_title_and_displays_constraints():
+    from soliplex_a2ui_workbench.workbench_forms import custom_form_components
+
+    record = {
+        "title": "Survey",
+        "fields": [field.model_dump() for field in definition().fields],
+    }
+    _, components = custom_form_components(record)
+    assert not any(item.get("text") == "Survey" for item in components)
+    labels = [item["label"] for item in components if "label" in item]
+    assert "Name * (max 30 characters)" in labels
+    assert "Notes (max 100 characters)" in labels
+    assert "Age (1–120)" in labels

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_client/soliplex_client.dart';
 import 'package:soliplex_design/soliplex_design.dart';
@@ -18,6 +19,7 @@ import '../../test/support/monty.dart';
 import '../tool/generate_workbench_teaching.dart' as teaching;
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   test(
     'example discovers an available worker without skipping the real run',
     () {

@@ -5,6 +5,7 @@ import 'package:dart_monty/dart_monty.dart' hide CancelToken;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soliplex_agent/soliplex_agent.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_frontend/src/modules/room/a2ui/surface_scope.dart';
@@ -26,6 +27,7 @@ import '../../../../test/helpers/test_server_entry.dart';
 import '../../test/support/monty.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final liveDelivery in [true, false]) {
     for (final program in [true, false]) {
       final delivery = liveDelivery ? 'live' : 'history';
@@ -227,7 +229,7 @@ void main() {
             await tester.tap(find.text('North').first);
             await tester.tap(
               find.descendant(
-                of: find.widgetWithText(ChatSurfaceView, 'Acknowledged'),
+                of: find.widgetWithText(ChatSurfaceView, 'Acknowledged *'),
                 matching: find.byType(Checkbox),
               ),
             );

@@ -220,8 +220,8 @@ replay perform no checks or execution.
 
 The syntax, NameError and type check suggestions use curated backend sources
 through `open_demo`. The type example enables Type check on publication; its
-uncalled annotated function fails static checking while unchecked execution
-prints normally. Tick AI Fix and press Run to repair each example. A repair
+annotated function is called to calculate stock after a delivery, so the
+printed result depends on fixing the function. Tick AI Fix and press Run to repair each example. A repair
 turn that ends without replacement displays "The model did not repair the
 program." The repair tool reports whether automatic execution was requested;
 only a successful client run result establishes that the fix ran.

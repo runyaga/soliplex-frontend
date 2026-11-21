@@ -32,7 +32,7 @@ void main() {
       'print(42)',
       '$source\n# model repair',
       '',
-      source.replaceFirst('count = 0', 'count = 99')
+      source.replaceFirst('count = 3', 'count = 99')
     ]) {
       code = other;
       expect(WalkthroughPrograms.accepts(code), isFalse);

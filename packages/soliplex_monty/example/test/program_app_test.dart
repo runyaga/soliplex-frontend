@@ -33,6 +33,9 @@ draw()
 
 void main() {
   for (final demo in [false, true]) {
+    // The curated demo starts its stock at 3; the inline program at 0.
+    final initialCount = demo ? 'Count: 3' : 'Count: 0';
+    final afterPlus = demo ? 'Count: 4' : 'Count: 1';
     testWidgets(
       'real Monty app demo=$demo uses layout, session, reuse and closing',
       (
@@ -161,11 +164,11 @@ void main() {
         await tester.pumpAndSettle();
         expect(store.layoutError, isNull);
         expect(
-          find.descendant(of: programWindow, matching: find.text('Count: 0')),
+          find.descendant(of: programWindow, matching: find.text(initialCount)),
           findsNothing,
         );
         expect(
-          find.descendant(of: appWindow, matching: find.text('Count: 0')),
+          find.descendant(of: appWindow, matching: find.text(initialCount)),
           findsOneWidget,
         );
         final programRect = tester.getRect(programWindow);
@@ -185,7 +188,7 @@ void main() {
             'Add point',
             'Open log window',
             'Close log window',
-            'Count: 0',
+            initialCount,
           ]) {
             final control = find.descendant(
               of: appWindow,
@@ -201,7 +204,7 @@ void main() {
         await tester.runAsync(() => tester.tap(plus));
         await pumpUntil(
           tester,
-          () => find.text('Count: 1').evaluate().isNotEmpty,
+          () => find.text(afterPlus).evaluate().isNotEmpty,
         );
         expect(appWindow.evaluate().single, same(appElement));
         expect(actions, hasLength(1));
@@ -209,7 +212,7 @@ void main() {
         await runProgram();
         await tester.pumpAndSettle();
         expect(appWindow.evaluate().single, same(appElement));
-        expect(find.text('Count: 0'), findsOneWidget);
+        expect(find.text(initialCount), findsOneWidget);
         expect(starter.starts, 1);
         expect(find.text('Run 1 · ok'), findsNothing);
         await tester.tap(find.byKey(const ValueKey('python-repl-history')));
@@ -228,14 +231,14 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         await mount();
         expect(find.text('Press Run to open this app.'), findsOneWidget);
-        expect(find.text('Count: 0'), findsNothing);
+        expect(find.text(initialCount), findsNothing);
         expect(starter.starts, 1);
         expect(actions, hasLength(3));
         expect(checks, 4); // Reload and replay did not check the source.
         await runProgram();
         await tester.pumpAndSettle();
         expect(starter.starts, 2);
-        expect(find.text('Count: 0'), findsOneWidget);
+        expect(find.text(initialCount), findsOneWidget);
         final apps = ProgramAppScope.maybeOf(
           tester.element(find.byType(PythonReplView)),
         )!;

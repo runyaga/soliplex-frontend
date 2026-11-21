@@ -131,6 +131,12 @@ class _Canvas {
   }
 }
 
+String expectedOutput(String demo) => switch (demo) {
+  'syntax_error' => 'Route distance: 14 km',
+  'name_error' => 'Ticket total: 24',
+  _ => 'Stock after delivery: 4',
+};
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final demo in ['syntax_error', 'name_error', 'type_check']) {
@@ -163,7 +169,7 @@ void main() {
           }),
         );
         if (demo == 'type_check') {
-          expect(failure['output'], isNot(contains('766228')));
+          expect(failure['output'], isNot(contains(expectedOutput(demo))));
         }
         final semantics = tester.ensureSemantics();
         expect(find.bySemanticsLabel('Fix now'), findsOneWidget);
@@ -204,8 +210,8 @@ void main() {
         expect(canvas.actions, hasLength(2));
         final result = canvas.actions.last['context']! as Map;
         expect(result['outcome'], 'success');
-        expect(result['output'], contains('766228'));
-        expect(find.text('766228'), findsOneWidget);
+        expect(result['output'], contains(expectedOutput(demo)));
+        expect(find.text(expectedOutput(demo)), findsOneWidget);
         expect(find.textContaining('Run 2'), findsOneWidget);
         expect(find.byType(PythonReplView), findsOneWidget);
         canvas.publish('repair');
@@ -237,7 +243,7 @@ void main() {
       () => find.textContaining('unsupported-operator').evaluate().isNotEmpty,
     );
     expect(canvas.actions, isEmpty);
-    expect(find.text('766228'), findsNothing);
+    expect(find.text(expectedOutput('type_check')), findsNothing);
   }, skip: skipWithoutMonty != false);
 
   testWidgets('declined repair ends when its model turn finishes', (
@@ -275,21 +281,22 @@ void main() {
     await canvas.clickRun();
     expect(find.textContaining('unsupported-operator'), findsOneWidget);
     expect(canvas.actions, isEmpty);
-    expect(find.text('766228'), findsNothing);
+    expect(find.text(expectedOutput('type_check')), findsNothing);
     await tester.runAsync(() => tester.tap(canvas.typeCheck));
     await tester.pump();
     final prefs = await tester.runAsync(SharedPreferences.getInstance);
     expect(prefs!.getBool('soliplex.python.typeCheck.surface_2'), false);
     await tester.runAsync(() => tester.tap(canvas.run));
-    await pumpUntil(tester, () => canvas.actions.isNotEmpty);
-    expect(
-      (canvas.actions.single['context']! as Map)['output'],
-      contains('766228'),
+    await pumpUntil(
+      tester,
+      () => find.textContaining('TypeError').evaluate().isNotEmpty,
     );
+    expect(canvas.actions, isEmpty);
+    expect(find.text(expectedOutput('type_check')), findsNothing);
     canvas.publish('repair', live: false);
     await settleFor(tester);
     expect(tester.widget<Checkbox>(canvas.typeCheck).value, false);
     expect(canvas.scheduled, isEmpty);
-    expect(canvas.actions, hasLength(1));
+    expect(canvas.actions, isEmpty);
   }, skip: skipWithoutMonty != false);
 }

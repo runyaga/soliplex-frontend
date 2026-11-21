@@ -11,8 +11,8 @@ from fastapi.testclient import TestClient
 from pydantic_ai import Agent
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.ui.ag_ui import AGUIAdapter
-
-from soliplex_a2ui_workbench import workbench_projection, workbench_tools as tools
+from soliplex_a2ui_workbench import workbench_projection
+from soliplex_a2ui_workbench import workbench_tools as tools
 from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
 from soliplex_a2ui_workbench.workbench_repository import WorkbenchScope
 from soliplex_a2ui_workbench.workbench_routes import create_guarded_agui_router
@@ -121,13 +121,10 @@ def test_every_step_uses_validator_and_stable_ids_and_saves_real_csv(tmp_path):
         tools._panel_target(projection.layout["nodes"], other["nodeId"])["visibility"]
         == "open"
     )
-    for node in state["nodes"].values():
-        assert (
-            tools._panel_target(projection.layout["nodes"], node["nodeId"])[
-                "visibility"
-            ]
-            == "closed"
-        )
+    for key, node in state["nodes"].items():
+        assert tools._panel_target(projection.layout["nodes"], node["nodeId"])[
+            "visibility"
+        ] == ("closed" if key == "form" else "open")
     assert (
         tools._panel_target(projection.layout["nodes"], state["narrationNode"])[
             "visibility"

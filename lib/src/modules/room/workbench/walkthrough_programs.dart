@@ -7,7 +7,7 @@ import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 /// A publication, editor change or model repair cannot grant itself consent.
 class WalkthroughPrograms {
   static const montyGuiDigest =
-      '85f65f1f3e6ff9504d79ac584ce06bc8007eac733a9152ff0e227fd86fd68b17';
+      '4e44af032efeb79954357e0ac15d4a5d2b93ba8c62a4261c20beae4df542adc0';
 
   static bool accepts(String source) =>
       sha256.convert(utf8.encode(source)).toString() == montyGuiDigest;
