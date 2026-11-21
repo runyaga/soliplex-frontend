@@ -55,8 +55,10 @@ def test_every_suggestion_has_a_user_case_and_curated_teaching():
     )
     from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
 
-    assert len(DEMO_SUGGESTIONS) == 12
+    assert len(DEMO_SUGGESTIONS) == 13
     for suggestion in (*ROOM_SUGGESTIONS, *DEMO_SUGGESTIONS):
+        if DEMO_SUGGESTIONS.get(suggestion) == "platform_probe":
+            continue  # The slow suite lives only behind --probes.
         assert any(case["prompt"] == suggestion for case in cases), suggestion
     for name in [
         "incident_flight_recorder",
@@ -167,7 +169,7 @@ def test_suggestions_are_short_and_have_an_exact_demo_mapping():
     from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
 
     assert set(ROOM_SUGGESTIONS[1:]) <= set(DEMO_SUGGESTIONS)
-    assert len(set(DEMO_SUGGESTIONS.values())) == 12
+    assert len(set(DEMO_SUGGESTIONS.values())) == 13
     for text, name in DEMO_SUGGESTIONS.items():
         assert len(text) <= 65
         assert f'{text} -> open_demo("{name}")' in room_skill("workbench")

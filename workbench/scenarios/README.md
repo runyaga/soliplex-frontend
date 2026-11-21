@@ -226,3 +226,57 @@ printed result depends on fixing the function. Tick AI Fix and press Run to repa
 turn that ends without replacement displays "The model did not repair the
 program." The repair tool reports whether automatic execution was requested;
 only a successful client run result establishes that the fix ran.
+
+## Platform ceiling probe
+
+Deploy this worktree's frontend and backend together, configure the literal
+credentials above, then run from the worktree root:
+
+```bash
+bash workbench/scenarios/run.sh --probes
+```
+
+This opt-in suite uses Chrome and the Glimmer room. It is excluded from `--all`
+and normal tests. It creates and retains one fresh thread, sends exactly
+`Open the platform probe.`, then presses Run. Publishing or reloading the demo
+never starts an experiment. The demo has no room suggestion button.
+
+| Button | Measurement |
+| --- | --- |
+| Compute | One loop per click, starting at 10,000 iterations and doubling until the first failure, with a 24-sample safety cap. The attempted size is saved before execution. Chrome records elapsed time, largest tested success, first failure and literal error. A CPU feed or memory limit may precede the five-second deadline. An unreached ceiling is marked censored. |
+| Redraw | Exact total trees of 50, 100, 200, 400 and 401 components, including controls, labels and containers. Records rejection text; accepted redraws require a visible marker and painted pixels. |
+| Charts | Embedded `BarChart` with 8/32 bars, then `LineChart` with six series of 50/200/500 points. Records click-to-result time and checks the chart's image semantics and painted pixels. |
+| Events | One counter click through the retained interpreter and visible redraw. No server action is expected for a local counter update. |
+| Long session | 300 separate counter clicks in the same interpreter, with no Run or reset between them. Records each duration in browser evidence and the final count in the workdir receipt. An early failure records the last count. |
+| Files | Writes ASCII payloads of 1 KiB, 16 KiB, 64 KiB and 64 KiB + 1, then reads accepted writes and compares the complete content. Records the observed rejection message. |
+| App state | Grows `DATA.largest_field` through 1,024/8,192/14,000/14,800/15,000/16,000/16,384/16,385 bytes. After each step asks Glimmer for its length and suffix without supplying either. Captures the actual outgoing `workbenchApps` and reply. The browser currently omits an entire app above its 15,000-byte snapshot budget; the server separately bounds the wrapped snapshot at 16 KiB. |
+| Type check | Opens an inert, exactly 12,000-byte Python program. Enables Type check and presses Run on both the probe itself and that program. The checker duration shown beside the controls uses `Stopwatch` and includes checker worker startup; browser wall time also includes execution and rendering. Neither source executes during checking. |
+| Windows | Opens one window per click until a server rejection (20-sample safety cap), retaining the actual response and accepted server window/node counts. Closes accepted probe windows before cycling. |
+| Window cycles | Opens and closes a new window per click until the server refuses (40-cycle safety cap). Closed nodes remain allocated. Runs last because exhausting the 64-node budget prevents new content in that thread. |
+
+Each risky gesture first saves a `started` record through
+`ui.workbench.write_file`. A successful gesture saves its result; a cancelled
+interpreter leaves the attempted size on disk. The driver captures the failure,
+presses Run to restore the controls when the VM reset, then enters the browser
+observation into **Probe receipt** and presses **Save observation**. That app
+button merges the measured timing/error through the same file API. It does not
+reset the running interpreter. There is no injected Python clock; `wall_ms` is
+null until the browser supplies a measurement. The long session writes one
+summary receipt after its last click, while browser evidence keeps all samples.
+
+The driver reads `probe-results.json` from the authenticated workbench workdir
+endpoint, using only authorization observed from the live browser. Evidence is
+written after every sample under
+`workbench/docs/evidence/probes/<UTC timestamp>/`:
+
+- `probe-report.md`: measured samples, observed errors and censored searches.
+- `probe-results.json`: downloaded thread workdir receipts.
+- `browser-results.json`: every click, including all 300 long-session samples
+  and both checker durations.
+- `app-snapshots.json`: exact outgoing snapshots and Glimmer's replies.
+
+Browser times include file persistence and UI scheduling. They describe this
+app's end-to-end path, not isolated interpreter throughput. Expected limit
+rejections are measurements; a missing result, failed transport or incomplete
+harness run exits nonzero and preserves partial evidence. No live measurements
+are supplied by the offline tests.
