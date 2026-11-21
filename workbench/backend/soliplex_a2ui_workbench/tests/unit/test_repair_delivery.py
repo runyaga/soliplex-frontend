@@ -7,9 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from soliplex_a2ui_workbench import workbench_tools
-from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, room_skill
 from test_workbench_agent_tools import _context, _tool
+
+from soliplex_a2ui_workbench import workbench_tools
+from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS, room_skill
 
 BASE = Path(workbench_tools.__file__).parent
 FIXTURE = (
@@ -85,7 +86,7 @@ def test_demo_source_is_curated_and_preserves_type_preference_on_repair(name):
         assert data["title"] == DEMOS[name][0]
         if stage == "initial":
             assert data["source"] == (BASE / DEMOS[name][1]).read_text()
-    assert any(s.startswith(DEMOS[name][2]) for s in ROOM_SUGGESTIONS)
+    assert any(s.startswith(DEMOS[name][2]) for s in DEMO_SUGGESTIONS)
     assert f'open_demo("{name}")' in room_skill("workbench")
     assert "Reply with only the tool confirmation." in room_skill("workbench")
     assert "Reply: tick AI Fix" not in room_skill("workbench")

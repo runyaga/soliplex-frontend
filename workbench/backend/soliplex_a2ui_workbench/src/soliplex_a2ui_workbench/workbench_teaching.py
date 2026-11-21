@@ -312,10 +312,10 @@ through the signatures above and publish it with run_python_client.
 
 
 WELCOME_MESSAGE = (
-    "Click an example or describe what to put on the workbench. "
-    "Programs run only when you press Run. "
-    "Try repairs that keep live data, anomaly reproduction, a two-stage healing pipeline, "
-    "survey results, saved notes and tasks, or a sales CSV generator."
+    "Click a demo or describe what to put on the workbench. "
+    "Programs run only when you press Run. The walkthrough tours the platform; "
+    "the others repair a live app without losing its data, turn an anomaly into "
+    "a runnable script, and heal a pipeline through two repairs."
 )
 
 # Exact user message to curated program mapping; source never comes from prose.
@@ -333,4 +333,10 @@ DEMO_SUGGESTIONS = {
     "Fix a Python type error with AI.": "type_check",
 }
 
-ROOM_SUGGESTIONS = ("Start the walkthrough.", *DEMO_SUGGESTIONS)
+# Room buttons show only the advanced demos; every DEMO_SUGGESTIONS text still
+# opens its demo when typed.
+ADVANCED_DEMOS = ("hot_patch", "reproducer", "healing_pipeline")
+ROOM_SUGGESTIONS = (
+    "Start the walkthrough.",
+    *(text for text, name in DEMO_SUGGESTIONS.items() if name in ADVANCED_DEMOS),
+)

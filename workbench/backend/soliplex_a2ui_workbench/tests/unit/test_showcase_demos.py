@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic_ai.ui.ag_ui import AGUIAdapter
+
 from soliplex_a2ui_workbench import workbench_tools as tools
 from soliplex_a2ui_workbench.workbench_context import WorkbenchToolContext
 from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
@@ -45,8 +46,10 @@ def test_every_suggestion_has_a_user_case_and_curated_teaching():
     cases = json.loads(
         (Path(__file__).parents[4] / "scenarios/model/prompts.yaml").read_text()
     )
-    assert len(ROOM_SUGGESTIONS) == 12
-    for suggestion in ROOM_SUGGESTIONS:
+    from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
+
+    assert len(DEMO_SUGGESTIONS) == 11
+    for suggestion in (*ROOM_SUGGESTIONS, *DEMO_SUGGESTIONS):
         assert any(case["prompt"] == suggestion for case in cases), suggestion
     for name in [
         "survey_results",
@@ -69,6 +72,7 @@ def test_form_receipt_streams_before_model_reply_and_survives_replay(tmp_path):
     from pydantic_ai import Agent
     from pydantic_ai.messages import ModelResponse, TextPart
     from pydantic_ai.models.function import FunctionModel
+
     from soliplex_a2ui_workbench.workbench_actions import validate_submission
     from soliplex_a2ui_workbench.workbench_form_results import append_form_result
     from soliplex_a2ui_workbench.workbench_routes import create_guarded_agui_router
@@ -155,7 +159,7 @@ def test_form_receipt_streams_before_model_reply_and_survives_replay(tmp_path):
 def test_suggestions_are_short_and_have_an_exact_demo_mapping():
     from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
 
-    assert set(ROOM_SUGGESTIONS[1:]) == set(DEMO_SUGGESTIONS)
+    assert set(ROOM_SUGGESTIONS[1:]) <= set(DEMO_SUGGESTIONS)
     assert len(set(DEMO_SUGGESTIONS.values())) == 11
     for text, name in DEMO_SUGGESTIONS.items():
         assert len(text) <= 65
