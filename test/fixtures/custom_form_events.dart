@@ -138,7 +138,6 @@ const customFormEventsJson = r'''[
                 "id": "root",
                 "component": "Column",
                 "children": [
-                  "title",
                   "provenance",
                   "field_0",
                   "field_1",
@@ -151,18 +150,13 @@ const customFormEventsJson = r'''[
                 ]
               },
               {
-                "id": "title",
-                "component": "Text",
-                "text": "Scenario survey"
-              },
-              {
                 "id": "provenance",
                 "component": "Text",
                 "text": "Form created by the assistant"
               },
               {
                 "id": "field_0",
-                "label": "Name",
+                "label": "Name * (max 30 characters)",
                 "value": {
                   "@path": "/values/name"
                 },
@@ -171,7 +165,7 @@ const customFormEventsJson = r'''[
               },
               {
                 "id": "field_1",
-                "label": "Notes",
+                "label": "Notes (max 100 characters)",
                 "value": {
                   "@path": "/values/notes"
                 },
@@ -180,7 +174,7 @@ const customFormEventsJson = r'''[
               },
               {
                 "id": "field_2",
-                "label": "Age",
+                "label": "Age (1–120)",
                 "value": {
                   "@path": "/values/age"
                 },

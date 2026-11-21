@@ -9,11 +9,11 @@ const cases = JSON.parse(await readFile(new URL('../model/prompts.yaml', import.
 
 test('walkthrough corpus clicks Start and has ordered narrated surface checkpoints', () => {
   assert.equal(validateCases(cases, { prompts: true }).find(c => c.id === 'walkthrough').walkthrough, true);
-  assert.equal(checkpoints.length, 17);
+  assert.equal(checkpoints.length, 15);
   assert(checkpoints.every(c => c.title && c.assertions.length));
   assert(checkpoints[6].assertions.some(a => a.includes === 'Sample visitor'));
-  assert.match(checkpoints[15].title, /skipped/);
-  assert(checkpoints.at(-1).assertions.some(a => a.absent));
+  assert.match(checkpoints[13].title, /AI Fix/);
+  assert(checkpoints.at(-1).assertions.every(a => !a.absent));
 });
 
 function fakePage({ skip = -1, model = false, concurrent = false } = {}) {
@@ -58,11 +58,11 @@ test('watcher inspects every step and finishes only at the wrap-up', async () =>
   let inspections = 0, turns = 0;
   const assertions = await watchWalkthrough(fake.page, { room: 'room', threadId: 'thread', timeoutMs: 100 }, checkpoints, async (page, checks) => {
     assert.equal(page, fake.page);
-    assert(checks[0].name.includes(`Step ${++inspections} of 17`));
+    assert(checks[0].name.includes(`Step ${++inspections} of ${checkpoints.length}`));
     return [{ pass: true, label: checks[1].name }];
   }, () => { turns++; });
-  assert.equal(turns, 17); assert.equal(inspections, 17);
-  assert.equal(assertions.length, 17);
+  assert.equal(turns, checkpoints.length); assert.equal(inspections, checkpoints.length);
+  assert.equal(assertions.length, checkpoints.length);
   assert(fake.clicked()); assert(fake.removed());
 });
 

@@ -215,13 +215,13 @@ def test_place_form_emits_bound_intake_controls_and_submit_context():
     assert by_id["question"] == {
         "id": "question",
         "component": "TextField",
-        "label": "Question",
+        "label": "Question * (max 240 characters)",
         "value": {"@path": "/question"},
     }
     assert by_id["districts"] == {
         "id": "districts",
         "component": "ChoicePicker",
-        "label": "Districts",
+        "label": "Districts * (choose 1–2)",
         "variant": "multipleSelection",
         "options": [
             {"value": "north", "label": "North"},
@@ -230,6 +230,7 @@ def test_place_form_emits_bound_intake_controls_and_submit_context():
         "value": {"@path": "/districts"},
         "displayStyle": "chips",
     }
+    assert "title" not in by_id
     assert by_id["root"]["component"] == "Column"
     assert by_id["submit"]["child"] == "submit_label"
     assert by_id["submit_label"]["text"] == "Submit"
@@ -256,7 +257,7 @@ def test_basic_choice_picker_requires_renderer_option_objects():
         "catalogId": BASIC_CATALOG,
         "component": "ChoicePicker",
         "properties": {
-            "label": "Districts",
+            "label": "Districts * (choose 1–2)",
             "variant": "multipleSelection",
             "options": options,
             "value": {"@path": "/districts"},

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_color.dart';
 import 'package:json_schema_builder/json_schema_builder.dart';
 
 const _number = {'type': 'number'};
@@ -322,11 +323,20 @@ class ExtendedChart extends StatelessWidget {
                   runSpacing: SoliplexSpacing.s2,
                   children: [
                     for (final (label, color) in entries)
-                      Text(
-                        label,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: color,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.circle, size: 9, color: color),
+                          const SizedBox(width: SoliplexSpacing.s2),
+                          Flexible(
+                            child: Text(
+                              label,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                   ],
                 ),
@@ -378,21 +388,27 @@ class ExtendedChart extends StatelessWidget {
     final slices = _rows(spec['slices']);
     if (!slices.any((slice) => _value(slice, 'value') > 0)) return (null, []);
     return (
-      PieChart(
-        PieChartData(
-          sections: [
-            for (var i = 0; i < slices.length; i++)
-              PieChartSectionData(
-                value: _value(slices[i], 'value'),
-                color: _seriesColor(slices[i], i, colors),
-                showTitle: false,
-                radius: 46,
-              ),
-          ],
-          centerSpaceRadius: 44,
-          pieTouchData: PieTouchData(enabled: false),
-        ),
-        duration: duration,
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final radius =
+              math.min(constraints.maxWidth, constraints.maxHeight) / 2;
+          return PieChart(
+            PieChartData(
+              sections: [
+                for (var i = 0; i < slices.length; i++)
+                  PieChartSectionData(
+                    value: _value(slices[i], 'value'),
+                    color: _seriesColor(slices[i], i, colors),
+                    showTitle: false,
+                    radius: radius * 0.52,
+                  ),
+              ],
+              centerSpaceRadius: radius * 0.48,
+              pieTouchData: PieTouchData(enabled: false),
+            ),
+            duration: duration,
+          );
+        },
       ),
       [
         for (var i = 0; i < slices.length; i++)
@@ -556,18 +572,5 @@ List<(String, Color)> _legend(List<_Record> series, ColorScheme colors) => [
     ),
 ];
 
-Color _seriesColor(_Record row, int index, ColorScheme scheme) {
-  if (row['color'] case final String rgba) {
-    return Color(
-      (int.parse(rgba.substring(7), radix: 16) << 24) |
-          int.parse(rgba.substring(1, 7), radix: 16),
-    );
-  }
-  final colors = [
-    scheme.primary,
-    scheme.secondary,
-    scheme.tertiary,
-    scheme.outline,
-  ];
-  return colors[index % colors.length];
-}
+Color _seriesColor(_Record row, int index, ColorScheme scheme) =>
+    chartColor(row['color'], index, scheme);

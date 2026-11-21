@@ -41,7 +41,7 @@ STEPS = (
     ),
     (
         "Move back",
-        "The bar chart returns to the right sidebar. Your placements win: if you move a tour chart yourself, the tour leaves it where you put it.",
+        "The bar chart returns to the right sidebar. The tour uses server-validated placement tools; this workspace has no drag or resize controls.",
         6000,
         "none",
     ),
@@ -76,20 +76,8 @@ STEPS = (
         "run",
     ),
     (
-        "Press +1 once",
-        "I am pressing +1. The button calls handle_event in the retained Python session. Python changes its count and redraws the GUI: a round trip.",
-        5000,
-        "plus",
-    ),
-    (
-        "Press +1 twice",
-        "I am pressing +1 again. The same session keeps the count, and handle_event redraws it as 2.",
-        5000,
-        "plus",
-    ),
-    (
-        "Press +1 three times",
-        "One more +1 makes 3. The displayed last-event line lets you see the round trip.",
+        "Press +1",
+        "I am pressing +1. The button calls handle_event in the retained Python session. Python adds one item of stock, making 4, and redraws the GUI.",
         5000,
         "plus",
     ),
@@ -106,14 +94,14 @@ STEPS = (
         "open_log",
     ),
     (
-        "AI Fix: skipped on this branch",
-        "AI Fix is the checkbox that asks the agent to repair a failed program. A NameError demo would need a verified repair and automatic rerun. That chain is being fixed on another branch, so this tour skips it rather than pretend it succeeded.",
+        "Try AI Fix after the tour",
+        "After the tour, choose Open the NameError example from the room suggestions. Enable AI Fix and press Run: a failed run asks the agent to repair the source and reruns its replacement. This tour only explains that flow and does not call the model.",
         10000,
         "none",
     ),
     (
         "Try it yourself",
-        "The tour is complete. I have closed only its own surfaces, leaving this narration. Try Open the Monty GUI demo, Team survey, the Weekly visits dashboard, or the Primes program from the room suggestions.",
+        "The tour is complete. The Monty program, its app and the charts stay open for you to use. I closed the sample form. Try its buttons and bars, or choose Open the NameError example from the room suggestions to try AI Fix.",
         8000,
         "none",
     ),
@@ -341,7 +329,7 @@ def handle_step(projection, scope, run_id, raw, installation=None):
         elif step == 8:
             place("program", tools.open_demo(ctx, "monty_gui"))
         elif step == len(STEPS) - 1:
-            events.extend(_close_tour(ctx, state))
+            events.extend(tools.close_panel(ctx, nodes["form"]["nodeId"])["events"])
             state["status"] = "complete"
     return _finish(ctx, state, events)
 

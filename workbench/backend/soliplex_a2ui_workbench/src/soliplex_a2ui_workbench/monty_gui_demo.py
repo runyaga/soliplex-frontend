@@ -1,16 +1,16 @@
-# Script -> GUI: Run builds the counter, buttons and chart, then opens a result window.
-# GUI -> script: each button calls handle_event; Python changes state and redraws.
-# The last-event line makes the round trip visible. Nothing runs until you press Run.
+# Run builds a small stock counter. Buttons and bars call handle_event.
+# Each event updates Python state and redraws the app; the log keeps 8 events.
 import chart
 import ui
 import ui.workbench
 
-count = 0
-points = [{"id": "p0", "label": "Start", "value": 0}]
+count = 3
+points = [{"id": "p0", "label": "Start", "value": 3}]
 last_event = "run"
-# A second Run replaces the previous log in this retained REPL session.
+history = ["last event: run, count 3"]
+notice = "Stock starts at 3. +1 adds stock; -1 removes stock until empty."
+# A new Run resets the app and closes the previous snapshot, if present.
 try:
-    # The first Run has no previous log; later Runs reuse session globals.
     if log_window:  # ty: ignore[unresolved-reference]
         ui.workbench.close_window(log_window)  # ty: ignore[unresolved-reference]
 except NameError:
@@ -19,14 +19,17 @@ log_window = ""
 
 
 def draw():
-    # The embeddable bar chart shows the latest 32 samples beside the controls.
-    spec = chart.bar(points[-32:], title="Counter samples")
+    spec = chart.bar(points[-32:], title="Stock samples (click a bar to restore)")
     ui.show(
         ui.Column(
             [
                 ui.Text("Python drives the GUI"),
                 ui.Text(f"Count: {count}"),
                 ui.Text(f"last event: {last_event}, count {count}"),
+                ui.Text(notice),
+                ui.Text(
+                    "Add point records stock; Reset restores 3 and clears samples."
+                ),
                 ui.Row(
                     [
                         ui.Button(ui.Text("+1"), action=ui.Event("plus", {})),
@@ -52,7 +55,9 @@ def draw():
                         for point in spec["points"]
                     ],
                     title=spec["title"],
+                    action=ui.Event("restore", {}),
                 ),
+                ui.Text("Recent events (last 8):\n" + "\n".join(history)),
             ]
         ),
         data=DATA,
@@ -61,28 +66,44 @@ def draw():
 
 def open_log():
     global log_window
-    # Replace the old log before opening another: two ordinary windows plus the app stay open.
     if log_window:
         ui.workbench.close_window(log_window)
     log_window = ui.workbench.open_window(
-        "Monty event log", "text", f"last event: {last_event}, count {count}"
+        "Monty event log",
+        "text",
+        "Recent events (snapshot; reopen to refresh):\n" + "\n".join(history),
     )
     ui.workbench.move_window(log_window, 1)
 
 
 def handle_event(name, context):
-    global count, last_event, log_window
+    global count, points, last_event, log_window, history, notice
     last_event = name
     if name == "plus":
         count += 1
+        notice = "Added one item of stock."
     elif name == "minus":
-        count = max(0, count - 1)
+        if count > 0:
+            count -= 1
+            notice = "Removed one item of stock."
+        else:
+            notice = "Stock is empty; add an item with +1 before removing one."
     elif name == "reset":
-        count = 0
+        count = 3
+        points = [{"id": "p0", "label": "Start", "value": 3}]
+        notice = "Reset stock to 3 and cleared recorded samples."
     elif name == "add_point":
         sample = len(points)
         points.append({"id": f"p{sample}", "label": f"Sample {sample}", "value": count})
-    elif name == "open_log":
+        notice = f"Recorded Sample {sample}: {count}. Click its bar to restore stock."
+    elif name == "restore":
+        label = context.get("label", "")
+        for point in points:
+            if point["label"] == label:
+                count = int(point["value"])
+                notice = f"Restored stock from {label}: {count}."
+    history = (history + [f"last event: {name}, count {count}"])[-8:]
+    if name == "open_log":
         open_log()
     elif name == "close_log" and log_window:
         ui.workbench.close_window(log_window)
@@ -92,4 +113,3 @@ def handle_event(name, context):
 
 DATA = {}
 draw()
-open_log()

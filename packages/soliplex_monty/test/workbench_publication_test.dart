@@ -4,12 +4,14 @@ import 'dart:convert';
 import 'package:dart_monty/dart_monty.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fixtures/workbench_activity_events.dart';
 import 'support/lab_surface.dart';
 import 'support/monty.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('server Python publication validates and stays inert on replay', (
     tester,
   ) async {

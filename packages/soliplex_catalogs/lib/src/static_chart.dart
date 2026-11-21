@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_color.dart';
 import 'package:json_schema_builder/json_schema_builder.dart'
     hide ValidationResult;
 import 'package:soliplex_catalogs/src/extended_chart.dart';
@@ -306,13 +307,7 @@ class _BarChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final points = (spec['points']! as List).cast<Map<Object?, Object?>>();
     final colors = Theme.of(context).colorScheme;
-    final color = switch (spec['color']) {
-      final String rgba => Color(
-        (int.parse(rgba.substring(7), radix: 16) << 24) |
-            int.parse(rgba.substring(1, 7), radix: 16),
-      ),
-      _ => colors.primary,
-    };
+    final color = chartColor(spec['color'], 0, colors);
     final textTheme = Theme.of(context).textTheme;
     var low = 0.0;
     var high = 0.0;

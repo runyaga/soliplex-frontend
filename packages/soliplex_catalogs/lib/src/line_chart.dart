@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_color.dart';
 
 /// Renders a validated static line spec using the HHG fl_chart approach.
 class StaticLineChart extends StatelessWidget {
@@ -32,7 +33,7 @@ class StaticLineChart extends StatelessWidget {
     ];
     final palette = [
       for (var i = 0; i < series.length; i++)
-        _color(series[i]['color'], i, Theme.of(context).colorScheme),
+        chartColor(series[i]['color'], i, Theme.of(context).colorScheme),
     ];
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -165,7 +166,7 @@ class StaticLineChart extends StatelessWidget {
               showTitles: true,
               interval: interval.toDouble(),
               minIncluded: categories.length > 1,
-              maxIncluded: false,
+              maxIncluded: categories.length > 1,
               getTitlesWidget: (value, meta) {
                 final i = value.toInt();
                 if (i != value || i < 0 || i >= categories.length) {
@@ -229,22 +230,6 @@ class _Legend extends StatelessWidget {
       ),
     ],
   );
-}
-
-Color _color(Object? value, int index, ColorScheme scheme) {
-  if (value case final String rgba) {
-    return Color(
-      (int.parse(rgba.substring(7), radix: 16) << 24) |
-          int.parse(rgba.substring(1, 7), radix: 16),
-    );
-  }
-  final palette = [
-    scheme.primary,
-    scheme.secondary,
-    scheme.tertiary,
-    scheme.outline,
-  ];
-  return palette[index % palette.length];
 }
 
 String _tick(double value) {

@@ -9,6 +9,21 @@ from datetime import date
 from .workbench_schemas import FormField
 
 
+def field_label(field):
+    """Keep the validator's limits visible beside the input."""
+    label = field.label + (" *" if field.required else "")
+    if field.kind == "number":
+        if field.min is not None and field.max is not None:
+            label += f" ({field.min:g}–{field.max:g})"
+        elif field.min is not None:
+            label += f" (at least {field.min:g})"
+        elif field.max is not None:
+            label += f" (at most {field.max:g})"
+    if field.kind in {"text", "textarea"}:
+        label += f" (max {field.max_length or 4000} characters)"
+    return label
+
+
 def custom_form_components(record):
     fields = [FormField.model_validate(field) for field in record["fields"]]
     values = {
@@ -21,7 +36,7 @@ def custom_form_components(record):
     for index, field in enumerate(fields):
         control = {
             "id": f"field_{index}",
-            "label": field.label,
+            "label": field_label(field),
             "value": {"@path": f"/values/{field.name}"},
         }
         if field.kind == "checkbox":
@@ -47,9 +62,8 @@ def custom_form_components(record):
         {
             "id": "root",
             "component": "Column",
-            "children": ["title", "provenance", *[c["id"] for c in controls], "submit"],
+            "children": ["provenance", *[c["id"] for c in controls], "submit"],
         },
-        {"id": "title", "component": "Text", "text": record["title"]},
         {
             "id": "provenance",
             "component": "Text",

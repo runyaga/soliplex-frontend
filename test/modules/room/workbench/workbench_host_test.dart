@@ -203,7 +203,7 @@ void main() {
     )));
     await tester.pumpAndSettle();
     expect(controller.surfaces, hasLength(2));
-    expect(find.text('Question'), findsOneWidget);
+    expect(find.text('Question * (max 240 characters)'), findsOneWidget);
     expect(controller.error, isNull);
   });
 
@@ -258,7 +258,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('intake textbox has only Question as its accessible name',
+  testWidgets('intake textbox exposes its own label and constraints',
       (tester) async {
     _desktop(tester);
     final semantics = tester.ensureSemantics();
@@ -272,12 +272,12 @@ void main() {
     await tester.pumpWidget(_app(_host(store, fold.conversation.messages)));
     await tester.pumpAndSettle();
     final field = find.byType(TextField);
-    expect(tester.getSemantics(field).label, 'Question');
+    expect(tester.getSemantics(field).label, 'Question * (max 240 characters)');
     await tester.enterText(field, 'Need help');
     await tester.pump();
-    expect(tester.getSemantics(field).label, 'Question');
+    expect(tester.getSemantics(field).label, 'Question * (max 240 characters)');
     expect(tester.getSemantics(field).value, 'Need help');
-    expect(tester.getSemantics(find.text('Districts')).label,
+    expect(tester.getSemantics(find.text('Districts * (choose 1–2)')).label,
         contains('Districts'));
     semantics.dispose();
   });
@@ -332,10 +332,10 @@ void main() {
 
 void _expectCanvas(WidgetTester tester) {
   for (final label in [
-    'Question',
+    'Question * (max 240 characters)',
     'North',
     'South',
-    'Acknowledged',
+    'Acknowledged *',
     'Submit'
   ]) {
     expect(

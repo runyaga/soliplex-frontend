@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
@@ -85,6 +86,7 @@ Future<void> _mount(
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('published demo shows its source and Run without execution', (
     tester,
   ) async {
@@ -103,7 +105,7 @@ void main() {
     expect(controller.surfaces.single.dataModel.get('/source'), _source);
     expect(tester.widget<TextField>(repl.editor).controller!.text, _source);
     expect(find.text('Run'), findsOneWidget);
-    expect(find.text('Count: 0'), findsNothing);
+    expect(find.text('Count: 3'), findsNothing);
     expect(starts, 0);
     expect(actions, isEmpty);
     expect(tester.takeException(), isNull);
@@ -130,8 +132,8 @@ void main() {
         reason: '${controller.surfaces.single.dataModel.get('/output')}',
       );
       expect(find.text('Python drives the GUI'), findsOneWidget);
-      expect(find.text('Count: 0'), findsOneWidget);
-      expect(find.text('last event: run, count 0'), findsOneWidget);
+      expect(find.text('Count: 3'), findsOneWidget);
+      expect(find.text('last event: run, count 3'), findsOneWidget);
       for (final label in [
         '+1',
         '-1',
@@ -143,7 +145,7 @@ void main() {
         expect(find.text(label), findsOneWidget);
       }
       expect(
-        find.bySemanticsLabel(RegExp('Bar Start: 0')),
+        find.bySemanticsLabel(RegExp('Bar Start: 3')),
         findsOneWidget,
       );
 
@@ -151,13 +153,7 @@ void main() {
           (((actions[index]['context']! as Map)['actions']) as List)
               .map((value) => Map<String, Object?>.from(value as Map))
               .toList();
-      expect(batch(0).map((a) => a['op']), ['show_app', 'open', 'move']);
-      final firstWindow = batch(0)[1]['window_id'];
-      expect(batch(0)[1]['title'], 'Monty event log');
-      expect(batch(0)[1]['kind'], 'text');
-      expect(batch(0)[1]['content'], 'last event: run, count 0');
-      expect(batch(0).last['window_id'], firstWindow);
-      expect(batch(0).last['order'], 1);
+      expect(batch(0).map((a) => a['op']), ['show_app']);
 
       Future<void> click(String label, String event, int count) async {
         await tester.runAsync(() => tester.tap(find.text(label)));
@@ -175,58 +171,48 @@ void main() {
         expect(tester.takeException(), isNull);
       }
 
-      await click('+1', 'plus', 1);
-      await click('+1', 'plus', 2);
-      expect(actions, hasLength(1));
-      await click('Add point', 'add_point', 2);
-      expect(
-        find.bySemanticsLabel(RegExp('Bar Sample 1: 2')),
-        findsOneWidget,
+      await click('+1', 'plus', 4);
+      await click('Add point', 'add_point', 4);
+      expect(find.bySemanticsLabel(RegExp('Bar Sample 1: 4')), findsOneWidget);
+      await click('-1', 'minus', 3);
+      await tester.runAsync(
+        () => tester.tap(find.byKey(const ValueKey('chart-bar:Sample 1'))),
       );
-      await click('-1', 'minus', 1);
-      await click('Add point', 'add_point', 1);
-      expect(
-        find.bySemanticsLabel(RegExp('Bar Sample 2: 1')),
-        findsOneWidget,
+      await tester.pump();
+      await repl.waitFor(
+        tester,
+        () => repl.idle(tester) && find.text('Count: 4').evaluate().isNotEmpty,
       );
-      await click('Reset', 'reset', 0);
+      expect(find.text('Restored stock from Sample 1: 4.'), findsOneWidget);
+      await click('Reset', 'reset', 3);
+      expect(find.byKey(const ValueKey('chart-bar:Sample 1')), findsNothing);
+      for (var n = 2; n >= 0; n--) {
+        await click('-1', 'minus', n);
+      }
       await click('-1', 'minus', 0);
+      expect(
+        find.text('Stock is empty; add an item with +1 before removing one.'),
+        findsOneWidget,
+      );
       await click('Open log window', 'open_log', 0);
-      expect(batch(1).map((a) => a['op']), ['close', 'open', 'move']);
-      expect(batch(1).first['window_id'], firstWindow);
-      final secondWindow = batch(1)[1]['window_id'];
-      expect(secondWindow, isNot(firstWindow));
-      expect(batch(1)[1]['content'], 'last event: open_log, count 0');
-      expect(batch(1).last['window_id'], secondWindow);
+      expect(batch(1).map((a) => a['op']), ['open', 'move']);
+      final firstWindow = batch(1).first['window_id'];
+      final log = batch(1).first['content']! as String;
+      expect(log, contains('snapshot; reopen to refresh'));
+      expect(log.split('\n').skip(1), hasLength(8));
+      expect(log, contains('last event: open_log, count 0'));
       await click('Close log window', 'close_log', 0);
       expect(batch(2).single['op'], 'close');
-      expect(batch(2).single['window_id'], secondWindow);
+      expect(batch(2).single['window_id'], firstWindow);
       await click('Close log window', 'close_log', 0);
       expect(actions, hasLength(3));
-      await click('Open log window', 'open_log', 0);
-      expect(batch(3).map((a) => a['op']), ['open', 'move']);
-      // More than eight cumulative requests proves each click gets a new arena.
-      for (var i = 0; i < 3; i++) {
-        await click('Open log window', 'open_log', 0);
-        expect(batch(4 + i).map((a) => a['op']), ['close', 'open', 'move']);
-      }
-      expect(actions, hasLength(7));
-      expect(
-        actions.every((a) => a['name'] == 'workbench.program.layout'),
-        isTrue,
-      );
       await repl.tapRun(tester);
       await repl.waitFor(
         tester,
-        () => actions.length == 8 && repl.idle(tester),
+        () => actions.length == 4 && repl.idle(tester),
       );
-      expect(batch(7).map((a) => a['op']), [
-        'show_app',
-        'close',
-        'open',
-        'move',
-      ]);
-      expect(find.text('Count: 0'), findsOneWidget);
+      expect(batch(3).map((a) => a['op']), ['show_app']);
+      expect(find.text('Count: 3'), findsOneWidget);
       expect(starter.starts, 1);
       await tester.pumpWidget(const SizedBox.shrink());
       controller.dispose();
@@ -249,11 +235,11 @@ void main() {
     await repl.tapRun(tester);
     await repl.waitFor(
       tester,
-      () => repl.idle(tester) && find.text('Count: 0').evaluate().isNotEmpty,
+      () => repl.idle(tester) && find.text('Count: 3').evaluate().isNotEmpty,
     );
     // Each redraw makes about twenty ui calls, so sixty clicks pass the
     // 1000-suspension session default.
-    for (var count = 1; count <= 60; count++) {
+    for (var count = 4; count <= 63; count++) {
       await tester.runAsync(() => tester.tap(find.text('+1')));
       await tester.pump();
       await repl.waitFor(
@@ -269,7 +255,7 @@ void main() {
         reason: 'click $count',
       );
     }
-    expect(find.text('Count: 60'), findsOneWidget);
+    expect(find.text('Count: 63'), findsOneWidget);
     semantics.dispose();
     await tester.pumpWidget(const SizedBox.shrink());
   });
