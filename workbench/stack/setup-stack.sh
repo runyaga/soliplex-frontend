@@ -58,6 +58,19 @@ need_stack() {
   cd "$TARGET"
 }
 dc() { (cd "$TARGET" && docker compose --project-name "$PROJECT" --project-directory "$TARGET" "$@"); }
+
+# Container health does not cover the public route through nginx. Return only
+# when the deployed site answers, so the next login or test does not hit 503.
+wait_ready() {
+  local url=https://soliplex-a2ui-workbench.localhost:9743/api/ok code i
+  for i in $(seq 1 60); do
+    code=$(curl -sk -o /dev/null -w '%{http_code}' "$url" || true)
+    [ "$code" = 200 ] && { echo "ready: $url"; return 0; }
+    sleep 2
+  done
+  echo "not ready after 120 s: $url (last HTTP $code)" >&2
+  return 1
+}
 check_compose() {
   dc config --format json | python3 -c '
 import json, os, sys
@@ -353,6 +366,7 @@ PY
   if dc ps --status running --services | grep -qx backend; then
     dc restart backend
     dc up -d --wait backend
+    wait_ready
   fi
 }
 step4() {
@@ -543,6 +557,7 @@ PY
   done
   dc restart backend nginx
   dc exec -T nginx nginx -t
+  wait_ready
 }
 step7() {
   # Live model probes and transport checks. Browser acceptance remains manual.
