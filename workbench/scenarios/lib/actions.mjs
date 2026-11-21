@@ -15,6 +15,18 @@ async function check(target, wait) {
   throw new Error('Checkbox did not become checked');
 }
 
+// Whole-word matching lets "Run" also match "Show run history (2)". When
+// exactly one match carries the exact name, act on that one.
+export async function narrowToExact(matches, name) {
+  if (matches.length < 2) return matches;
+  const exact = [];
+  for (const match of matches) {
+    const label = ((await match.target.getAttribute('aria-label')) ?? (await match.target.innerText())).trim();
+    if (label === name) exact.push(match);
+  }
+  return exact.length === 1 ? exact : matches;
+}
+
 export async function performActions(page, actions = [], turnOptions, onTurn = () => {}, wait = pause, onAssertions) {
   const observations = [];
   for (const action of actions) {
@@ -28,6 +40,7 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
       if (matches.length) break;
       await wait(250);
     }
+    matches = await narrowToExact(matches, action.name);
     if (matches.length !== 1) throw new Error(`Action needs one visible workspace ${role}: ${action.name}`);
     const target = matches[0].target;
     const trigger = async () => {
