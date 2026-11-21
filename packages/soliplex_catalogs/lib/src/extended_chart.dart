@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_format.dart';
 import 'chart_color.dart';
 import 'package:json_schema_builder/json_schema_builder.dart';
 
@@ -37,7 +38,13 @@ Map<String, Object> _list(Object items, int max, {int min = 0}) => {
 
 final Map<String, Object> _scatterPoints = _list(
   _object(
-    {'id': _id, 'x': _number, 'y': _number, 'label': _label},
+    {
+      'id': _id,
+      'x': _number,
+      'y': _number,
+      'label': _label,
+      'highlight': {'type': 'boolean'},
+    },
     ['id', 'x', 'y'],
   ),
   5000,
@@ -48,6 +55,7 @@ final extendedChartSchemas = <String, Map<String, Object>>{
   'scatter': _spec(
     'scatter',
     {
+      'y_reversed': {'type': 'boolean'},
       'series': _list(
         _object(
           {
@@ -55,6 +63,7 @@ final extendedChartSchemas = <String, Map<String, Object>>{
             'label': _label,
             'color': _color,
             'points': _scatterPoints,
+            'line': {'type': 'boolean'},
           },
           ['id', 'points'],
         ),
@@ -143,7 +152,7 @@ double _value(_Record row, String key) => (row[key]! as num).toDouble();
 /// Validates structure, identity and numeric invariants before rendering.
 void validateExtendedChart(Map<Object?, Object?> spec, String kind) {
   final schema = Schema.fromMap(extendedChartSchemas[kind]!);
-  final errors = schema.validateSync(_stringKeyed(spec));
+  final errors = schema.validateSync(stringKeyedChart(spec));
   if (errors.isNotEmpty) {
     throw FormatException('Invalid $kind spec: ${errors.first}');
   }
@@ -213,28 +222,36 @@ void validateExtendedChart(Map<Object?, Object?> spec, String kind) {
   }
 }
 
-Object? _stringKeyed(Object? value) {
+/// Copies a chart JSON tree, rejecting non-string object keys.
+Object? stringKeyedChart(Object? value) {
   if (value is Map<Object?, Object?>) {
     final out = <String, Object?>{};
     for (final MapEntry(:key, value: entry) in value.entries) {
       if (key is! String) {
         throw const FormatException('Chart fields must have string keys.');
       }
-      out[key] = _stringKeyed(entry);
+      out[key] = stringKeyedChart(entry);
     }
     return out;
   }
-  if (value is List<Object?>) return value.map(_stringKeyed).toList();
+  if (value is List<Object?>) return value.map(stringKeyedChart).toList();
   return value;
 }
 
+/// Whether a numeric chart value is exactly representable on every backend.
+bool isSafeChartNumber(Object? value) =>
+    value is num &&
+    value.isFinite &&
+    value >= -9007199254740991 &&
+    value <= 9007199254740991;
+
 double _finite(Object? item) {
-  if (item is! num || !item.isFinite || item.abs() > 9007199254740991) {
+  if (!isSafeChartNumber(item)) {
     throw const FormatException(
       'Expected a finite number in the JSON-safe range.',
     );
   }
-  return item.toDouble();
+  return (item! as num).toDouble();
 }
 
 void _uniqueIds(List<_Record> rows) {
@@ -352,31 +369,83 @@ class ExtendedChart extends StatelessWidget {
     ColorScheme colors,
   ) {
     final series = _rows(spec['series']);
-    final spots = [
-      for (var i = 0; i < series.length; i++)
-        for (final row in _rows(series[i]['points']))
-          ScatterSpot(
-            _value(row, 'x'),
-            _value(row, 'y'),
-            dotPainter: FlDotCirclePainter(
-              color: _seriesColor(series[i], i, colors),
-            ),
-          ),
+    // fl_chart draws larger values higher, so a reversed axis plots -y and
+    // labels each tick with its negation.
+    final sign = spec['y_reversed'] == true ? -1.0 : 1.0;
+    final points = [
+      for (final entry in series)
+        [
+          for (final row in _rows(entry['points']))
+            (_value(row, 'x'), sign * _value(row, 'y'), row['highlight']),
+        ],
     ];
-    if (spots.isEmpty) return (null, []);
-    final (minX, maxX) = _extent(spots.map((spot) => spot.x));
-    final (minY, maxY) = _extent(spots.map((spot) => spot.y));
+    if (points.every((list) => list.isEmpty)) return (null, []);
+    final (minX, maxX) = _extent(points.expand((l) => l.map((p) => p.$1)));
+    final (minY, maxY) = _extent(points.expand((l) => l.map((p) => p.$2)));
+    final titles = sign < 0
+        ? _titles.copyWith(
+            leftTitles: AxisTitles(
+              sideTitles: _titles.leftTitles.sideTitles.copyWith(
+                getTitlesWidget: _reversedAxisLabel,
+              ),
+            ),
+          )
+        : _titles;
+    FlDotCirclePainter dot(int index, {required bool highlight}) =>
+        FlDotCirclePainter(
+          color: _seriesColor(series[index], index, colors),
+          radius: highlight ? 7 : 4,
+          strokeWidth: highlight ? 2 : 0,
+          strokeColor: highlight ? colors.onSurface : Colors.transparent,
+        );
+    if (!series.any((entry) => entry['line'] == true)) {
+      return (
+        ScatterChart(
+          ScatterChartData(
+            scatterSpots: [
+              for (var i = 0; i < series.length; i++)
+                for (final (x, y, highlight) in points[i])
+                  ScatterSpot(
+                    x,
+                    y,
+                    dotPainter: dot(i, highlight: highlight == true),
+                  ),
+            ],
+            minX: minX,
+            maxX: maxX,
+            minY: minY,
+            maxY: maxY,
+            titlesData: titles,
+            borderData: FlBorderData(show: false),
+            scatterTouchData: ScatterTouchData(enabled: false),
+          ),
+          duration: duration,
+        ),
+        _legend(series, colors),
+      );
+    }
     return (
-      ScatterChart(
-        ScatterChartData(
-          scatterSpots: spots,
+      LineChart(
+        LineChartData(
+          lineBarsData: [
+            for (var i = 0; i < series.length; i++)
+              LineChartBarData(
+                spots: [for (final (x, y, _) in points[i]) FlSpot(x, y)],
+                color: _seriesColor(series[i], i, colors),
+                barWidth: series[i]['line'] == true ? 2.5 : 0,
+                dotData: FlDotData(
+                  getDotPainter: (spot, _, _, index) =>
+                      dot(i, highlight: points[i][index].$3 == true),
+                ),
+              ),
+          ],
           minX: minX,
           maxX: maxX,
           minY: minY,
           maxY: maxY,
-          titlesData: _titles,
+          titlesData: titles,
           borderData: FlBorderData(show: false),
-          scatterTouchData: ScatterTouchData(enabled: false),
+          lineTouchData: const LineTouchData(enabled: false),
         ),
         duration: duration,
       ),
@@ -550,6 +619,17 @@ Widget _axisLabel(double value, TitleMeta meta) => SideTitleWidget(
   child: Builder(
     builder: (context) => Text(
       meta.formattedValue,
+      style: Theme.of(context).textTheme.labelSmall,
+    ),
+  ),
+);
+
+Widget _reversedAxisLabel(double value, TitleMeta meta) => SideTitleWidget(
+  meta: meta,
+  fitInside: SideTitleFitInsideData.fromTitleMeta(meta),
+  child: Builder(
+    builder: (context) => Text(
+      chartNumberText(-value),
       style: Theme.of(context).textTheme.labelSmall,
     ),
   ),

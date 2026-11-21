@@ -6,7 +6,11 @@ export 'src/program_app.dart';
 
 export 'src/demo_components.dart' show demoComponents;
 export 'src/static_chart.dart'
-    show chartGraphicsCatalog, chartGraphicsCatalogId, validateStaticChartSpec;
+    show
+        chartGraphicsCatalog,
+        chartGraphicsCatalogId,
+        validateStaticChartSpec,
+        validateChartComponent;
 export 'src/surface_catalog.dart'
     show chatGraphicsCatalog, chatGraphicsCatalogId;
 

@@ -211,6 +211,9 @@ Map<String, List<Map<String, Object?>>> hostFunctionSchemas() {
       ),
     );
   }
+  // Chart bindings inherit the full JSON Schemas, including scatter's
+  // y_reversed, per-series line and per-point highlight booleans. This also
+  // carries them into both chart.scatter and ui.graphics.Chart stub types.
   final chartSchema = chartGraphicsCatalog().components['Chart']!.schema.value;
   final chartProps = _map(chartSchema['properties']);
   final kinds = (_map(chartProps['spec'])['oneOf']! as List).map(_map).toList();

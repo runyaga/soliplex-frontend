@@ -71,6 +71,7 @@ ScatterSeriesItemPointsItem = TypedDict("ScatterSeriesItemPointsItem", {
     "x": float,
     "y": float,
     "label": NotRequired[str],
+    "highlight": NotRequired[bool],
 })
 
 ScatterSeriesItem = TypedDict("ScatterSeriesItem", {
@@ -78,6 +79,7 @@ ScatterSeriesItem = TypedDict("ScatterSeriesItem", {
     "label": NotRequired[str],
     "color": NotRequired[str],
     "points": list[ScatterSeriesItemPointsItem],
+    "line": NotRequired[bool],
 })
 
 ScatterSpecSeriesItemPointsItem = TypedDict("ScatterSpecSeriesItemPointsItem", {
@@ -85,6 +87,7 @@ ScatterSpecSeriesItemPointsItem = TypedDict("ScatterSpecSeriesItemPointsItem", {
     "x": float,
     "y": float,
     "label": NotRequired[str],
+    "highlight": NotRequired[bool],
 })
 
 ScatterSpecSeriesItem = TypedDict("ScatterSpecSeriesItem", {
@@ -92,6 +95,7 @@ ScatterSpecSeriesItem = TypedDict("ScatterSpecSeriesItem", {
     "label": NotRequired[str],
     "color": NotRequired[str],
     "points": list[ScatterSpecSeriesItemPointsItem],
+    "line": NotRequired[bool],
 })
 
 ScatterSpec = TypedDict("ScatterSpec", {
@@ -99,6 +103,7 @@ ScatterSpec = TypedDict("ScatterSpec", {
     "title": NotRequired[str],
     "xlabel": NotRequired[str],
     "ylabel": NotRequired[str],
+    "y_reversed": NotRequired[bool],
     "series": list[ScatterSpecSeriesItem],
 })
 
@@ -189,7 +194,7 @@ def line(series: list[LineSeriesItem], *, title: str | None = None, xlabel: str 
 def gauge(value: float, *, min_value: float, max_value: float, target: float | None = None, title: str | None = None, unit: str | None = None) -> GaugeSpec: ...
 
 # Build a scatter chart spec.
-def scatter(series: list[ScatterSeriesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None) -> ScatterSpec: ...
+def scatter(series: list[ScatterSeriesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None, y_reversed: bool | None = None) -> ScatterSpec: ...
 
 # Build a pie chart spec.
 def pie(slices: list[PieSlicesItem], *, title: str | None = None) -> PieSpec: ...

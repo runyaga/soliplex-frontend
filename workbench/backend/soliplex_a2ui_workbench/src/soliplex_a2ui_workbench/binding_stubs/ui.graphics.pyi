@@ -54,6 +54,7 @@ ChartSpecOption3SeriesItemPointsItem = TypedDict("ChartSpecOption3SeriesItemPoin
     "x": float,
     "y": float,
     "label": NotRequired[str],
+    "highlight": NotRequired[bool],
 })
 
 ChartSpecOption3SeriesItem = TypedDict("ChartSpecOption3SeriesItem", {
@@ -61,6 +62,7 @@ ChartSpecOption3SeriesItem = TypedDict("ChartSpecOption3SeriesItem", {
     "label": NotRequired[str],
     "color": NotRequired[str],
     "points": list[ChartSpecOption3SeriesItemPointsItem],
+    "line": NotRequired[bool],
 })
 
 ChartSpecOption3 = TypedDict("ChartSpecOption3", {
@@ -68,6 +70,7 @@ ChartSpecOption3 = TypedDict("ChartSpecOption3", {
     "title": NotRequired[str],
     "xlabel": NotRequired[str],
     "ylabel": NotRequired[str],
+    "y_reversed": NotRequired[bool],
     "series": list[ChartSpecOption3SeriesItem],
 })
 
