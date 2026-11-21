@@ -107,7 +107,11 @@ void main() {
       }
       await event('redraw');
       expect(last()['status'], 'error');
-      expect(last()['error'], 'Too many components in one run.');
+      expect(
+        last()['error'],
+        'Surface renders 20001 components, exceeding the limit of 20000. '
+        'Show fewer rows (page or filter the data).',
+      );
       await event('charts');
       expect(statusText(), last()['message']);
       final chart = current.staged!.components.singleWhere(
