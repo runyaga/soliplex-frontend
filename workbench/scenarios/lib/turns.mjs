@@ -72,8 +72,9 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
 // Observe every action turn, including a repair followed by its automatic Run.
 // Off must stay quiet for the full 20 seconds; a single captured turn is a failure.
 // An expectedOutput without a repair instead requires a successful ordinary Run.
-export async function captureProgramTurns(page, { room, threadId, timeoutMs, expectedOutput }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
-  const repairCount = expectRepair === true ? 1 : (expectRepair || 0);
+export async function captureProgramTurns(page, { room, threadId, timeoutMs, expectedOutput, expectRepairs }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const repairCount = expectRepairs ?? (expectRepair === true ? 1 : (expectRepair || 0));
+  expectRepair = repairCount > 0;
   const expectSuccess = !expectRepair && Boolean(expectedOutput);
   const turns = [];
   let completed;

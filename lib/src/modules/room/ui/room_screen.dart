@@ -1494,7 +1494,8 @@ class _RoomScreenState extends State<RoomScreen> {
       // binding Flutter gives a focused field repeats, so a held chord keeps
       // pasting, and each one owes a pending read the same answer a fresh press
       // would.
-      if (isPasteChord(includeRepeats: true) && _composerAcceptsText) {
+      if (isPasteChord(includeRepeats: true) &&
+          _composerEnabled(_state.activeThreadView?.messages.peek())) {
         _latestPasteChord = Object();
       }
       return false;
@@ -1525,7 +1526,18 @@ class _RoomScreenState extends State<RoomScreen> {
     )) {
       return false;
     }
+    if (!_composerEnabled(_state.activeThreadView?.messages.peek())) {
+      return false;
+    }
     _chatFocusNode.requestFocus();
+    // Focus is applied after this key's dispatch. Preserve the character that
+    // brought the user back to the composer; subsequent keys use text input.
+    final character = event.character;
+    if (character != null && character.isNotEmpty) {
+      _chatController.value =
+          insertPastedText(_chatController.value, character);
+      return true;
+    }
     return false;
   }
 
@@ -1688,9 +1700,8 @@ class _RoomScreenState extends State<RoomScreen> {
     if (_composerTarget != target) {
       return drop('the draft it measured was replaced');
     }
-    // The composer is read-only until the run settles, so text put there now
-    // could be neither edited nor sent — and this is the one obstacle that costs
-    // the user text they asked for while the draft is still on screen.
+    // A deferred clipboard read uses the send/attachment gate. Leave the
+    // current draft alone if a run started while that read was in flight.
     if (!_composerAcceptsText) {
       return drop('a run took the composer', costsText: true);
     }
@@ -3061,9 +3072,6 @@ class _RoomScreenState extends State<RoomScreen> {
       // [ChatInput.composerScope] for what that would cost.
       composerScope: (_serverId, widget.roomId, threadView?.threadId),
       onSend: (parts) {
-        _walkthroughPrompt(parts.length == 1 && parts.first is TextPart
-            ? (parts.first as TextPart).text
-            : null);
         if (threadView != null) {
           threadView.sendMessage(
             parts,
@@ -3073,7 +3081,15 @@ class _RoomScreenState extends State<RoomScreen> {
         } else {
           _state.sendToNewThread(parts, stateOverlay: _buildStateOverlay());
         }
+        // Stopping a walkthrough can itself start an action turn. Submit the
+        // message first so that action queues behind it instead of blocking it.
+        _walkthroughPrompt(parts.length == 1 && parts.first is TextPart
+            ? (parts.first as TextPart).text
+            : null);
       },
+      canSend: () =>
+          identical(threadView, _state.activeThreadView) &&
+          _composerSessionState.peek() == null,
       onCancel: threadView != null ? threadView.cancelRun : _state.cancelSpawn,
       sessionState: _composerSessionState,
       cancelEnabled: threadView?.isCancellable,

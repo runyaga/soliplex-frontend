@@ -432,8 +432,9 @@ class _PythonReplViewState extends State<PythonReplView> {
   Widget? _appView;
   bool _appRequested = false;
 
-  /// Whether the editor is open in [ReplMode.run].
+  /// Whether the source editor is expanded in either mode.
   bool _editorOpen = false;
+  bool _userOpenedEditor = false;
 
   bool get _runMode => widget.mode == ReplMode.run;
 
@@ -526,6 +527,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   @override
   void initState() {
     super.initState();
+    _editorOpen = !_runMode;
     _editor = TextEditingController(text: widget.source);
     _preferences = _loadPreference();
     unawaited(_preferences);
@@ -548,6 +550,7 @@ class _PythonReplViewState extends State<PythonReplView> {
     final attempt = retry?.chainId == null ? chain.awaiting : retry?.attempt;
     if (attempt == null || !chain.claim(attempt)) return;
     _follow(chain);
+    _editorOpen = true;
     _claimed = attempt;
     _runs = chain.runs;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -615,6 +618,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       text: example.source,
       selection: TextSelection.collapsed(offset: example.source.length),
     );
+    setState(() => _editorOpen = true);
     _onEdit(example.source);
   }
 
@@ -849,6 +853,7 @@ class _PythonReplViewState extends State<PythonReplView> {
     final surfaceId = widget.surfaceId;
     if (surfaceId != null) _chains.surfaceChains[surfaceId] = chain.id;
     setState(() {
+      _editorOpen = true;
       _requested = attempt;
       _repairTurnId = null;
       _requestedDuringRunId = widget.activeRunId;
@@ -1096,6 +1101,8 @@ class _PythonReplViewState extends State<PythonReplView> {
     final limits = widget.limits;
     final keep = limits.maxEntries;
     setState(() {
+      if (!ok) _userOpenedEditor = false;
+      _editorOpen = !ok || _userOpenedEditor;
       _entries.add(
         ReplEntry(
           input: input,
@@ -1177,17 +1184,19 @@ class _PythonReplViewState extends State<PythonReplView> {
             ),
             const SizedBox(height: SoliplexSpacing.s2),
           ],
-          if (_runMode)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SoliplexButton.text(
-                key: const ValueKey('python-repl-edit'),
-                onPressed: () => setState(() => _editorOpen = !_editorOpen),
-                icon: Icon(_editorOpen ? Icons.expand_less : Icons.edit),
-                child: Text(_editorOpen ? 'Hide code' : 'Edit code'),
-              ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SoliplexButton.text(
+              key: const ValueKey('python-repl-edit'),
+              onPressed: () => setState(() {
+                _editorOpen = !_editorOpen;
+                _userOpenedEditor = _editorOpen;
+              }),
+              icon: Icon(_editorOpen ? Icons.expand_less : Icons.edit),
+              child: Text(_editorOpen ? 'Hide code' : 'Edit code'),
             ),
-          if (!_runMode || _editorOpen)
+          ),
+          if (_editorOpen)
             Semantics(
               container: true,
               child: TextField(

@@ -23,7 +23,7 @@ test('demo corpus checks Run, each counter click, window open and close in order
   const demo = model.find(c => c.id === 'monty_demo');
   assert.equal(demo.prompt, 'Explore a Python app with buttons and charts.'); 
   assert.deepEqual(demo.actions, deterministic.find(c => c.id === 'monty_demo').actions);
-  assert.deepEqual(demo.actions.map(a => a.name), ['Run', '+1', 'Add point', 'Bar Start: 3', 'Open log window', 'Close log window', 'Open log window', 'Close log window']);
+  assert.deepEqual(demo.actions.map(a => a.name), ['Run', '+1', 'Add point', 'Bar Start: 3', 'Open log window', 'Close log window', 'Open log window', 'Close log window', 'Edit code']);
   assert.ok(demo.actions[0].assertions.some(a => a.role === 'button' && a.name === 'Bar Start: 3'));
   assert.ok(demo.actions[0].assertions.some(a => a.absent && a.name === 'Workbench window Monty event log'));
   assert.ok(demo.actions[1].assertions.some(a => a.name === 'Count: 4'));
@@ -464,4 +464,27 @@ test('two-stage repairs require both ordered attempts in the same chain', async 
   assert.equal(result.successfulRuns, 1);
   const missing = programFixture();
   await assert.rejects(captureProgramTurns(missing.page, options, () => missing.page.trigger(), 2), /repair arrival/);
+});
+
+
+test('run_program accepts an explicit expected repair count', async () => {
+  const { page } = programFixture({ rounds: 2 });
+  const result = await captureProgramTurns(page, { ...options, expectRepairs: 2 }, () => page.trigger(), true);
+  assert.equal(result.repairRequests, 2);
+  const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
+  const item = cases.find(c => c.id === 'two_stage_healing_pipeline');
+  assert.equal(item.actions.find(a => a.kind === 'run_program').expectRepairs, 2);
+});
+
+test('action dispatcher forwards the expected repair count and validates it', async () => {
+  const program = programFixture({ rounds: 2 });
+  const button = fixture();
+  program.page.locator = button.page.locator;
+  button.page.trigger = () => program.page.trigger();
+  const action = { kind: 'run_program', name: 'Submit', region: 'left', expectRepair: true, expectRepairs: 2 };
+  const observations = await performActions(program.page, [action], options, undefined, noWait);
+  assert.equal(observations[0].repairRequests, 2);
+  for (const expectRepairs of [0, -1, 6, 1.5, '2']) {
+    assert.throws(() => validateCases([{ id: 'repair', prompt: 'Repair', actions: [{ ...action, expectRepairs }], assertions: [{ kind: 'text', name: 'Done' }] }], { prompts: true }), /repair count/);
+  }
 });

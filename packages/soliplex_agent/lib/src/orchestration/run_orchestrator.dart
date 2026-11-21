@@ -97,6 +97,7 @@ class RunOrchestrator {
   /// run of the turn, so a resume after a client tool asks for what the turn
   /// opened with.
   Map<String, dynamic>? _turnForwardedProps;
+  bool _actionOnlyTurn = false;
 
   /// The run being folded, kept past its end until the next turn is built: a
   /// continuation run carries the turn's citations forward from it, and an
@@ -231,6 +232,7 @@ class RunOrchestrator {
   }) async {
     _guardRunToCompletion();
     _runToCompletionActive = true;
+    _actionOnlyTurn = a2uiAction != null;
     _activeOnReconnectStatus = (status) {
       _logReconnectStatus(status);
       onReconnectStatus?.call(status);
@@ -277,6 +279,7 @@ class RunOrchestrator {
     ThreadHistory? cachedHistory,
   }) async {
     _guardNotRunning();
+    _actionOnlyTurn = false;
     _toolDepth = 0;
     try {
       _turnForwardedProps = _forwardedProps?.call();
@@ -1090,6 +1093,7 @@ class RunOrchestrator {
       initialState.conversation,
       runId: initialState.runId,
       userMessageId: _userMessageId,
+      actionOnly: _actionOnlyTurn,
       turnCitations: _fold?.turnCitations ?? const TurnCitations.empty(),
       runCreated: null,
       registeredWorkbenchActivities: _registeredWorkbenchActivities,

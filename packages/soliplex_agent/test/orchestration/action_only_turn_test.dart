@@ -127,6 +127,87 @@ void main() {
     expect(users.map((message) => message.id), ['question']);
   });
 
+  for (final name in [
+    'workbench.program.run_result',
+    'workbench.program.layout',
+    'workbench.walkthrough.next',
+  ]) {
+    test('$name may finish silently, while empty user replies stay visible',
+        () async {
+      final events = [
+        RunStartedEvent(threadId: 'thread', runId: 'run'),
+        const RunFinishedEvent(threadId: 'thread', runId: 'run'),
+      ];
+      final result = await orchestratorFor(_Provider([events])).runToCompletion(
+        key: _key,
+        userMessage: const [],
+        toolExecutor: (_) async => [],
+        cachedHistory: priorHistory(),
+        a2uiAction: {
+          'userAction': {'name': name, 'surfaceId': 'program'},
+        },
+      ) as CompletedState;
+      expect(result.conversation.runOutcomes, isEmpty);
+      final userResult =
+          await orchestratorFor(_Provider([events])).runToCompletion(
+        key: _key,
+        userMessage: const [TextPart('Hello')],
+        toolExecutor: (_) async => [],
+        cachedHistory: priorHistory(),
+      ) as CompletedState;
+      expect(userResult.conversation.runOutcomes.keys, ['run']);
+    });
+  }
+
+  test('an action error still records its failure outcome', () async {
+    final provider = _Provider([
+      [
+        RunStartedEvent(threadId: 'thread', runId: 'run'),
+        const RunErrorEvent(message: 'Layout failed'),
+      ],
+    ]);
+    final result = await orchestratorFor(provider).runToCompletion(
+      key: _key,
+      userMessage: const [],
+      toolExecutor: (_) async => [],
+      cachedHistory: priorHistory(),
+      a2uiAction: action,
+    ) as FailedState;
+    expect(
+      result.conversation!.runOutcomes['run']!.reason,
+      TerminalReason.failed,
+    );
+  });
+
+  test('submission continuation can also complete without a reply', () async {
+    final provider = _Provider([
+      _clientToolCall('run-1'),
+      [
+        RunStartedEvent(threadId: 'thread', runId: 'run-2'),
+        const RunFinishedEvent(threadId: 'thread', runId: 'run-2'),
+      ],
+    ]);
+    final tools = const ToolRegistry().register(
+      ClientTool(
+        definition: const Tool(name: 'probe', description: 'Probe'),
+        executor: (_, __) async => 'ok',
+      ),
+    );
+    final result =
+        await orchestratorFor(provider, tools: tools).runToCompletion(
+      key: _key,
+      userMessage: const [],
+      cachedHistory: priorHistory(),
+      a2uiAction: {...action, 'submissionId': 'submission-1'},
+      toolExecutor: (pending) async => [
+        for (final call in pending)
+          call.copyWith(status: ToolCallStatus.completed, result: 'ok'),
+      ],
+    ) as CompletedState;
+    expect(result.conversation.runOutcomes, isEmpty);
+    expect(provider.inputs.last.forwardedProps, {'bandwidth': 'low'});
+  });
+
   test('a continuation resends the same action once', () async {
     final provider = _Provider([_clientToolCall('run-1'), _answer('run-2')]);
     final tools = const ToolRegistry().register(
@@ -183,6 +264,38 @@ void main() {
       'a2uiAction': submission,
     });
     expect(provider.inputs.last.forwardedProps, {'bandwidth': 'low'});
+  });
+
+  test('a manual user run after an action still reports an empty reply',
+      () async {
+    final provider = _Provider([
+      [
+        RunStartedEvent(threadId: 'thread', runId: 'run-1'),
+        const RunFinishedEvent(threadId: 'thread', runId: 'run-1'),
+      ],
+      [
+        RunStartedEvent(threadId: 'thread', runId: 'run-2'),
+        const RunFinishedEvent(threadId: 'thread', runId: 'run-2'),
+      ],
+    ]);
+    final orchestrator = orchestratorFor(provider);
+    await orchestrator.runToCompletion(
+      key: _key,
+      userMessage: const [],
+      toolExecutor: (_) async => [],
+      cachedHistory: priorHistory(),
+      a2uiAction: action,
+    );
+    final finished = orchestrator.stateChanges.firstWhere(
+      (state) => state is CompletedState,
+    );
+    await orchestrator.startRun(
+      key: _key,
+      userMessage: const [TextPart('Hello')],
+      cachedHistory: priorHistory(),
+    );
+    final result = await finished as CompletedState;
+    expect(result.conversation.runOutcomes.keys, ['run-2']);
   });
 
   test('normal turns still append their visible user message', () async {

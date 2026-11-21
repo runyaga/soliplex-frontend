@@ -5482,8 +5482,7 @@ void main() {
       final composer = await pumpRoom(tester, settle: false);
 
       // A RunningState loads the messages and marks the run live in one step,
-      // so the composer is enabled and the run alone holds it read-only —
-      // otherwise this could not tell the two halves of the guard apart.
+      // so the draft stays editable while send and attachment actions wait.
       session.emit(RunningState(
         threadKey: key,
         runId: 'run-1',
@@ -5491,7 +5490,8 @@ void main() {
         streaming: const AwaitingText(),
       ));
       await tester.pump();
-      expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isTrue);
+      expect(
+          tester.widget<TextField>(find.byType(TextField)).readOnly, isFalse);
 
       final claimed =
           await pressChord(tester, LogicalKeyboardKey.keyV, settle: false);
@@ -5740,6 +5740,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(composer.focusNode!.hasFocus, isFalse);
+    });
+
+    testChord('type to focus preserves the first character after a click',
+        (tester) async {
+      final composer = await pumpRoom(tester);
+      composer.focusNode!.unfocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyA, character: 'a');
+      await tester.pump();
+      expect(composer.focusNode!.hasFocus, isTrue);
+      expect(composer.controller!.text, 'a');
     });
 
     testChord('typing in another focused text field stays in that field',

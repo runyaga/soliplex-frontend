@@ -24,19 +24,10 @@ final _logger = LogManager.instance.getLogger('soliplex_frontend.chat_input');
 const unrestoredImageNotice =
     'Remove the images that could not be restored to send this message.';
 
-/// Whether the composer takes text right now. It refuses while the screen has
-/// it disabled and while a run is in flight, because both render it read-only —
-/// text routed in during either state could not be edited or removed until the
-/// composer came back.
-///
-/// [ChatInput] gates its text field, send button, add-image button, document
-/// filter, upload control, and document chip removal on this. Two things sit
-/// outside it. The Stop button, by necessity: it renders only while a run holds
-/// the composer, which is one of the states this refuses. And an inline image's
-/// placeholder chip, whose tap target is a gesture inside the field that
-/// `readOnly` does not reach — so a restored draft's unavailable images can
-/// still be cleared while a run is in flight, which costs nothing, since they
-/// block the send until they are gone either way.
+/// Whether send and attachment actions may use the composer right now.
+/// A running turn holds those actions until it ends. The text field stays
+/// editable so the user can prepare the next message without losing a draft.
+/// Stop and removal of unavailable image placeholders remain independent.
 bool composerAcceptsText({
   required bool enabled,
   required AgentSessionState? sessionState,
@@ -53,6 +44,7 @@ class ChatInput extends StatefulWidget {
     required this.onCancel,
     this.sessionState,
     this.cancelEnabled,
+    this.canSend,
     this.controller,
     this.focusNode,
     this.enabled = true,
@@ -71,6 +63,10 @@ class ChatInput extends StatefulWidget {
 
   final void Function(List<MessagePart> parts) onSend;
   final void Function() onCancel;
+
+  /// Checks the destination immediately before dispatch, including state that
+  /// may have changed since the composer last rebuilt. Refusal keeps the draft.
+  final bool Function()? canSend;
   final ReadonlySignal<AgentSessionState?>? sessionState;
 
   /// When provided, the Stop button is disabled while this signal is
@@ -220,7 +216,7 @@ class _ChatInputState extends State<ChatInput> {
       );
 
   void _send() {
-    if (!_acceptsInput) {
+    if (!_acceptsInput || widget.canSend?.call() == false) {
       return;
     }
     final parts = _controller.sendableParts();
@@ -325,10 +321,8 @@ class _ChatInputState extends State<ChatInput> {
     // conversation is exactly what must not appear over this one.
     if (!mounted || widget.composerScope != scope) return;
 
-    // The same window that lets the composer change can hand it to a run, which
-    // renders it read-only. An image put there could not be removed until the
-    // run ended — a chip showing its picture has no other way out — and would
-    // then be sent with whatever the user typed next.
+    // A pick can outlive the idle turn that opened it. Attachment actions wait
+    // during a run, matching the disabled add-image button.
     if (!_acceptsInput) {
       setState(
         () => _attachNotice = 'The composer was busy. Add the images again.',
@@ -685,7 +679,8 @@ class _ChatInputState extends State<ChatInput> {
                     child: SoliplexInput(
                       controller: _controller,
                       focusNode: _focusNode,
-                      readOnly: disabled,
+                      // A running turn blocks sending, while drafts stay editable.
+                      readOnly: !widget.enabled,
                       minLines: 1,
                       maxLines: 5,
                       textInputAction: TextInputAction.newline,

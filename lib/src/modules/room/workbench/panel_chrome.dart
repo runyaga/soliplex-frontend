@@ -34,7 +34,7 @@ class PanelChrome extends StatelessWidget {
                       ),
                     ),
                     if (constraints.hasBoundedHeight)
-                      Expanded(
+                      Flexible(
                         child: SingleChildScrollView(
                           primary: false,
                           child: child,

@@ -37,6 +37,7 @@ class RunFold {
     required String? userMessageId,
     required TurnCitations turnCitations,
     required DateTime? runCreated,
+    bool actionOnly = false,
     List<WorkbenchRegistration> registeredWorkbenchActivities = const [],
   }) {
     // The run is marked on the transcript before that transcript is kept as
@@ -55,6 +56,7 @@ class RunFold {
       unreadable: false,
       eventIndex: 0,
       runCreated: runCreated,
+      actionOnly: actionOnly,
       lastEventTime: null,
       registeredWorkbenchActivities: List<WorkbenchRegistration>.unmodifiable(
         registeredWorkbenchActivities,
@@ -64,6 +66,7 @@ class RunFold {
 
   const RunFold._({
     required this.conversation,
+    required this.actionOnly,
     required this.streaming,
     required this.runId,
     required String? userMessageId,
@@ -83,6 +86,10 @@ class RunFold {
 
   /// The conversation with every event so far folded in.
   final Conversation conversation;
+
+  /// Action turns can complete through UI or program effects without a reply.
+  /// Failed and cancelled outcomes are still recorded.
+  final bool actionOnly;
 
   /// The reply or reasoning in flight, if any.
   final StreamingState streaming;
@@ -142,6 +149,7 @@ class RunFold {
   }) =>
       RunFold._(
         conversation: conversation ?? this.conversation,
+        actionOnly: actionOnly,
         streaming: streaming ?? this.streaming,
         runId: runId,
         userMessageId: _userMessageId,
@@ -206,6 +214,13 @@ class RunFold {
           );
         }
         var folded = result.conversation;
+        if (actionOnly &&
+            event is RunFinishedEvent &&
+            folded.runOutcomes[runId]?.reason == TerminalReason.finished) {
+          folded = folded.copyWith(
+            runOutcomes: {...folded.runOutcomes}..remove(runId),
+          );
+        }
         // The turn's user message takes the run that started the turn and its
         // start time. Both only fill what is empty, so a client tool's
         // continuation run leaves the message with the run that sent it.

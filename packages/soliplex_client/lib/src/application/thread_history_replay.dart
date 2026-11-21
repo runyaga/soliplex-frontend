@@ -53,6 +53,7 @@ typedef RunPayload = ({
   RunUserMessage? userMessage,
   List<ToolMessage> toolResults,
   bool endsWithToolMessage,
+  bool actionOnly,
 });
 
 /// One run as replay sees it: its payload joined with the identity, parent,
@@ -92,6 +93,7 @@ const RunPayload noRunData = (
   userMessage: null,
   toolResults: <ToolMessage>[],
   endsWithToolMessage: false,
+  actionOnly: false,
 );
 
 /// Builds the history of thread [threadId] from its listing, [thread],
@@ -438,6 +440,7 @@ ThreadHistory replayThreadHistory(
         conversation,
         runId: runId,
         userMessageId: userMessageId,
+        actionOnly: payload.actionOnly || (resumedFrom?.actionOnly ?? false),
         turnCitations:
             resumedFrom?.turnCitations ?? const TurnCitations.empty(),
         runCreated: created,
@@ -780,6 +783,18 @@ RunPayload runPayloadFromJson(
     userMessage: _extractUserMessage(rawRun, threadId, runId),
     toolResults: _extractToolResults(rawRun, threadId, runId),
     endsWithToolMessage: _inputEndsWithToolMessage(rawRun),
+    actionOnly: switch (rawRun['run_input']) {
+      {
+        'forwardedProps': {'a2uiAction': {'userAction': Map<String, dynamic> _}}
+      } ||
+      {
+        'forwarded_props': {
+          'a2uiAction': {'userAction': Map<String, dynamic> _}
+        }
+      } =>
+        true,
+      _ => false,
+    },
   );
 }
 
