@@ -56,6 +56,7 @@ void main() {
         jsonDecode(files['probe-results.json']!) as Map<String, dynamic>;
     Map<String, dynamic> last() =>
         (book()['results'] as List).last as Map<String, dynamic>;
+    Object? statusText() => current.staged!.components[1]['text'];
     Future<void> event(String name, [Map<String, Object?>? state]) async {
       final data = state ?? current.staged?.dataModel ?? {};
       current = arena();
@@ -69,20 +70,44 @@ void main() {
       await execute(source);
       expect(book()['results'], isEmpty); // Run never starts a probe.
       expect(current.staged, isNotNull);
+      expect(statusText(), 'Probe ready');
       await event('events');
       expect(last()['count'], 1);
+      final eventMessage = last()['message'];
+      expect(statusText(), eventMessage);
       final eventId = last()['id'];
       await event('receipt', {
-        'receipt': jsonEncode({'id': eventId, 'wall_ms': 12.25}),
+        'receipt': jsonEncode({
+          'id': eventId,
+          'wall_ms': 12.25,
+          'status': 'harness_error',
+          'error': 'visibility failed',
+        }),
       });
       expect(last()['wall_ms'], 12.25);
+      expect(last()['status'], 'completed');
+      expect(last().containsKey('error'), isFalse);
+      expect(
+        (last()['observation'] as Map<String, dynamic>)['status'],
+        'harness_error',
+      );
+      expect(statusText(), eventMessage);
       await event('compute');
       expect(last()['size'], 10000);
       expect(last()['status'], 'completed');
       expect(last()['checksum'], isA<int>());
+      expect(statusText(), last()['message']);
+      for (final size in [50, 100, 200, 400]) {
+        await event('redraw');
+        expect(current.staged!.components, hasLength(size));
+        expect(last()['status'], 'completed');
+        expect(statusText(), last()['message']);
+      }
       await event('redraw');
-      expect(current.staged!.components, hasLength(50));
+      expect(last()['status'], 'error');
+      expect(last()['error'], 'Too many components in one run.');
       await event('charts');
+      expect(statusText(), last()['message']);
       final chart = current.staged!.components.singleWhere(
         (node) => node['component'] == 'Chart',
       );

@@ -47,14 +47,14 @@ def begin(probe, size):
     return row
 
 
-def draw(message, chart_node=None, nodes=0):
+def draw(chart_node=None, nodes=0):
     buttons = [
         ui.Button(ui.Text(label), action=ui.Event(event, {}))
         for label, event in BUTTONS
     ]
     rows = [ui.Row(buttons[i : i + 2]) for i in range(0, len(buttons), 2)]
     children = (
-        [ui.Text("Platform probe"), ui.Text(message)]
+        [ui.Text(book.get("message", "Probe ready")), ui.Text("Platform probe")]
         + rows
         + [
             ui.TextField("Probe receipt", value=ui.bind("/receipt")),
@@ -64,7 +64,7 @@ def draw(message, chart_node=None, nodes=0):
     # Count *all* components: labels, buttons, rows, field, texts and root.
     used = 6 + 2 * len(buttons) + len(rows)
     if chart_node is not None:
-        children.append(chart_node)
+        children.insert(2, chart_node)
         used += 1
     for i in range(max(0, nodes - used)):
         children.append(ui.Text(f"node {i}"))
@@ -76,7 +76,9 @@ def handle_event(name, context):
         receipt = json.loads(DATA.get("receipt", "{}"))
         for result in book["results"]:
             if result["id"] == receipt.get("id"):
-                result.update(receipt)
+                # Keep the program outcome separate from browser observations.
+                result["observation"] = receipt
+                result["wall_ms"] = receipt.get("wall_ms")
                 if (
                     receipt.get("server_rejected")
                     and result.get("window_id") in book["windows"]
@@ -84,14 +86,14 @@ def handle_event(name, context):
                     book["windows"].remove(result["window_id"])
         DATA["receipt"] = ""
         save()
-        draw("Receipt saved")
+        draw()
         return
     if name == "close":
         # One close per gesture avoids the eight-action transaction bound.
         if book["windows"]:
             ui.workbench.close_window(book["windows"].pop())
         save()
-        draw("Window close requested")
+        draw()
         return
     index = book["next"].get(name, 0)
     sizes = {
@@ -180,10 +182,14 @@ def handle_event(name, context):
             row["status"] = "requested"
         if row["status"] != "requested":
             row["status"] = "completed"
-        draw(marker + " done", chart_node, size if name == "redraw" else 0)
+        row["message"] = marker + " done"
+        book["message"] = row["message"]
+        draw(chart_node, size if name == "redraw" else 0)
     except (ValueError, TypeError) as error:
         row["status"] = "error"
         row["error"] = str(error)
+        row["message"] = marker + " error"
+        book["message"] = row["message"]
         # At 401 nodes even the fallback controls cannot be allocated. Keep the
         # last accepted app and expose the rejection in the run transcript.
     save()
@@ -191,4 +197,4 @@ def handle_event(name, context):
 
 
 save()
-draw("Probe ready")
+draw()
