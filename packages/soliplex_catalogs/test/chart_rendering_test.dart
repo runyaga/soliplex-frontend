@@ -1,11 +1,12 @@
 import 'dart:math' as math;
 
+import 'package:a2ui_core/a2ui_core.dart';
+import 'package:a2ui_flutter/a2ui_flutter.dart';
+import 'package:a2ui_flutter/basic_catalog.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:soliplex_catalogs/src/extended_chart.dart';
-import 'package:soliplex_catalogs/src/gauge_chart.dart';
-import 'package:soliplex_catalogs/src/line_chart.dart';
+import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 final _specs = <String, Map<String, Object?>>{
@@ -93,11 +94,49 @@ Future<ThemeData> _pump(
     ..._specs[kind]!,
   };
   final theme = dark ? soliplexDarkTheme() : soliplexLightTheme();
-  final chart = switch (kind) {
-    'line' => StaticLineChart(spec: spec, description: 'demo', height: 280),
-    'gauge' => StaticGaugeChart(spec: spec, description: 'demo', height: 280),
-    _ => ExtendedChart(spec: spec, description: 'demo', height: 280),
-  };
+  final processor = MessageProcessor<ComponentImplementation>(
+    catalogs: [basicCatalog(), chartGraphicsCatalog()],
+    validationConfig: ValidationConfig.strict,
+  );
+  addTearDown(processor.dispose);
+  processor.processMessages([
+    {
+      'version': '1.0',
+      'createSurface': {'surfaceId': 'chart', 'catalogId': BasicCatalog.v1_0Id},
+    },
+    {
+      'version': '1.0',
+      'updateComponents': {
+        'surfaceId': 'chart',
+        'components': [
+          {
+            'id': 'root',
+            'component': 'Column',
+            'children': ['card', 'button'],
+          },
+          {'id': 'card', 'component': 'Card', 'child': 'plot'},
+          {
+            'id': 'plot',
+            'component': 'Chart',
+            '@catalogId': chartGraphicsCatalogId,
+            'spec': spec,
+            'selection': <String>[],
+            'description': 'demo',
+          },
+          {
+            'id': 'button',
+            'component': 'Button',
+            'child': 'caption',
+            'action': {
+              'event': {'name': 'refresh'},
+            },
+          },
+          {'id': 'caption', 'component': 'Text', 'text': 'Refresh'},
+        ],
+      },
+    },
+  ]);
+  final chart = A2uiSurface(surface: processor.model.allSurfaces.single);
   await tester.pumpWidget(
     MaterialApp(
       theme: theme,
@@ -115,6 +154,7 @@ Future<ThemeData> _pump(
   await tester.pumpAndSettle();
   expect(tester.takeException(), isNull);
   expect(find.text('$kind demo'), findsOneWidget);
+  expect(find.text('Refresh'), findsOneWidget);
   return theme;
 }
 

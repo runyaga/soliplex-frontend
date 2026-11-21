@@ -80,7 +80,7 @@
 | Failure | Reports update per case. Setup errors produce failed assertions. Any failed case or missing screenshot exits nonzero |
 | Secrets | Credentials stay in memory and stdin. No shell sourcing, credential argv, traces, storage state or raw child logs. Evidence is redacted before serialization. Authentication screenshots are prohibited and account text is masked |
 | Retention | The runner deletes its recorded deterministic and model thread ids in `finally`, through public `ThreadStorage.delete_thread`. Set `WB_KEEP_THREADS=1` to retain them for review. It never enumerates or deletes unrelated threads |
-| Scope limits | Region and window semantics replace geometry classification. Graphics charts require image semantics with title and series; the embedded lab chart exposes named bar buttons. Every visible assertion also checks PNG ink. Selectors require live verification |
+| Scope limits | Region and window semantics replace geometry classification. Charts expose semantics with title and series; selectable bars expose named bar buttons. Every visible assertion also checks PNG ink. Selectors require live verification |
 | Execution | Replay remains inert. The Monty demo and model counter cases deliberately press Run. Other deterministic programs remain inert. The follow-up fix case checks replacement. The AI Fix cases check the host repair chain and its off switch |
 | Offline tests | JavaScript tests cover corpus validation, action checkpoints, window scopes, turn capture, stored form pairs, reply assertions, computed expectations, evidence, semantic selectors and cleanup retention. Eight Python tests cover recipes, public-storage cleanup and persistence, including all ten seeded recipes |
 | Markdown | README and generated fixture reports pass markdownlint-cli2. Offline fixtures stay in ignored `tests/.output/` |
@@ -101,9 +101,10 @@ Each button calls the real `handle_event(name, context)` in the same session.
 
 A second Run closes the prior log before replacing it in the retained session.
 The counter stays at or above zero. Add point appends a counter sample;
-`chart.bar` builds the spec and the existing embeddable `ui.BarChart` displays
-the latest 32 samples beside the controls. `ui.graphics.Chart` requires a
-standalone surface, so the demo uses the existing lab chart for this composition.
+`chart.bar` builds the spec and `ui.BarChart` displays the latest 32 samples
+beside the controls. Both `ui.BarChart` and `ui.graphics.Chart` render through
+`soliplex_catalogs`; Chart can be composed inside Column, Row or Card with
+buttons. Selectable bars retain their `Bar <label>: <value>` button names.
 Opening the log replaces its previous window, then moves the replacement to
 canvas position 1. Each gesture stages at most three layout actions, below the
 eight-action limit (including the automatic app opening), and leaves at most

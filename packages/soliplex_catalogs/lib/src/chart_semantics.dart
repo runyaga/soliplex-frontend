@@ -4,7 +4,7 @@ String chartSemanticsLabel(Map<Object?, Object?> spec, String description) {
     if (data is List) {
       for (final item in data.take(32).whereType<Map>()) {
         entries.add(
-          '${item['label'] ?? item['id']}: ${_value(item['value'] ?? item['y'] ?? item['close'])}',
+          '${item['label'] ?? item['id']}: ${_value(item.containsKey('value') ? item['value'] : item['y'] ?? item['close'])}',
         );
       }
     }
@@ -31,4 +31,11 @@ String chartSemanticsLabel(Map<Object?, Object?> spec, String description) {
 String _value(Object? value) =>
     value is num && value == value.truncateToDouble()
     ? value.toStringAsFixed(0)
+    : value == null
+    ? 'gap'
     : '$value';
+
+/// Formats a chart value without `.0`, or with two decimals for bar labels.
+String chartNumber(num value) => value == value.truncateToDouble()
+    ? value.toStringAsFixed(0)
+    : value.toStringAsFixed(2);

@@ -4,8 +4,8 @@ import 'package:a2ui_core/a2ui_core.dart';
 import 'package:dart_monty/core.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 
-import 'package:soliplex_monty/src/lab_chart_api.dart';
 import 'package:soliplex_monty/src/python_workbench.dart';
+import 'package:soliplex_monty/src/ui_chart.dart';
 
 /// Positional order of every v1.0 basic-catalog constructor, from the Track B
 /// binding contract. Each name is also accepted as a keyword.
@@ -128,7 +128,7 @@ class PythonUiArena {
         }),
         for (final MapEntry(key: name, value: params) in {
           ...basicSignatures,
-          ...labChartSignatures,
+          ...uiChartSignatures,
         }.entries)
           name: MontyHostFunction(name, (positional, keywords) {
             return MontyString(
@@ -140,7 +140,15 @@ class PythonUiArena {
             return MontyString(
               current()._construct(
                 'Chart',
-                const ['spec', 'selection', 'description', 'height'],
+                const [
+                  'spec',
+                  'selection',
+                  'description',
+                  'height',
+                  'selected',
+                  'action',
+                  'weight',
+                ],
                 positional,
                 keywords,
               ),
@@ -315,26 +323,32 @@ class PythonUiArena {
       for (final MapEntry(:key, :value) in props.entries) {
         lowered[key] = _lower(key, value, visit, node['component']! as String);
       }
-      if (labChartSignatures.containsKey(node['component'])) {
-        lowered['@catalogId'] = labChartCatalogId;
+      if (uiChartSignatures.containsKey(node['component'])) {
         if (node['component'] == 'BarChart') _wireChart(lowered);
+        try {
+          lowerUiChart(lowered);
+        } on FormatException catch (error) {
+          throw ExternalException('ValueError', error.message);
+        }
       }
       components[index] = lowered;
       return lowered['id']! as String;
     }
 
     visit(rootToken);
-    if (components.any((node) => node['component'] == 'Chart')) {
-      if (components.length != 1) {
-        throw const ExternalException(
-          'ValueError',
-          'Chart must be the root of a standalone surface.',
-        );
-      }
+    for (final component in components.where(
+      (node) => node['component'] == 'Chart',
+    )) {
+      component['@catalogId'] = chartGraphicsCatalogId;
       try {
-        validateStaticChartSpec(components.single['spec']);
+        validateStaticChartSpec(component['spec']);
       } on FormatException catch (error) {
         throw ExternalException('ValueError', error.message);
+      }
+      if (!component.containsKey('selected') &&
+          (component['spec']! as Map)['kind'] == 'bar' &&
+          component.containsKey('action')) {
+        _wireChart(component);
       }
     }
     return StagedSurface(components, data == null ? null : _lowerData(data));

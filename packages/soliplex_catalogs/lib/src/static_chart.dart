@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -17,7 +18,7 @@ import 'package:soliplex_catalogs/src/gauge_chart.dart';
 import 'package:soliplex_catalogs/src/line_chart.dart';
 import 'package:soliplex_catalogs/src/surface_catalog.dart';
 
-/// The graphics catalog with the typed, standalone Chart component.
+/// The graphics catalog with the typed, embeddable Chart component.
 const chartGraphicsCatalogId = 'urn:soliplex:catalog:graphics:2';
 
 const _maxPoints = 5000;
@@ -85,7 +86,19 @@ final _lineSchema = <String, Object>{
           'id': _string(128, minLength: 1),
           'label': _string(512),
           'color': _rgba,
-          'points': _pointListSchema,
+          'points': {
+            ..._pointListSchema,
+            'items': {
+              ...(_pointListSchema['items']! as Map<String, Object>),
+              'properties': {
+                'id': _string(128, minLength: 1),
+                'label': _string(512),
+                'value': {
+                  'type': ['number', 'null'],
+                },
+              },
+            },
+          },
         },
         'required': ['id', 'points'],
       },
@@ -108,7 +121,7 @@ final _gaugeSchema = <String, Object>{
   'required': ['kind', 'value', 'min_value', 'max_value'],
 };
 
-/// Registers the standalone charts and the existing graphics components.
+/// Registers the embeddable charts and the existing graphics components.
 CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
   id: chartGraphicsCatalogId,
   protocolVersion: A2uiProtocolVersion.v1_0,
@@ -128,6 +141,9 @@ CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
             ],
           },
           'selection': {'type': 'array', 'maxItems': 0},
+          'selected': CommonSchemasV1.dynamicString,
+          'action': {r'$ref': r'common_types.json#/$defs/Action'},
+          'weight': {'type': 'number'},
           'description': _string(512, minLength: 1),
           'height': {'type': 'number', 'minimum': 160, 'maximum': 1200},
         },
@@ -143,7 +159,9 @@ CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
         final chart = spec! as Map<Object?, Object?>;
         final description = props.string('description')!;
         final height = props.number('height') ?? 280;
-        return KeyedSubtree(
+        final selected = props.writable('selected');
+        final action = props.action('action');
+        final chartView = KeyedSubtree(
           key: ValueKey(_chartIdentity(chart)),
           child: switch (chart['kind']) {
             'line' => StaticLineChart(
@@ -160,12 +178,39 @@ CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
               spec: chart,
               description: description,
               height: height,
+              selected: props.string('selected'),
+              onSelect: selected == null && action == null
+                  ? null
+                  : (label) {
+                      selected?.set(label);
+                      if (action != null) unawaited(action());
+                    },
             ),
             _ => ExtendedChart(
               spec: chart,
               description: description,
               height: height,
             ),
+          },
+        );
+        // Composed rows may give a child an unbounded width. Weighted columns
+        // may constrain its height. Keep plots finite and scroll the chart when
+        // the available height is smaller than its captions and plot.
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : 640.0;
+            final content = chart['kind'] != 'bar' && width < 160
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: SizedBox(width: 160, child: chartView),
+                  )
+                : chartView;
+            return SizedBox(
+              width: width,
+              child: SingleChildScrollView(primary: false, child: content),
+            );
           },
         );
       },
@@ -215,7 +260,7 @@ void _validateGauge(Map<Object?, Object?> spec) {
   }
 }
 
-List<String> _pointLabels(Object? points) {
+List<String> _pointLabels(Object? points, {bool allowGaps = false}) {
   if (points is! List || points.length > _maxPoints) {
     throw const FormatException('Expected a list of at most 5000 points.');
   }
@@ -226,11 +271,14 @@ List<String> _pointLabels(Object? points) {
         case {
           'id': final String id,
           'label': final String label,
-          'value': final num value,
+          'value': final Object? value,
         }
         when id.isNotEmpty &&
-            value.isFinite &&
-            (value is! int || value.abs() <= _maxSafeInteger)) {
+            ((allowGaps && value == null) ||
+                // Same bound as the server; dart2js cannot tell 1e100 from an int.
+                (value is num &&
+                    value.isFinite &&
+                    value.abs() <= _maxSafeInteger))) {
       if (!ids.add(id)) throw FormatException('Duplicate point ID: $id.');
       labels.add(label);
     } else {
@@ -257,7 +305,7 @@ void _validateLineSeries(Object? series) {
     if (id.isEmpty || !ids.add(id)) {
       throw FormatException('Invalid or duplicate series ID: $id.');
     }
-    final labels = _pointLabels(entry['points']);
+    final labels = _pointLabels(entry['points'], allowGaps: true);
     total += labels.length;
     if (total > _maxPoints) {
       throw const FormatException('A chart accepts at most 5000 points.');
@@ -288,7 +336,12 @@ String _chartIdentity(Map<Object?, Object?> spec) {
     else
       for (final item
           in (spec['series']! as List<Object?>).cast<Map<Object?, Object?>>())
-        [item['id'], ids(item['points'])],
+        [
+          item['id'],
+          ids(item['points']),
+          for (final point in item['points']! as List)
+            (point as Map)['value'] == null,
+        ],
   ]);
 }
 
@@ -297,8 +350,12 @@ class _BarChart extends StatelessWidget {
     required this.spec,
     required this.description,
     required this.height,
+    this.selected,
+    this.onSelect,
   });
 
+  final String? selected;
+  final ValueChanged<String>? onSelect;
   final Map<Object?, Object?> spec;
   final String description;
   final double height;
@@ -325,8 +382,9 @@ class _BarChart extends StatelessWidget {
     return Semantics(
       container: true,
       label: chartSemanticsLabel(spec, description),
-      image: true,
-      excludeSemantics: true,
+      image: onSelect == null,
+      explicitChildNodes: onSelect != null,
+      excludeSemantics: onSelect == null,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.surfaceContainerLow,
@@ -336,6 +394,7 @@ class _BarChart extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(SoliplexSpacing.s6),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (spec['title'] case final String title)
@@ -366,8 +425,13 @@ class _BarChart extends StatelessWidget {
                       final point = points[index];
                       final value = point['value']! as num;
                       final negative = value < 0;
-                      final barColor = negative ? colors.error : color;
-                      return Column(
+                      final label = point['label']! as String;
+                      final barColor = label == selected
+                          ? colors.tertiary
+                          : negative
+                          ? colors.error
+                          : color;
+                      final row = Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Row(
@@ -381,13 +445,19 @@ class _BarChart extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: SoliplexSpacing.s2),
-                              Text(
-                                value > 0 && diverges ? '+$value' : '$value',
-                                style: textTheme.labelLarge?.copyWith(
-                                  color: negative
-                                      ? colors.error
-                                      : colors.onSurface,
-                                  fontWeight: FontWeight.w700,
+                              Flexible(
+                                child: Text(
+                                  value > 0 && diverges
+                                      ? '+${chartNumber(value)}'
+                                      : chartNumber(value),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: textTheme.labelLarge?.copyWith(
+                                    color: negative
+                                        ? colors.error
+                                        : colors.onSurface,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ),
                             ],
@@ -442,6 +512,20 @@ class _BarChart extends StatelessWidget {
                             ),
                           ),
                         ],
+                      );
+                      if (onSelect == null) return row;
+                      return Semantics(
+                        container: true,
+                        label: 'Bar $label: ${chartNumber(value)}',
+                        button: true,
+                        selected: label == selected,
+                        excludeSemantics: true,
+                        onTap: () => onSelect!(label),
+                        child: InkWell(
+                          key: ValueKey('chart-bar:$label'),
+                          onTap: () => onSelect!(label),
+                          child: row,
+                        ),
                       );
                     },
                   ),
