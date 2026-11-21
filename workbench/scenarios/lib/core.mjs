@@ -82,6 +82,11 @@ export function validateCases(data, { prompts = false } = {}) {
       if (a?.kind === 'reply') {
         if (!prompts || ['region', 'name', 'absent', 'count', 'role'].some(key => key in a)) throw new Error('Invalid reply assertion');
         replyExpectation(a.includes);
+        if (a.excludes !== undefined && (typeof a.excludes !== 'string' || !a.excludes)) throw new Error('Invalid reply exclusion');
+        continue;
+      }
+      if (a?.kind === 'file') {
+        if (!prompts || typeof a.filename !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}\.(csv|md|txt|json)$/.test(a.filename) || typeof a.includes !== 'string' || !a.includes) throw new Error('Invalid file assertion');
         continue;
       }
       if (a?.kind === 'csv') {
@@ -163,6 +168,7 @@ export function regionSelector(region = 'workspace') {
 
 export function assertionLabel(a) {
   if (a.kind === 'reply') return `Latest assistant reply containing ${replyExpectation(a.includes)}`;
+  if (a.kind === 'file') return `Saved thread file ${a.filename} contains ${a.includes}`;
   if (a.kind === 'csv') return `Public workdir CSV ${a.filename} contains submitted values`;
   if (a.kind === 'submission') return `Run input contains ${a.name} submission`;
   return `${a.absent ? 'Absent ' : ''}${a.kind === 'role' ? a.role : a.kind} ${a.name} in ${a.region ?? 'workspace'}${a.window ? ` window ${a.window}` : ''}${a.includes ? ` containing ${a.includes}` : ''}${a.count ? ` count ${a.count}` : ''}`;
@@ -183,7 +189,7 @@ export function assertTurn(a, turn) {
   }
   if (a.kind === 'reply') return {
     label: assertionLabel(a),
-    pass: Boolean(turn?.completed && !turn.runErrors?.length && turn.finalMessage?.toLowerCase().includes(replyExpectation(a.includes).toLowerCase())),
+    pass: Boolean(turn?.completed && !turn.runErrors?.length && turn.finalMessage?.toLowerCase().includes(replyExpectation(a.includes).toLowerCase()) && (!a.excludes || !turn.finalMessage.toLowerCase().includes(a.excludes.toLowerCase()))),
     detail: turn?.finalMessage || 'No captured assistant reply',
   };
   if (a.kind === 'submission') {

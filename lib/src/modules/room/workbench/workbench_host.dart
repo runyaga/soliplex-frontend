@@ -85,6 +85,9 @@ class _ActivityHostState extends State<_ActivityHost> {
     final store = ChatSurfaceScope.maybeOf(context)!;
     final scope = ChatSurfaceScope.scopeOf(context)!;
     _store = store;
+    _apps.readFile = store.readProgramFile;
+    _apps.writeFile = store.writeProgramFile;
+    store.programSnapshot = _apps.snapshot;
     _player = WalkthroughScope.of(context);
     _player?.perform = _perform;
     _player?.send = (name, values) {

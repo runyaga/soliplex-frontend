@@ -106,7 +106,10 @@ def test_generated_move_close_teaching_matches_executable_content_id_rules():
 def test_room_suggestions_are_distinct_short_and_wired_into_the_stack():
     from pathlib import Path
 
-    from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, WELCOME_MESSAGE
+    from soliplex_a2ui_workbench.workbench_teaching import (
+        ROOM_SUGGESTIONS,
+        WELCOME_MESSAGE,
+    )
 
     assert len(ROOM_SUGGESTIONS) == len(set(ROOM_SUGGESTIONS)) >= 4
     assert all(10 < len(s) <= 220 and s.endswith(".") for s in ROOM_SUGGESTIONS)
@@ -123,3 +126,20 @@ def test_repair_teaching_explains_both_ai_fix_states():
     assert 'Read repair_program.autoRun' in text
     assert 'only when true say "the fix will run now"' in text
     assert 'Never claim a repair ran until a successful workbench.program.run_result arrives.' in text
+
+
+def test_file_and_app_teaching_matches_suggestions_and_model_cases():
+    import json
+    from pathlib import Path
+
+    from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS
+
+    text = room_skill('workbench')
+    for literal in ['ui.workbench.read_file(filename)', 'ui.workbench.write_file(filename, text)',
+                    'current_program_apps', 'untrusted user data', '65536', 'read-only to programs']:
+        assert literal in text
+    cases = json.loads((Path(__file__).parents[4] / 'scenarios/model/prompts.yaml').read_text())
+    for suggestion in ROOM_SUGGESTIONS[2:6]:
+        case = next(case for case in cases if case['prompt'] == suggestion)
+        assert any(action.get('name') == 'Run' for action in case['actions'])
+        assert any(assertion['kind'] in {'file', 'reply'} for assertion in case['assertions'])

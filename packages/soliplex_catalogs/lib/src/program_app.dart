@@ -1,7 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 
 /// Live, thread-local app views. Layout and execution remain with their owners.
 class ProgramApps extends ChangeNotifier {
+  Future<String> Function(String filename)? readFile;
+  Future<void> Function(String filename, String text)? writeFile;
+  final _state = <String, Object? Function()>{};
+
+  void bindState(String program, Object? Function() read) =>
+      _state[program] = read;
+  void unbindState(String program) => _state.remove(program);
+
+  /// A fresh copy includes bound input edits made since the last Python event.
+  Map<String, Object?> snapshot() {
+    final result = <String, Object?>{};
+    for (final entry in _state.entries.take(12)) {
+      final candidate = {...result, entry.key: entry.value()};
+      if (utf8.encode(jsonEncode(candidate)).length <= 15000) {
+        result[entry.key] = candidate[entry.key];
+      }
+    }
+    return jsonDecode(jsonEncode(result)) as Map<String, Object?>;
+  }
+
   final _views = <String, Widget>{};
   bool _closed = false;
   final _controls = <String, ProgramControls>{};
@@ -39,6 +61,7 @@ class ProgramApps extends ChangeNotifier {
     _closed = true;
     _views.clear();
     _controls.clear();
+    _state.clear();
     super.dispose();
   }
 }
