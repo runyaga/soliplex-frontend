@@ -434,6 +434,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   );
   Widget? _appView;
   bool _appRequested = false;
+  bool _needsReload = false;
 
   /// Whether the source editor is expanded in either mode.
   bool _editorOpen = false;
@@ -667,6 +668,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       }
       final runtime = await _runtime(code);
       if (runtime == null || _disposed) return;
+      final recovering = _needsReload;
       if (_runMode && !await _freshSession(runtime, code)) return;
       if (!mounted) return;
       final threadApps = ProgramAppScope.maybeOf(context);
@@ -682,6 +684,10 @@ class _PythonReplViewState extends State<PythonReplView> {
         inputs: {'CLIENT': _clientViewport()},
       );
       if (_disposed) return;
+      if (ok) {
+        _needsReload = false;
+        if (recovering) output = _join(output, _reloadNotice);
+      }
       if (_arena.workbench.rejected) {
         ok = false;
         output = _join(output, 'Workbench layout action limit (8) exceeded.');
@@ -768,23 +774,13 @@ class _PythonReplViewState extends State<PythonReplView> {
     }
   }
 
-  /// Clears globals and the Python-built surface before a run in
-  /// [ReplMode.run]. False when the interpreter could not be reset.
+  /// Clears globals before a run in [ReplMode.run]. Keep the published surface
+  /// until a successful replacement commits, including during a repair.
+  /// False when the interpreter could not be reset.
   Future<bool> _freshSession(MontyRuntime runtime, String code) async {
-    final old = _ui;
-    final view = _appView;
-    final program = widget.surfaceId;
-    if (view != null && program != null) {
-      _apps?.remove(program, view);
-      _apps?.unbindState(program);
-    }
-    _appView = null;
-    if (old != null) {
-      setState(() => _ui = null);
-      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-    }
     try {
       await runtime.clearState();
+      _needsReload = true;
       return !_disposed;
     } on Object catch (error) {
       if (!_disposed) {
@@ -891,7 +887,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   ///
   /// Returns the rejection reason, or null when committed or nothing staged.
   /// A rejected surface leaves the previous one on screen.
-  String? _commit(StagedSurface? staged) {
+  String? _commit(StagedSurface? staged, {Object? fallbackData}) {
     if (staged == null) return null;
     final next = MessageProcessor<ComponentImplementation>(
       catalogs: [
@@ -903,7 +899,12 @@ class _PythonReplViewState extends State<PythonReplView> {
     final errors = <String>[];
     final sub = next.model.onError.subscribe((e) => errors.add('$e'));
     try {
-      next.processMessages(staged.messages('python'));
+      next.processMessages(
+        StagedSurface(
+          staged.components,
+          staged.dataModel ?? fallbackData,
+        ).messages('python'),
+      );
     } on Object catch (error) {
       errors.add('$error');
     }
@@ -955,17 +956,43 @@ class _PythonReplViewState extends State<PythonReplView> {
         writeFile: threadApps?.writeFile,
       );
       final data = _ui?.model.allSurfaces.firstOrNull?.dataModel.get('/');
-      var (output, ok) = await _execute(
-        runtime,
-        'handle_event(EVENT["name"], EVENT["context"])',
-        widget.limits,
-        checkSource: _editor.text,
-        inputs: {
-          'CLIENT': _clientViewport(),
-          'EVENT': {'name': name, 'context': action['context'] ?? {}},
-          'DATA': data ?? {},
-        },
-      );
+      var output = '';
+      var ok = true;
+      final recovering = _needsReload;
+      if (recovering) {
+        // The runtime replaces a reset interpreter, but its program definitions
+        // are gone. Use the same source execution as Run before any event.
+        (output, ok) = await _execute(
+          runtime,
+          _editor.text,
+          widget.limits,
+          inputs: {'CLIENT': _clientViewport()},
+        );
+        if (_disposed) return;
+        if (ok) {
+          _needsReload = false;
+          output = _join(output, _reloadNotice);
+        }
+      }
+      // Init may deliberately replace the model. Otherwise retain the values
+      // still displayed by the existing surface, including bound input edits.
+      final eventData = _arena.staged?.dataModel ?? data;
+      if (ok) {
+        final (eventOutput, eventOk) = await _execute(
+          runtime,
+          'handle_event(EVENT["name"], EVENT["context"])',
+          widget.limits,
+          checkSource: _editor.text,
+          preflight: !recovering,
+          inputs: {
+            'CLIENT': _clientViewport(),
+            'EVENT': {'name': name, 'context': action['context'] ?? {}},
+            'DATA': eventData ?? {},
+          },
+        );
+        output = _join(output, eventOutput);
+        ok = eventOk;
+      }
       if (_disposed) return;
       if (_arena.workbench.rejected) {
         ok = false;
@@ -979,12 +1006,13 @@ class _PythonReplViewState extends State<PythonReplView> {
         }
       }
       if (ok) {
-        final rejected = _commit(_arena.staged);
+        final rejected = _commit(_arena.staged, fallbackData: eventData);
         if (rejected != null) {
           output = _join(output, 'Surface rejected: $rejected');
           ok = false;
         }
-      } else if (output.contains("'handle_event' is not defined")) {
+      } else if (!recovering &&
+          output.contains("'handle_event' is not defined")) {
         output = 'Define handle_event(name, context) to react to clicks.';
       }
       // Redraws update the existing view; only Run opens/reopens its window.
@@ -1039,10 +1067,14 @@ class _PythonReplViewState extends State<PythonReplView> {
     ReplLimits limits, {
     Map<String, Object?>? inputs,
     String? checkSource,
+    bool preflight = true,
   }) async {
+    if ((checkSource ?? code).length > limits.maxSourceChars) {
+      return ('Source exceeds ${limits.maxSourceChars} characters.', false);
+    }
     final ExecutionHandle handle;
     try {
-      if (_typeCheck) {
+      if (_typeCheck && preflight) {
         final clock = Stopwatch()..start();
         final error = await widget.checkTypes(
           checkSource ?? code,
@@ -1057,6 +1089,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       }
       handle = runtime.execute(code, os: _os, inputs: inputs);
     } on Object catch (error) {
+      if (_resetsSession(error)) _needsReload = true;
       return ('$error', false);
     }
     _active = handle;
@@ -1080,6 +1113,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       return (_join(printed, shown), true);
     } on Object catch (error) {
       if (timedOut) {
+        _needsReload = true;
         return (
           _join(
             printed,
@@ -1090,9 +1124,9 @@ class _PythonReplViewState extends State<PythonReplView> {
         );
       }
       final message = failure?.displayMessage ?? _describe(error);
-      final reset = _resetsSession(error)
-          ? '\nInterpreter state was reset.'
-          : '';
+      final resets = _resetsSession(error);
+      if (resets) _needsReload = true;
+      final reset = resets ? '\nInterpreter state was reset.' : '';
       return (_join(printed, '$message$reset'), false);
     } finally {
       deadline.cancel();
@@ -1496,6 +1530,8 @@ String _clip(String text, int max) =>
 String _seconds(Duration d) => d.inMilliseconds % 1000 == 0
     ? '${d.inSeconds} s'
     : '${d.inMilliseconds} ms';
+
+const _reloadNotice = 'App state was reset; the program was reloaded.';
 
 bool _resetsSession(Object error) =>
     error is MontyCrashedError ||
