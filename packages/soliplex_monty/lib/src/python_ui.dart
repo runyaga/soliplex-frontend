@@ -3,7 +3,6 @@ import 'package:a2ui_core/a2ui_core.dart';
 import 'package:dart_monty/core.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 import 'package:soliplex_monty/src/bindings/host_bindings.dart';
-import 'package:soliplex_monty/src/bindings/positional_signatures.dart';
 import 'package:soliplex_monty/src/bindings/registered_module.dart';
 import 'package:soliplex_monty/src/python_workbench.dart';
 import 'package:soliplex_monty/src/ui_chart.dart';

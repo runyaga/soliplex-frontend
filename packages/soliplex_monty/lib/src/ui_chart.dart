@@ -1,8 +1,5 @@
-/// Positional order of the chart constructors in the Python `ui` module.
-const uiChartSignatures = <String, List<String>>{
-  'BarChart': ['bars', 'title', 'action', 'weight'],
-  'LineChart': ['labels', 'series', 'title', 'weight'],
-};
+export 'package:soliplex_catalogs/soliplex_catalogs.dart'
+    show uiChartSignatures;
 
 /// Most bars one `BarChart` draws.
 const maxChartBars = 32;

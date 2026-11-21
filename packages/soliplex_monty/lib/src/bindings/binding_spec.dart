@@ -1,75 +1,35 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:dart_monty/core.dart';
-
-/// A Python annotation and the matching check on a decoded host value.
-class PythonType {
-  const PythonType(this.annotation, this.accepts);
-
-  final String annotation;
-  final bool Function(Object?) accepts;
-
-  PythonType operator |(PythonType other) => PythonType(
-    '$annotation | ${other.annotation}',
-    (value) => accepts(value) || other.accepts(value),
-  );
-
-  PythonType get list => PythonType(
-    'list[$annotation]',
-    (value) => value is List && value.every(accepts),
-  );
-}
-
-final pyString = PythonType('str', (v) => v is String);
-final pyNumber = PythonType('float', (v) => v is num);
-final pyInt = PythonType('int', (v) => v is int);
-final pyBool = PythonType('bool', (v) => v is bool);
-final pyNone = PythonType('None', (v) => v == null);
-final pyDict = PythonType(
-  'dict[str, Any]',
-  (v) => v is Map && v.keys.every((k) => k is String),
-);
-final pyBinding = PythonType(
-  'Binding',
-  (v) => v is String && v.startsWith('<ui:bind:'),
-);
-final pyEvent = PythonType(
-  'EventHandle',
-  (v) => v is String && v.startsWith('<ui:event:'),
-);
-
-PythonType pythonLiteral(List<Object?> values) => PythonType(
-  'Literal[${values.map(pythonValue).join(', ')}]',
-  values.contains,
-);
-
-String pythonValue(Object? value) => switch (value) {
-  null => 'None',
-  true => 'True',
-  false => 'False',
-  _ => jsonEncode(value),
-};
+import 'package:soliplex_monty/src/bindings/schema_types.dart';
+import 'package:soliplex_monty/src/bindings/schema_validator.dart';
 
 /// Null [defaultValue] means required; `...` means optional without insertion.
 /// This preserves catalog defaults and constructor staging behaviour.
 class BindingParameter {
   const BindingParameter(
     this.name,
-    this.type, {
-    this.defaultValue,
-    this.defaultDart,
+    this.schema,
+    this.annotation, {
+    required this.required,
     this.keywordOnly = false,
   });
 
   final String name;
-  final PythonType type;
-  final String? defaultValue;
-  final Object? defaultDart;
+  final Map<String, Object?> schema;
+  final String annotation;
+  final bool required;
+
+  String? get defaultValue => required
+      ? null
+      : schema.containsKey('default')
+      ? pythonValue(schema['default'])
+      : '...';
+  Object? get defaultDart => schema['default'];
   final bool keywordOnly;
 
   String declaration({bool required = false}) =>
-      '$name: ${type.annotation}'
+      '$name: $annotation'
       '${!required && defaultValue != null ? ' = $defaultValue' : ''}';
 }
 
@@ -77,12 +37,61 @@ typedef BindingBody = FutureOr<MontyValue> Function(Map<String, Object?> args);
 
 /// One source of truth for a host function's Python and Dart boundary.
 class FunctionBinding {
-  const FunctionBinding(this.name, this.parameters, this.returns, this.doc);
+  FunctionBinding.fromSchema(this.definition, SchemaTypes types) {
+    name = definition['name']! as String;
+    doc = definition['description']! as String;
+    final arguments = SchemaTypes.map(definition['parameters']);
+    final props = SchemaTypes.map(arguments['properties']);
+    final required = (arguments['required'] as List?)?.cast<String>() ?? [];
+    final positional =
+        (SchemaTypes.map(definition['x-python'])['positional'] as List?)
+            ?.cast<String>() ??
+        [];
+    if (positional.toSet().length != positional.length ||
+        positional.any((key) => !props.containsKey(key)) ||
+        required.any((key) => !props.containsKey(key))) {
+      throw StateError('Invalid host signature for $name');
+    }
+    final typePrefix = '${name[0].toUpperCase()}${name.substring(1)}';
+    parameters = [
+      for (final key in [
+        ...positional,
+        ...props.keys.where((key) => !positional.contains(key)),
+      ])
+        BindingParameter(
+          key,
+          SchemaTypes.map(props[key]),
+          types.type(
+            SchemaTypes.map(props[key]),
+            '$typePrefix${SchemaTypes.identifier(key)}',
+          ),
+          required: required.contains(key),
+          keywordOnly: !positional.contains(key),
+        ),
+    ];
+    final returnSchema = definition.containsKey('x-returnSchema')
+        ? SchemaTypes.map(definition['x-returnSchema'])
+        : switch (definition['returnType']) {
+            'void' => <String, Object?>{'type': 'null'},
+            'any' => <String, Object?>{},
+            final String type => <String, Object?>{'type': type},
+            _ => throw StateError('Missing return schema for $name'),
+          };
+    returns = types.type(
+      returnSchema,
+      '${typePrefix}Result',
+    );
+    _arguments = JsonSchemaValidator(arguments, types.definitions);
+    _returns = JsonSchemaValidator(returnSchema, types.definitions);
+  }
 
-  final String name;
-  final List<BindingParameter> parameters;
-  final PythonType returns;
-  final String doc;
+  final Map<String, Object?> definition;
+  late final String name;
+  late final List<BindingParameter> parameters;
+  late final String returns;
+  late final String doc;
+  late final JsonSchemaValidator _arguments;
+  late final JsonSchemaValidator _returns;
 
   List<BindingParameter> get positional =>
       parameters.where((p) => !p.keywordOnly).toList();
@@ -108,7 +117,7 @@ class FunctionBinding {
         }
         parts.add(parameter.declaration(required: prefix != null && !star));
       }
-      return 'def $name(${parts.join(', ')}) -> ${returns.annotation}: ...';
+      return 'def $name(${parts.join(', ')}) -> $returns: ...';
     }
 
     return '# $doc\n${needsOverloads ? [
@@ -143,10 +152,10 @@ class FunctionBinding {
         if (parameter.defaultValue != '...') {
           values[parameter.name] = parameter.defaultDart;
         }
-      } else if (!parameter.type.accepts(values[parameter.name])) {
-        fail('"${parameter.name}" must be ${parameter.type.annotation}');
       }
     }
+    final errors = _arguments.errors(values);
+    if (errors.isNotEmpty) fail(errors.join('; '));
     return values;
   }
 
@@ -154,9 +163,9 @@ class FunctionBinding {
     name,
     (args, kwargs) async {
       final result = await body(validate(args, kwargs));
-      if (!returns.accepts(result.dartValue)) {
+      if (!_returns.accepts(result.dartValue)) {
         throw StateError(
-          '$name returned a value outside ${returns.annotation}',
+          '$name returned a value outside $returns',
         );
       }
       return result;
