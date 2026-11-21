@@ -53,7 +53,7 @@ class StaticLineChart extends StatelessWidget {
               borderRadius: BorderRadius.circular(context.radii.lg),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(SoliplexSpacing.s6),
+              padding: const EdgeInsets.all(SoliplexSpacing.s4),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -61,7 +61,7 @@ class StaticLineChart extends StatelessWidget {
                   if (spec['title'] case final String title)
                     Text(
                       title,
-                      style: theme.textTheme.titleLarge?.copyWith(
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),

@@ -301,12 +301,12 @@ class ExtendedChart extends StatelessWidget {
           borderRadius: BorderRadius.circular(context.radii.lg),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(SoliplexSpacing.s6),
+          padding: const EdgeInsets.all(SoliplexSpacing.s4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (spec['title'] case final String title)
-                Text(title, style: theme.textTheme.titleLarge),
+                Text(title, style: theme.textTheme.titleMedium),
               if (spec['ylabel'] case final String label)
                 Text(label, style: theme.textTheme.bodySmall),
               const SizedBox(height: SoliplexSpacing.s3),
