@@ -16,6 +16,10 @@ class ChatSurfaceStore extends ChangeNotifier {
 
   /// Catalogs each controller renders in addition to the basic catalog.
   final List<CatalogImplementation> catalogs;
+  Future<String> Function(String filename)? readProgramFile;
+  Future<void> Function(String filename, String text)? writeProgramFile;
+  Map<String, Object?> Function()? programSnapshot;
+
   final Map<String, ChatSurfaceController> _controllers = {};
   final Map<String, List<String>> _wire = {};
   final Set<String> _invalid = {};

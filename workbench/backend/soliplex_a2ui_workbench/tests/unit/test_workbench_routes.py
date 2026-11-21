@@ -7,9 +7,14 @@ import pytest
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.testclient import TestClient
 from soliplex import agui, authz, installation, views
-
-from soliplex_a2ui_workbench.workbench_repository import SQLiteWorkbenchRepository, WorkbenchScope
-from soliplex_a2ui_workbench.workbench_routes import build_router, create_guarded_agui_router
+from soliplex_a2ui_workbench.workbench_repository import (
+    SQLiteWorkbenchRepository,
+    WorkbenchScope,
+)
+from soliplex_a2ui_workbench.workbench_routes import (
+    build_router,
+    create_guarded_agui_router,
+)
 
 
 class MemoryRoomPolicy:
@@ -212,3 +217,31 @@ def test_activity_tool_turn_and_reconnect_never_open_legacy_repository(monkeypat
     )
     assert response.status_code == 200, response.text
     assert response.json() == {"ok": True}
+
+
+def test_program_files_use_authenticated_thread_and_write_permission(tmp_path):
+    repo = SQLiteWorkbenchRepository(tmp_path / 'repo.sqlite')
+    threads = MemoryThreadStorage({('alice', 'room-a', 'thread-a')})
+    policy = MemoryRoomPolicy({('room-a', 'alice', authz.Permission.WRITE), ('room-a', 'alice', authz.Permission.READ)})
+    app = FastAPI()
+    app.include_router(build_router(repository=repo, workbench_rooms={'room-a'}))
+    client = _test_client(app, repo, policy, threads)
+    install = MemoryInstallation()
+    install.sandbox_workdirs_path = tmp_path / 'files'
+    app.dependency_overrides[installation.depend_the_installation.dependency] = lambda: install
+    base = '/v1/rooms/room-a/threads/thread-a/workbench/files/'
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'saved'}).json() == {'saved': True}
+    assert client.post(base + 'read', json={'filename': 'notes.md'}).json() == {'text': 'saved'}
+    assert client.post(base + 'write', json={'filename': '../secret.md', 'text': 'bad'}).status_code == 422
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * 400001}).status_code == 413
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'x' * 65537}).status_code == 422
+    foreign = base.replace('thread-a', 'foreign')
+    assert client.post(foreign + 'read', json={'filename': 'notes.md'}).status_code == 404
+    policy.permissions = {('room-a', 'alice', authz.Permission.READ)}
+    assert client.post(base + 'read', json={'filename': 'notes.md'}).json() == {'text': 'saved'}
+    assert client.post(base + 'write', json={'filename': 'notes.md', 'text': 'bad'}).status_code == 403
+    def anonymous_claims():
+        return {}
+
+    app.dependency_overrides[views.depend_the_user_claims.dependency] = anonymous_claims
+    assert client.post(base + 'read', json={'filename': 'notes.md'}).status_code == 401

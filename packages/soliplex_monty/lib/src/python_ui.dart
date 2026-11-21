@@ -89,9 +89,16 @@ class StagedSurface {
 /// Constructors return opaque string handles that name an entry in this
 /// arena. Handles from another execution fail validation.
 class PythonUiArena {
-  PythonUiArena({bool workbenchEnabled = false})
-    : workbench = PythonWorkbench(enabled: workbenchEnabled),
-      _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36);
+  PythonUiArena({
+    bool workbenchEnabled = false,
+    Future<String> Function(String filename)? readFile,
+    Future<void> Function(String filename, String text)? writeFile,
+  }) : workbench = PythonWorkbench(
+         enabled: workbenchEnabled,
+         readFile: readFile,
+         writeFile: writeFile,
+       ),
+       _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36);
 
   final PythonWorkbench workbench;
   final String _nonce;

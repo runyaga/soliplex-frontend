@@ -1209,5 +1209,221 @@
         "window": "Type check example"
       }
     ]
+  },
+  {
+    "id": "team_survey_live_results",
+    "prompt": "Build Team survey: Name and single choice Color (Red, Green, Blue), saving CSV. Add a Survey results Python app that reads team-survey.csv, charts color counts and has Refresh. I will press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Survey results",
+        "awaitTurn": true
+      },
+      {
+        "kind": "fill",
+        "name": "Name",
+        "value": "Casey",
+        "region": "left"
+      },
+      {
+        "kind": "choose",
+        "role": "radio",
+        "name": "Blue",
+        "region": "left"
+      },
+      {
+        "role": "button",
+        "name": "Submit",
+        "region": "left",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Refresh",
+        "window": "Survey results app",
+        "assertions": [
+          {
+            "kind": "role",
+            "role": "img",
+            "name": "Blue: 1",
+            "window": "Survey results app"
+          }
+        ]
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "team-survey.csv",
+        "includes": "Blue"
+      },
+      {
+        "kind": "role",
+        "role": "img",
+        "name": "Blue: 1",
+        "window": "Survey results app"
+      }
+    ]
+  },
+  {
+    "id": "notes_that_save",
+    "prompt": "Build a Notes Python app with a Notes text area and Save button. Save notes.md and load it on Run so reopening the thread keeps my notes. I will press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Notes",
+        "awaitTurn": true
+      },
+      {
+        "kind": "fill",
+        "name": "Notes",
+        "value": "Keep these notes",
+        "region": "canvas",
+        "window": "Notes app"
+      },
+      {
+        "role": "button",
+        "name": "Save",
+        "window": "Notes app"
+      },
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Notes",
+        "awaitTurn": true
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "notes.md",
+        "includes": "Keep these notes"
+      },
+      {
+        "kind": "role",
+        "role": "textbox",
+        "name": "Notes",
+        "window": "Notes app"
+      },
+      {
+        "kind": "reply",
+        "includes": "Keep these notes"
+      }
+    ],
+    "followup": [
+      "What text is currently in my Notes app? Quote my saved note."
+    ]
+  },
+  {
+    "id": "todo_current_state",
+    "prompt": "Build a Python To-do app with New task, Add, Done and Remove controls. Save items to todo.json, load on Run and share items as app data so I can ask what's left. I will press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "To-do",
+        "awaitTurn": true
+      },
+      {
+        "kind": "fill",
+        "name": "New task",
+        "value": "Buy tea",
+        "region": "canvas",
+        "window": "To-do app"
+      },
+      {
+        "role": "button",
+        "name": "Add",
+        "window": "To-do app"
+      },
+      {
+        "kind": "fill",
+        "name": "New task",
+        "value": "Call Sam",
+        "region": "canvas",
+        "window": "To-do app"
+      },
+      {
+        "role": "button",
+        "name": "Add",
+        "window": "To-do app"
+      },
+      {
+        "role": "button",
+        "name": "Done Buy tea",
+        "window": "To-do app"
+      },
+      {
+        "kind": "fill",
+        "name": "New task",
+        "value": "Discard me",
+        "region": "canvas",
+        "window": "To-do app"
+      },
+      {
+        "role": "button",
+        "name": "Add",
+        "window": "To-do app"
+      },
+      {
+        "role": "button",
+        "name": "Remove Discard me",
+        "window": "To-do app"
+      }
+    ],
+    "followup": [
+      "What's left in my To-do app? Answer with only the unfinished task names."
+    ],
+    "assertions": [
+      {
+        "kind": "reply",
+        "includes": "Call Sam",
+        "excludes": "Buy tea"
+      },
+      {
+        "kind": "file",
+        "filename": "todo.json",
+        "includes": "Call Sam"
+      }
+    ]
+  },
+  {
+    "id": "pipeline_saved_csv",
+    "prompt": "Build a Pipeline Python app with a Rows input and Generate button. Generate monthly totals, save sales.csv and chart it. Default 3 rows: Jan 10, Feb 20, Mar 30. I will press Run.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Pipeline",
+        "awaitTurn": true
+      },
+      {
+        "kind": "fill",
+        "name": "Rows",
+        "value": "3",
+        "region": "canvas",
+        "window": "Pipeline app"
+      },
+      {
+        "role": "button",
+        "name": "Generate",
+        "window": "Pipeline app"
+      }
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "sales.csv",
+        "includes": "Jan,10"
+      },
+      {
+        "kind": "role",
+        "role": "img",
+        "name": "Mar: 30",
+        "window": "Pipeline app"
+      }
+    ]
   }
 ]

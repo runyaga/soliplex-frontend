@@ -17,6 +17,8 @@ import 'package:soliplex_client/soliplex_client.dart'
         CancelToken,
         FeedbackType,
         GenUiMessage,
+        HttpTransport,
+        UrlBuilder,
         MalformedResponseException,
         PermissionDeniedException,
         RagDatabaseScope,
@@ -293,7 +295,35 @@ class _RoomScreenState extends State<RoomScreen> {
               stateOverlay: _buildStateOverlay(),
             );
           },
+        )
+          ..readProgramFile = (filename) async {
+            final result = await _programFile(threadId, 'read', filename);
+            return result['text'] as String;
+          }
+          ..writeProgramFile = (filename, text) async {
+            await _programFile(threadId, 'write', filename, text);
+          },
+      );
+
+  Future<Map<String, dynamic>> _programFile(
+          String threadId, String operation, String filename, [String? text]) =>
+      HttpTransport(client: widget.serverEntry.httpClient)
+          .request<Map<String, dynamic>>(
+        'POST',
+        UrlBuilder(
+                '${widget.serverEntry.serverUrl.toString().replaceAll(RegExp(r'/$'), '')}/api/v1')
+            .build(
+          pathSegments: [
+            'rooms',
+            widget.roomId,
+            'threads',
+            threadId,
+            'workbench',
+            'files',
+            operation
+          ],
         ),
+        body: {'filename': filename, if (text != null) 'text': text},
       );
 
   Widget _buildWorkbenchHost({
@@ -1053,7 +1083,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Map<String, dynamic>? _buildStateOverlay() {
     final scope = _databaseScope;
-    return buildRagStateOverlay(
+    final rag = buildRagStateOverlay(
       filterEnabled: _filterEnabled,
       selectedDocuments: _selectedDocuments,
       scope: scope,
@@ -1062,6 +1092,10 @@ class _RoomScreenState extends State<RoomScreen> {
       // `sources` in its cached state until a send overwrites it.
       clearsNarrowedSources: _storedDatabases.isNotEmpty,
     );
+    final thread = _state.activeThreadView?.threadId;
+    final apps = _workbenchSurfaceStores[thread]?.programSnapshot?.call();
+    if (apps == null || apps.isEmpty) return rag;
+    return {...?rag, 'workbenchApps': apps};
   }
 
   @override

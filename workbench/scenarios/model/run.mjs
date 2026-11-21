@@ -1,3 +1,4 @@
+import { assertSavedFile } from '../lib/files.mjs';
 import { readFile } from 'node:fs/promises';
 import { watchWalkthrough } from '../lib/walkthrough.mjs';
 import { assertCanvas, freshThread, performActions, screenshot, sendPrompt, timelineTools, visibleErrors } from '../lib/browser.mjs';
@@ -16,6 +17,14 @@ export async function checkModels({ page, base, alias, cases, directory, credent
     for (const item of cases) {
       const result = { id: item.id, model: model.name, assertions: [], runErrors: [], toolCalls: [], timelineTools: [], turns: [] };
       let latestTurn;
+      let authorization;
+      const observeAuth = request => {
+        const url = new URL(request.url());
+        if (url.origin === new URL(base).origin && url.pathname.includes(`/rooms/${model.room}/`)) {
+          authorization = request.headers().authorization || authorization;
+        }
+      };
+      page.on('request', observeAuth);
       const remember = (turn, stage) => {
         latestTurn = turn;
         result.threadId = turn.threadId;
@@ -54,13 +63,18 @@ export async function checkModels({ page, base, alias, cases, directory, credent
         result.error = error.message;
       }
       try {
-        const canvas = item.assertions.filter(a => !['reply', 'submission', 'csv'].includes(a.kind));
+        const canvas = item.assertions.filter(a => !['reply', 'submission', 'csv', 'file'].includes(a.kind));
+        for (const assertion of item.assertions.filter(a => a.kind === 'file')) {
+          result.assertions.push(await assertSavedFile(page, base, model.room, result.threadId, assertion, authorization));
+        }
         result.assertions.push(...await assertCanvas(page, canvas, result.error ? 0 : 12000));
         result.assertions.push(...item.assertions.filter(a => ['reply', 'submission', 'csv'].includes(a.kind)).map(a => assertTurn(a, latestTurn)));
       } catch {
         result.assertions.push(...failedAssertions(item.assertions, 'Canvas could not be inspected'));
         result.error ||= 'Canvas inspection failed';
       }
+      page.off('request', observeAuth);
+      authorization = undefined;
       result.timelineTools = await timelineTools(page, result.toolCalls).catch(() => []);
       result.runErrors.push(...await visibleErrors(page).catch(() => []));
       try {

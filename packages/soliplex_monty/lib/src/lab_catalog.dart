@@ -662,7 +662,13 @@ class _PythonReplViewState extends State<PythonReplView> {
       final runtime = await _runtime(code);
       if (runtime == null || _disposed) return;
       if (_runMode && !await _freshSession(runtime, code)) return;
-      _arena = PythonUiArena(workbenchEnabled: widget.onWorkbench != null);
+      if (!mounted) return;
+      final threadApps = ProgramAppScope.maybeOf(context);
+      _arena = PythonUiArena(
+        workbenchEnabled: widget.onWorkbench != null,
+        readFile: threadApps?.readFile,
+        writeFile: threadApps?.writeFile,
+      );
       var (output, ok) = await _execute(
         runtime,
         code,
@@ -755,7 +761,10 @@ class _PythonReplViewState extends State<PythonReplView> {
     final old = _ui;
     final view = _appView;
     final program = widget.surfaceId;
-    if (view != null && program != null) _apps?.remove(program, view);
+    if (view != null && program != null) {
+      _apps?.remove(program, view);
+      _apps?.unbindState(program);
+    }
     _appView = null;
     if (old != null) {
       setState(() => _ui = null);
@@ -905,7 +914,12 @@ class _PythonReplViewState extends State<PythonReplView> {
       final surface = next.model.allSurfaces.first;
       final view = A2uiSurface(key: ObjectKey(surface), surface: surface);
       _appView = view;
-      apps.publish(program, view);
+      apps
+        ..publish(program, view)
+        ..bindState(
+          program,
+          () => _ui?.model.allSurfaces.firstOrNull?.dataModel.get('/') ?? {},
+        );
     }
     if (old != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
@@ -923,7 +937,13 @@ class _PythonReplViewState extends State<PythonReplView> {
     final label = 'handle_event(${_quote('$name')}, ...)';
     setState(() => _running = true);
     try {
-      _arena = PythonUiArena(workbenchEnabled: widget.onWorkbench != null);
+      if (!mounted) return;
+      final threadApps = ProgramAppScope.maybeOf(context);
+      _arena = PythonUiArena(
+        workbenchEnabled: widget.onWorkbench != null,
+        readFile: threadApps?.readFile,
+        writeFile: threadApps?.writeFile,
+      );
       final data = _ui?.model.allSurfaces.firstOrNull?.dataModel.get('/');
       var (output, ok) = await _execute(
         runtime,
@@ -1110,7 +1130,10 @@ class _PythonReplViewState extends State<PythonReplView> {
     }
     final view = _appView;
     final program = widget.surfaceId;
-    if (view != null && program != null) _apps?.remove(program, view);
+    if (view != null && program != null) {
+      _apps?.remove(program, view);
+      _apps?.unbindState(program);
+    }
     _ui?.dispose();
     _editor.dispose();
     _scroll.dispose();
