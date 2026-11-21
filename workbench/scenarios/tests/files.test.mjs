@@ -43,3 +43,16 @@ test('every new suggestion has a real Run, edits and a saved file or model answe
   assert.ok(todo.actions.some(action => action.name === 'Done Buy tea'));
   assert.ok(todo.actions.some(action => action.name === 'Remove Discard me'));
 });
+
+test('survey and pipeline selectors match the rendered catalog', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const cases = JSON.parse(await readFile(new URL('../model/prompts.yaml', import.meta.url), 'utf8'));
+  const survey = cases.find(item => item.id === 'team_survey_live_results');
+  assert.equal(survey.actions.find(a => a.kind === 'fill').name, 'Name *');
+  const healing = cases.find(item => item.id === 'two_stage_healing_pipeline');
+  const repairedRun = healing.actions.find(a => a.kind === 'run_program');
+  assert.equal(repairedRun.expectRepair, 2);
+  assert.ok(repairedRun.assertions.some(a => a.kind === 'text' && a.name === 'Clean monthly sales'));
+  const pipeline = cases.find(item => item.id === 'pipeline_saved_csv');
+  assert.ok(pipeline.assertions.some(a => a.kind === 'text' && a.name === 'Monthly sales'));
+});

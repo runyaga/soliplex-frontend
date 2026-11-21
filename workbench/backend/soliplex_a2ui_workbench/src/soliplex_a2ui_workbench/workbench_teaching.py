@@ -120,22 +120,22 @@ The user's placements win. run_python_server is declared but disabled and
 returns not_enabled. Client tools only publish source; the user presses Run.
 
 Static text, tables and forms go through open_panel / place_form / show_chart.
+Exact suggestion mapping:
+{chr(10).join(f'{text} -> open_demo("{name}")' for text, name in DEMO_SUGGESTIONS.items())}
+After open_demo, reply with only its confirmation field, one sentence.
+Never echo repair guidance or source comments in that confirmation.
 For "Start the walkthrough." call start_walkthrough(); do nothing else.
 For "Open the syntax error example." call open_demo("syntax_error").
 For "Open the NameError example." call open_demo("name_error").
 For "Open the type check example." call open_demo("type_check").
 For the hot-patch demo call open_demo("hot_patch"). Tell the user to enable AI Fix,
-press Run, click Normal traffic and Burst, then Export report. Preserve STATE,
-samples and pending when repairing. Fix only the failing division line.
-The repaired module retries the pending export in the retained session.
+press Run, click Normal traffic and Burst, then Export report.
 For the anomaly reproducer demo call open_demo("reproducer"). Run, click C,
 Spawn reproducer, then press Run in Anomaly reproducer. Its assertion verifies the breach:
 compare its peak of 240 ms with the parent selection and target of 100 ms.
 For the self-healing pipeline demo call open_demo("healing_pipeline"). Type check
-is already on; ask the user to enable AI Fix and press Run once. Fix only the
-reported line each round: first the annotated return expression, then the CSV
-numeric conversion. Keep the assertions, dropped count, chart and clean.csv write.
-For Team survey with live results, call place_form with title="Team survey",
+is already on; ask the user to enable AI Fix and press Run once.
+For "Collect team survey responses and chart the results.", first call place_form with title="Team survey",
 parent_id="r_left", fields=[{{"name":"name","label":"Name","kind":"text","required":true}},
 {{"name":"color","label":"Color","kind":"choice","options":["Red","Green","Blue"],"required":true}}],
 then call open_demo("survey_results"). The user submits responses, presses Run,
@@ -145,10 +145,9 @@ For the saved To-do demo call open_demo("todo"). Run, add tasks, mark Done,
 then answer what's left from current_program_apps, respecting each done flag.
 For the sales pipeline demo call open_demo("sales_pipeline"). Run, set Rows,
 Generate; monthly totals are written to sales.csv and charted.
-Keep these curated sources unchanged. Reply with a short confirmation:
-"The example is open. Enable AI Fix, then press Run to try the repair."
+Keep these curated sources unchanged. Reply with only the tool confirmation.
 Type check is already on for the type check example; its checker error can be repaired with AI Fix.
-For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and reply: press Run, then click the buttons.
+For "Open the Monty GUI demo." call open_demo("monty_gui"); keep its curated source unchanged and use the tool confirmation.
 Use run_python_client only for content that computes or reacts to clicks.
 Example: "show Hello in a second window" -> create_container(kind="window"),
 then open_panel(text="Hello") inside it; "compute a sum" -> run_python_client.
@@ -300,22 +299,24 @@ through the signatures above and publish it with run_python_client.
 
 WELCOME_MESSAGE = (
     "Click an example or describe what to put on the workbench. "
-    "Programs run only when you press Run."
+    "Programs run only when you press Run. "
+    "Try repairs that keep live data, anomaly reproduction, a two-stage healing pipeline, "
+    "survey results, saved notes and tasks, or a sales CSV generator."
 )
 
-# One click sends each suggestion as the user's message. Each is self-contained
-# and matches a reproducible harness flow.
-ROOM_SUGGESTIONS = (
-    "Start the walkthrough.",
-    "Open the hot-patch demo. I will enable AI Fix, press Run, build traffic and Export report; repair the crashing button without losing samples, then I will ask whether we breached the target.",
-    "Open the anomaly reproducer demo. I will press Run, click an outlier bar and Spawn reproducer, then Run the child script and ask you to compare it with the app.",
-    "Open the self-healing pipeline demo. With Type check and AI Fix on, I will press Run once to watch two repairs end in a chart and clean.csv, then ask how many rows were dropped.",
-    "Open Team survey with live results. Place the survey and curated results app; I will submit responses, press Run, Refresh and click a colour bar to see its respondents.",
-    "Open Notes that save. I will press Run, edit notes, see unsaved status and Save to notes.md, then Run again to reload them.",
-    "Open the saved To-do demo. I will press Run, Add tasks and mark one Done, then ask what's left; save items in todo.json and share app state.",
-    "Open the sales pipeline demo. I will press Run, choose Rows and Generate to save sales.csv and chart monthly totals.",
-    "Open the Monty GUI demo. I will press Run, change stock, record samples and click bars to restore stock; Open log window shows recent events.",
-    "Open the syntax error example. I will enable AI Fix and press Run to watch a syntax repair produce a route distance.",
-    "Open the NameError example. I will enable AI Fix and press Run to watch a misspelled name repaired and the ticket total computed.",
-    "Open the type check example. Type check is on; I will enable AI Fix and press Run to repair the type error and compute stock after delivery.",
-)
+# Exact user message to curated program mapping; source never comes from prose.
+DEMO_SUGGESTIONS = {
+    "Hot-patch a crashing button without losing data.": "hot_patch",
+    "Reproduce an anomaly in a runnable script.": "reproducer",
+    "Watch a pipeline heal through two repairs.": "healing_pipeline",
+    "Collect team survey responses and chart the results.": "survey_results",
+    "Write notes and save them for later.": "notes",
+    "Track tasks in a saved to-do list.": "todo",
+    "Generate monthly sales and save a CSV.": "sales_pipeline",
+    "Explore a Python app with buttons and charts.": "monty_gui",
+    "Fix a syntax error with AI.": "syntax_error",
+    "Fix a misspelled Python name with AI.": "name_error",
+    "Fix a Python type error with AI.": "type_check",
+}
+
+ROOM_SUGGESTIONS = ("Start the walkthrough.", *DEMO_SUGGESTIONS)

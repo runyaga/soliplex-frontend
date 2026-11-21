@@ -64,7 +64,7 @@
       },
       {
         "kind": "role",
-        "name": "Name * (max 4000 characters)",
+        "name": "Name *",
         "role": "textbox",
         "region": "left"
       },
@@ -81,7 +81,7 @@
     "assertions": [
       {
         "kind": "source",
-        "name": "Name * (max 4000 characters)",
+        "name": "Name *",
         "includes": "Sample visitor",
         "region": "left"
       },

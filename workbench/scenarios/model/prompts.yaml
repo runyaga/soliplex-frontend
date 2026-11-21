@@ -13,7 +13,7 @@
   },
   {
     "id": "hot_patch_retains_samples",
-    "prompt": "Open the hot-patch demo. I will enable AI Fix, press Run, build traffic and Export report; repair the crashing button without losing samples, then I will ask whether we breached the target.",
+    "prompt": "Hot-patch a crashing button without losing data.",
     "actions": [
       {
         "kind": "check",
@@ -89,7 +89,7 @@
   },
   {
     "id": "anomaly_spawns_reproducer",
-    "prompt": "Open the anomaly reproducer demo. I will press Run, click an outlier bar and Spawn reproducer, then Run the child script and ask you to compare it with the app.",
+    "prompt": "Reproduce an anomaly in a runnable script.",
     "actions": [
       {
         "role": "button",
@@ -163,7 +163,7 @@
   },
   {
     "id": "two_stage_healing_pipeline",
-    "prompt": "Open the self-healing pipeline demo. With Type check and AI Fix on, I will press Run once to watch two repairs end in a chart and clean.csv, then ask how many rows were dropped.",
+    "prompt": "Watch a pipeline heal through two repairs.",
     "actions": [
       {
         "kind": "check",
@@ -193,8 +193,7 @@
             "window": "Self-healing pipeline app"
           },
           {
-            "kind": "role",
-            "role": "img",
+            "kind": "text",
             "name": "Clean monthly sales",
             "window": "Self-healing pipeline app"
           }
@@ -1033,7 +1032,7 @@
         "window": "Monty GUI demo"
       }
     ],
-    "prompt": "Open the Monty GUI demo. I will press Run, change stock, record samples and click bars to restore stock; Open log window shows recent events."
+    "prompt": "Explore a Python app with buttons and charts."
   },
   {
     "id": "ai_fix_off",
@@ -1122,7 +1121,7 @@
   },
   {
     "id": "syntax_error_ai_fix",
-    "prompt": "Open the syntax error example. I will enable AI Fix and press Run to watch a syntax repair produce a route distance.",
+    "prompt": "Fix a syntax error with AI.",
     "actions": [
       {
         "kind": "check",
@@ -1170,7 +1169,7 @@
   },
   {
     "id": "name_error_ai_fix",
-    "prompt": "Open the NameError example. I will enable AI Fix and press Run to watch a misspelled name repaired and the ticket total computed.",
+    "prompt": "Fix a misspelled Python name with AI.",
     "actions": [
       {
         "kind": "check",
@@ -1232,7 +1231,7 @@
   },
   {
     "id": "type_check_ai_fix",
-    "prompt": "Open the type check example. Type check is on; I will enable AI Fix and press Run to repair the type error and compute stock after delivery.",
+    "prompt": "Fix a Python type error with AI.",
     "actions": [
       {
         "kind": "check",
@@ -1319,7 +1318,7 @@
   },
   {
     "id": "team_survey_live_results",
-    "prompt": "Open Team survey with live results. Place the survey and curated results app; I will submit responses, press Run, Refresh and click a colour bar to see its respondents.",
+    "prompt": "Collect team survey responses and chart the results.",
     "actions": [
       {
         "role": "button",
@@ -1329,7 +1328,7 @@
       },
       {
         "kind": "fill",
-        "name": "Name * (max 4000 characters)",
+        "name": "Name *",
         "value": "Casey",
         "region": "left"
       },
@@ -1400,7 +1399,7 @@
   },
   {
     "id": "notes_that_save",
-    "prompt": "Open Notes that save. I will press Run, edit notes, see unsaved status and Save to notes.md, then Run again to reload them.",
+    "prompt": "Write notes and save them for later.",
     "actions": [
       {
         "role": "button",
@@ -1464,7 +1463,7 @@
   },
   {
     "id": "todo_current_state",
-    "prompt": "Open the saved To-do demo. I will press Run, Add tasks and mark one Done, then ask what's left; save items in todo.json and share app state.",
+    "prompt": "Track tasks in a saved to-do list.",
     "actions": [
       {
         "role": "button",
@@ -1537,7 +1536,7 @@
   },
   {
     "id": "pipeline_saved_csv",
-    "prompt": "Open the sales pipeline demo. I will press Run, choose Rows and Generate to save sales.csv and chart monthly totals.",
+    "prompt": "Generate monthly sales and save a CSV.",
     "actions": [
       {
         "role": "button",
@@ -1565,8 +1564,7 @@
         "includes": "Jan,10"
       },
       {
-        "kind": "role",
-        "role": "img",
+        "kind": "text",
         "name": "Monthly sales",
         "window": "Pipeline app"
       },

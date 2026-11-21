@@ -93,3 +93,9 @@ test('a slow failing checkpoint reports itself even when the next step arrives f
   );
   assert(fake.removed());
 });
+
+test('form checkpoints match the single title and current field semantics', () => {
+  assert.ok(checkpoints[5].assertions.some(a => a.kind === 'text' && a.name === 'Walkthrough Team survey'));
+  assert.ok(checkpoints[5].assertions.some(a => a.role === 'textbox' && a.name === 'Name *'));
+  assert.ok(checkpoints[6].assertions.some(a => a.kind === 'source' && a.name === 'Name *'));
+});

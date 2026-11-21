@@ -245,11 +245,23 @@ def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
     title, filename, type_check = demos[name]
     source = Path(__file__).with_name(filename).read_text()
     if not type_check:
-        return run_python_client(ctx, title, source, "r_canvas")
-    activity_id, surface_id = _record_ids()
-    record = python_record(activity_id, surface_id, title, source)
-    record["typeCheck"] = True
-    return _content_result(ctx, record, "r_canvas", title=title, program=True)
+        result = run_python_client(ctx, title, source, "r_canvas")
+    else:
+        activity_id, surface_id = _record_ids()
+        record = python_record(activity_id, surface_id, title, source)
+        record["typeCheck"] = True
+        result = _content_result(ctx, record, "r_canvas", title=title, program=True)
+    confirmation = (
+        f"{title} is open; enable AI Fix, then press Run."
+        if name
+        in {"hot_patch", "healing_pipeline", "syntax_error", "name_error", "type_check"}
+        else f"{title} is open; press Run to begin."
+    )
+    return {
+        **result,
+        "confirmation": confirmation,
+        "instruction": "Reply with only confirmation, one sentence.",
+    }
 
 
 def get_workbench(ctx: WorkbenchToolContext, **_injected: object) -> dict[str, object]:
