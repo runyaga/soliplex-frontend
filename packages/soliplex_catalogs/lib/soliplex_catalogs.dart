@@ -9,3 +9,6 @@ export 'src/static_chart.dart'
     show chartGraphicsCatalog, chartGraphicsCatalogId, validateStaticChartSpec;
 export 'src/surface_catalog.dart'
     show chatGraphicsCatalog, chatGraphicsCatalogId;
+
+export 'src/host_function_schemas.dart';
+export 'src/host_signatures.dart';
