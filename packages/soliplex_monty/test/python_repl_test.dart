@@ -79,6 +79,8 @@ void main() {
     expect(limits.maxSourceChars, 2000000);
     expect(limits.maxOutputChars, 20000);
     expect(limits.maxSuspensions, 1000000);
+    expect(limits.maxUiNodes, 20000);
+    expect(limits.warnUiNodes, 15000);
   });
 
   late MontyStarter starter;
@@ -293,6 +295,149 @@ void main() {
     },
     skip: skipWithoutMonty != false,
   );
+
+  testWidgets('Run rejects the exponentially shared Python program', (
+    tester,
+  ) async {
+    create();
+    await mount(tester);
+    await typeSource(tester, '''
+import ui
+node = ui.Text("leaf")
+for _ in range(15):
+    node = ui.Column([node, node])
+ui.show(node)
+''');
+    await tapRun(tester);
+    await waitFor(tester, () => idle(tester) && model('/repl/result') != null);
+    final result = model('/repl/result')! as Map;
+    expect(result['ok'], false);
+    expect(result['output'], contains('Surface renders 65535 components'));
+    await unmount(tester);
+  }, skip: skipWithoutMonty != false);
+
+  testWidgets(
+    'Run reports a rendered-node warning once and clears it next run',
+    (tester) async {
+      create(limits: const ReplLimits(maxUiNodes: 4, warnUiNodes: 2));
+      await mount(tester);
+      await typeSource(tester, '''
+import ui
+root = ui.Column([ui.Text("one"), ui.Text("two")])
+ui.show(root)
+ui.show(root)
+''');
+      await tapRun(tester);
+      await waitFor(
+        tester,
+        () => idle(tester) && model('/repl/result') != null,
+      );
+      final result = model('/repl/result')! as Map;
+      const warning =
+          'Surface renders 3 components (warning at 2). '
+          'Page or filter long lists.';
+      expect(result['ok'], true);
+      expect(
+        RegExp(RegExp.escape(warning)).allMatches(result['output']! as String),
+        hasLength(1),
+      );
+      expect(find.textContaining(warning), findsOneWidget);
+
+      await typeSource(tester, 'ui.show(ui.Text("small"))');
+      await tapRun(tester);
+      await waitFor(
+        tester,
+        () => idle(tester) && model('/repl/result/run') == 2,
+      );
+      expect(
+        (model('/repl/result')! as Map)['output'],
+        isNot(contains(warning)),
+      );
+      await unmount(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets('Run honors a custom rendered-node maximum', (tester) async {
+    create(limits: const ReplLimits(maxUiNodes: 2, warnUiNodes: null));
+    await mount(tester);
+    await typeSource(tester, '''
+import ui
+ui.show(ui.Column([ui.Text("one"), ui.Text("two")]))
+''');
+    await tapRun(tester);
+    await waitFor(tester, () => idle(tester) && model('/repl/result') != null);
+    final result = model('/repl/result')! as Map;
+    expect(result['ok'], false);
+    expect(result['output'], contains('exceeding the limit of 2'));
+    await unmount(tester);
+  }, skip: skipWithoutMonty != false);
+
+  testWidgets(
+    'event redraw reports a warning once with the configured limits',
+    (tester) async {
+      create(limits: const ReplLimits(maxUiNodes: 4, warnUiNodes: 3));
+      await mount(tester);
+      await typeSource(tester, '''
+import ui
+def draw(extra):
+    children = [ui.Button(ui.Text("Redraw"), action=ui.Event("redraw"))]
+    if extra:
+        children.append(ui.Text("added"))
+    root = ui.Column(children)
+    ui.show(root)
+    ui.show(root)
+def handle_event(name, context):
+    draw(True)
+draw(False)
+''');
+      await tapRun(tester);
+      await waitFor(
+        tester,
+        () => idle(tester) && model('/repl/result') != null,
+      );
+      expect(
+        (model('/repl/result')! as Map)['ok'],
+        true,
+        reason: '${model('/repl/result')}',
+      );
+      expect(
+        (model('/repl/result')! as Map)['output'],
+        isNot(contains('warning at')),
+      );
+      await tester.runAsync(() => tester.tap(find.text('Redraw')));
+      const warning =
+          'Surface renders 4 components (warning at 3). '
+          'Page or filter long lists.';
+      await waitFor(
+        tester,
+        () =>
+            idle(tester) && find.textContaining(warning).evaluate().isNotEmpty,
+      );
+      expect(find.text(warning), findsOneWidget);
+      await unmount(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
+  testWidgets('Run honors null UI limits without a construction backstop', (
+    tester,
+  ) async {
+    create(limits: const ReplLimits(maxUiNodes: null, warnUiNodes: null));
+    await mount(tester);
+    await typeSource(tester, '''
+import ui
+for i in range(11):
+    ui.Text(str(i))
+ui.show(ui.Text("shown"))
+''');
+    await tapRun(tester);
+    await waitFor(tester, () => idle(tester) && model('/repl/result') != null);
+    final result = model('/repl/result')! as Map;
+    expect(result['ok'], true);
+    expect(result['output'], isNot(contains('warning at')));
+    await unmount(tester);
+  }, skip: skipWithoutMonty != false);
 
   testWidgets('an example loads into the editor without running', (
     tester,

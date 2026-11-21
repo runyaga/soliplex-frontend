@@ -13,6 +13,8 @@ Future<String?> checkProgramTypes(
   String source,
   ResourceLimits limits, {
   String? workerLocation,
+  int? maxUiNodes = PythonUiArena.defaultMaxNodes,
+  int? warnUiNodes = PythonUiArena.defaultWarnNodes,
 }) =>
     Monty.withPool<String?>(
       (pool) => pool.withSession(
@@ -51,7 +53,7 @@ EVENT: dict[str, Any]
 def soliplex_check_ready() -> None: ...
 def handle_event(name: str, context: dict[str, Any]) -> None: ...
 ''',
-        externalModules: _modules(),
+        externalModules: _modules(maxUiNodes, warnUiNodes),
       ),
       maxProcesses: 1,
       checkoutTimeout: const Duration(seconds: 30),
@@ -63,8 +65,12 @@ def handle_event(name: str, context: dict[str, Any]) -> None: ...
       ),
     );
 
-Map<String, Object?> _modules() {
-  final arena = PythonUiArena(workbenchEnabled: true);
+Map<String, Object?> _modules(int? maxUiNodes, int? warnUiNodes) {
+  final arena = PythonUiArena(
+    maxNodes: maxUiNodes,
+    warnNodes: warnUiNodes,
+    workbenchEnabled: true,
+  );
   final ui = PythonUiArena.moduleFor(() => arena);
   return {'ui': ui, 'chart': chartModule()};
 }

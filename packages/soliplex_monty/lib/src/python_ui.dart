@@ -9,16 +9,29 @@ import 'package:soliplex_monty/src/ui_chart.dart';
 
 export 'bindings/positional_signatures.dart' show basicSignatures;
 
-/// Bounds on what one execution may stage.
-const _maxNodes = 20000;
+/// Caps rendered counts without relying on dart2js bit-shift widths.
+const int _maxRenderedCount = 1000000000;
+const _constructionBackstopFactor = 10;
 const _maxPathLength = 200;
+
+int _saturate(int value) => min(value, _maxRenderedCount);
+
+void _validateLimit(int? value, String name) {
+  if (value != null && (value < 1 || value >= _maxRenderedCount)) {
+    throw ArgumentError.value(value, name, 'Must be null or 1..999999999.');
+  }
+}
 
 /// A surface staged by `ui.show`, published only after the run succeeds.
 class StagedSurface {
-  const StagedSurface(this.components, this.dataModel);
+  StagedSurface(this.components, this.dataModel, {int? rendered})
+    : rendered = rendered ?? components.length;
 
   final List<Map<String, Object?>> components;
   final Object? dataModel;
+
+  /// Rendered component occurrences, counting shared subtrees per reference.
+  final int rendered;
 
   /// Wire messages for surface [surfaceId] in the basic catalog.
   List<Map<String, Object?>> messages(String surfaceId) => [
@@ -53,6 +66,8 @@ class StagedSurface {
 /// arena. Handles from another execution fail validation.
 class PythonUiArena {
   PythonUiArena({
+    this.maxNodes = defaultMaxNodes,
+    this.warnNodes = defaultWarnNodes,
     bool workbenchEnabled = false,
     Future<String> Function(String filename)? readFile,
     Future<void> Function(String filename, String text)? writeFile,
@@ -61,7 +76,19 @@ class PythonUiArena {
          readFile: readFile,
          writeFile: writeFile,
        ),
-       _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36);
+       _nonce = Random.secure().nextInt(0x7fffffff).toRadixString(36) {
+    _validateLimit(maxNodes, 'maxNodes');
+    _validateLimit(warnNodes, 'warnNodes');
+  }
+
+  static const int defaultMaxNodes = 20000;
+  static const int defaultWarnNodes = 15000;
+
+  /// Maximum rendered components per surface; null disables the limit.
+  final int? maxNodes;
+
+  /// Rendered count above which a show records a warning; null disables it.
+  final int? warnNodes;
 
   final PythonWorkbench workbench;
   final String _nonce;
@@ -69,6 +96,9 @@ class PythonUiArena {
   final Map<String, Object?> _values = {};
   final Set<String> _ids = {};
   StagedSurface? staged;
+  final List<String> _warnings = [];
+
+  List<String> get warnings => List.unmodifiable(_warnings);
 
   String _token(String kind) =>
       '<ui:$kind:$_nonce:${_nodes.length + _values.length}>';
@@ -182,7 +212,24 @@ class PythonUiArena {
             'show() data must be a dict.',
           );
         }
-        arena.staged = arena._stage(root! as String, data);
+        final staged = arena._stage(root! as String, data);
+        final count = staged.rendered;
+        final limit = arena.maxNodes;
+        if (limit != null && count > limit) {
+          throw ExternalException(
+            'ValueError',
+            'Surface renders $count components, exceeding the limit of '
+                '$limit. Show fewer rows (page or filter the data).',
+          );
+        }
+        final warning = arena.warnNodes;
+        if (warning != null && count > warning) {
+          arena._warnings.add(
+            'Surface renders $count components (warning at $warning). '
+            'Page or filter long lists.',
+          );
+        }
+        arena.staged = staged;
         return const MontyNone();
       }),
     }),
@@ -208,10 +255,13 @@ class PythonUiArena {
     List<MontyValue> positional,
     Map<String, MontyValue> keywords,
   ) {
-    if (_nodes.length >= _maxNodes) {
-      throw const ExternalException(
+    final limit = maxNodes;
+    final backstop = limit == null ? null : limit * _constructionBackstopFactor;
+    if (backstop != null && _nodes.length >= backstop) {
+      throw ExternalException(
         'ValueError',
-        'Too many components in one run.',
+        'Construction stopped at $backstop components '
+            '(ten times the node limit of $limit).',
       );
     }
     if (positional.length > params.length) {
@@ -273,6 +323,14 @@ class PythonUiArena {
   StagedSurface _stage(String rootToken, Object? data) {
     final components = <Map<String, Object?>>[];
     final visited = <String>{};
+    // Memoize finished subtrees, adding their size for every child reference.
+    // The open stack accumulates only counts, never the expanded render tree.
+    final sizes = <String, int>{};
+    final open = <int>[];
+    void addRendered(int size) {
+      if (open.isNotEmpty) open.last = _saturate(open.last + size);
+    }
+
     String visit(String token) {
       final node = _nodes[token];
       if (node == null) {
@@ -282,7 +340,10 @@ class PythonUiArena {
         );
       }
       final id = node['id']! as String;
-      if (!visited.add(token)) return id;
+      if (!visited.add(token)) {
+        addRendered(sizes[token]!);
+        return id;
+      }
       final props = node['props']! as Map<String, Object?>;
       final lowered = <String, Object?>{
         'id': components.isEmpty ? 'root' : id,
@@ -290,6 +351,7 @@ class PythonUiArena {
       };
       final index = components.length;
       components.add(lowered);
+      open.add(0);
       for (final MapEntry(:key, :value) in props.entries) {
         lowered[key] = _lower(key, value, visit, node['component']! as String);
       }
@@ -301,6 +363,9 @@ class PythonUiArena {
           throw ExternalException('ValueError', error.message);
         }
       }
+      final size = _saturate(1 + open.removeLast());
+      sizes[token] = size;
+      addRendered(size);
       components[index] = lowered;
       return lowered['id']! as String;
     }
@@ -325,7 +390,11 @@ class PythonUiArena {
         _wireChart(component);
       }
     }
-    return StagedSurface(components, data == null ? null : _lowerData(data));
+    return StagedSurface(
+      components,
+      data == null ? null : _lowerData(data),
+      rendered: sizes[rootToken],
+    );
   }
 
   /// Binds the chart's selection to `/_ui/<id>/label` and adds that label

@@ -43,9 +43,17 @@ class ReplLimits {
     this.maxRetries = 5,
     this.maxErrorChars = 2000,
     this.maxSuspensions = 1000000,
+    this.maxUiNodes = PythonUiArena.defaultMaxNodes,
+    this.warnUiNodes = PythonUiArena.defaultWarnNodes,
   });
 
   final int maxMemory;
+
+  /// Maximum rendered components per surface; null disables the limit.
+  final int? maxUiNodes;
+
+  /// Rendered count above which a run reports a warning; null disables it.
+  final int? warnUiNodes;
 
   /// Host calls a session may make over its lifetime. An app window keeps one
   /// session across every event and each redraw makes many ui calls, so the
@@ -421,7 +429,10 @@ class _PythonReplViewState extends State<PythonReplView> {
   bool _running = false;
   bool _disposed = false;
   int _runs = 0;
-  PythonUiArena _arena = PythonUiArena();
+  late PythonUiArena _arena = PythonUiArena(
+    maxNodes: widget.limits.maxUiNodes,
+    warnNodes: widget.limits.warnUiNodes,
+  );
   MessageProcessor<ComponentImplementation>? _ui;
   bool _loading = false;
   bool _historyOpen = false;
@@ -673,6 +684,8 @@ class _PythonReplViewState extends State<PythonReplView> {
       if (!mounted) return;
       final threadApps = ProgramAppScope.maybeOf(context);
       _arena = PythonUiArena(
+        maxNodes: widget.limits.maxUiNodes,
+        warnNodes: widget.limits.warnUiNodes,
         workbenchEnabled: widget.onWorkbench != null,
         readFile: threadApps?.readFile,
         writeFile: threadApps?.writeFile,
@@ -705,6 +718,9 @@ class _PythonReplViewState extends State<PythonReplView> {
           output = _join(output, 'Surface rejected: $rejected');
           ok = false;
         }
+      }
+      for (final warning in _arena.warnings.toSet()) {
+        output = _join(output, warning);
       }
       _record(code, output, ok: ok);
       _runs++;
@@ -903,6 +919,7 @@ class _PythonReplViewState extends State<PythonReplView> {
         StagedSurface(
           staged.components,
           staged.dataModel ?? fallbackData,
+          rendered: staged.rendered,
         ).messages('python'),
       );
     } on Object catch (error) {
@@ -951,6 +968,8 @@ class _PythonReplViewState extends State<PythonReplView> {
       if (!mounted) return;
       final threadApps = ProgramAppScope.maybeOf(context);
       _arena = PythonUiArena(
+        maxNodes: widget.limits.maxUiNodes,
+        warnNodes: widget.limits.warnUiNodes,
         workbenchEnabled: widget.onWorkbench != null,
         readFile: threadApps?.readFile,
         writeFile: threadApps?.writeFile,
@@ -1018,6 +1037,9 @@ class _PythonReplViewState extends State<PythonReplView> {
       // Redraws update the existing view; only Run opens/reopens its window.
       if (ok && _arena.workbench.actions.isNotEmpty) await _publishWorkbench();
       if (_disposed) return;
+      for (final warning in _arena.warnings.toSet()) {
+        output = _join(output, warning);
+      }
       _record(label, output, ok: ok, header: 'Click: $name');
       if (!ok) _afterRun(_editor.text, output, ok: false);
     } finally {
@@ -1076,10 +1098,15 @@ class _PythonReplViewState extends State<PythonReplView> {
     try {
       if (_typeCheck && preflight) {
         final clock = Stopwatch()..start();
-        final error = await widget.checkTypes(
-          checkSource ?? code,
-          _resourceLimits,
-        );
+        final source = checkSource ?? code;
+        final error = await (widget.checkTypes == checkProgramTypes
+            ? checkProgramTypes(
+                source,
+                _resourceLimits,
+                maxUiNodes: limits.maxUiNodes,
+                warnUiNodes: limits.warnUiNodes,
+              )
+            : widget.checkTypes(source, _resourceLimits));
         clock.stop();
         if (!_disposed) {
           setState(() => _lastTypeCheckMs = clock.elapsedMicroseconds / 1000);
