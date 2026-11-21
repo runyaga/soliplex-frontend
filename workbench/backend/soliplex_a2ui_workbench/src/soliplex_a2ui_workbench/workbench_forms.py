@@ -19,8 +19,8 @@ def field_label(field):
             label += f" (at least {field.min:g})"
         elif field.max is not None:
             label += f" (at most {field.max:g})"
-    if field.kind in {"text", "textarea"}:
-        label += f" (max {field.max_length or 4000} characters)"
+    if field.kind in {"text", "textarea"} and field.max_length:
+        label += f" (max {field.max_length} characters)"
     return label
 
 
