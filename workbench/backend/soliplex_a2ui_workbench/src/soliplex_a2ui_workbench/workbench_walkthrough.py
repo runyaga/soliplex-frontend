@@ -101,7 +101,7 @@ STEPS = (
     ),
     (
         "Try it yourself",
-        "The tour is complete. The Monty program, its app and the charts stay open for you to use. I closed the sample form. Try its buttons and bars, or choose Open the NameError example from the room suggestions to try AI Fix.",
+        "The tour is complete. The Monty program and its app are at the top of the canvas, ready to use. The charts stay open below. I closed the sample form. Try its buttons and bars, or open an AI Fix example from the room suggestions.",
         8000,
         "none",
     ),
@@ -317,12 +317,18 @@ def handle_step(projection, scope, run_id, raw, installation=None):
                 },
                 projection,
             )
-            filename = append_form_result(
+            receipt = append_form_result(
                 installation,
                 scope,
                 submission,
                 projection.content[form["activityMessageId"]],
+                with_receipt=True,
             )
+            filename = receipt["filename"]
+            record = copy.deepcopy(projection.content[form["activityMessageId"]])
+            record["receipt"] = f"Saved row {receipt['row']} to {filename}"
+            _, layout = tools._current(ctx)
+            events.extend(tools._publish(ctx, layout, content=[record])["events"])
             state["text"] = (
                 f"Submitted the sample values. Saved CSV row with submission id {submission.submissionId} in {filename}, in this thread's files."
             )
@@ -330,6 +336,19 @@ def handle_step(projection, scope, run_id, raw, installation=None):
             place("program", tools.open_demo(ctx, "monty_gui"))
         elif step == len(STEPS) - 1:
             events.extend(tools.close_panel(ctx, nodes["form"]["nodeId"])["events"])
+            program = nodes["program"]
+            events.extend(
+                tools.move_panel(ctx, program["nodeId"], "r_canvas", 0, "medium")[
+                    "events"
+                ]
+            )
+            for app, owner in (
+                ctx.snapshot()["layout"]["shared"].get("programApps", {}).items()
+            ):
+                if owner == program["surfaceId"]:
+                    events.extend(
+                        tools.move_panel(ctx, app, "r_canvas", 1, "medium")["events"]
+                    )
             state["status"] = "complete"
     return _finish(ctx, state, events)
 

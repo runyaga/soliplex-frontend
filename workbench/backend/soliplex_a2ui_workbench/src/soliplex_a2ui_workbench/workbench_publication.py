@@ -163,7 +163,8 @@ class WorkbenchCatalogValidator:
             | {"spec", "selection", "description", "height"},
             (LAB_CATALOG, "PythonRepl"): common
             | {"source", "title", "output", "typeCheck"},
-            (WORKBENCH_CATALOG, "PlaceForm"): common | {"template", "title", "fields"},
+            (WORKBENCH_CATALOG, "PlaceForm"): common
+            | {"template", "title", "fields", "receipt"},
         }
         allowed_record_keys = record_shapes.get(
             (catalog_id, component), common | {"properties"}
@@ -196,6 +197,10 @@ class WorkbenchCatalogValidator:
             if not isinstance(output, str) or len(output) > 4_000:
                 raise ValueError("invalid PythonRepl output")
         elif catalog_id == WORKBENCH_CATALOG and component == "PlaceForm":
+            if "receipt" in record and (
+                not isinstance(record["receipt"], str) or len(record["receipt"]) > 200
+            ):
+                raise ValueError("invalid form receipt")
             PlaceForm.model_validate(
                 {
                     "title": record.get("title"),
@@ -536,6 +541,7 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
                 "districts",
                 "acknowledged",
                 "submit",
+                "receipt",
             ],
         }
         extra = [
@@ -584,6 +590,7 @@ def _content_operations(record: Mapping[str, object]) -> list[dict[str, object]]
                 },
             },
             {"id": "submit_label", "component": "Text", "text": "Submit"},
+            {"id": "receipt", "component": "Text", "text": record.get("receipt", "")},
         ]
         return [
             _operation(sid, "createSurface", {"catalogId": catalog_id}),

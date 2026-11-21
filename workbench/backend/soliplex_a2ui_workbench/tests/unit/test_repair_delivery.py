@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
 from soliplex_a2ui_workbench import workbench_tools
 from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, room_skill
 from test_workbench_agent_tools import _context, _tool
@@ -86,7 +85,7 @@ def test_demo_source_is_curated_and_preserves_type_preference_on_repair(name):
         assert data["title"] == DEMOS[name][0]
         if stage == "initial":
             assert data["source"] == (BASE / DEMOS[name][1]).read_text()
-    assert DEMOS[name][2] in ROOM_SUGGESTIONS
+    assert any(s.startswith(DEMOS[name][2]) for s in ROOM_SUGGESTIONS)
     assert f'open_demo("{name}")' in room_skill("workbench")
     assert (
         "The example is open. Enable AI Fix, then press Run to try the repair."

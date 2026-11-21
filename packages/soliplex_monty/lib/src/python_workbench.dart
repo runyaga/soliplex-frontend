@@ -15,6 +15,7 @@ class PythonWorkbench {
     'read_file': ['filename'],
     'write_file': ['filename', 'text'],
     'open_window': ['title', 'kind', 'content'],
+    'update_window': ['window_id', 'content'],
     'move_window': ['window_id', 'order'],
     'close_window': ['window_id'],
   };
@@ -115,8 +116,18 @@ class PythonWorkbench {
             'A window id is required.',
           );
         }
+        if (entry.key == 'update_window' && args['content'] is! String) {
+          throw const ExternalException(
+            'TypeError',
+            'Window content must be text.',
+          );
+        }
         actions.add({
-          'op': entry.key == 'move_window' ? 'move' : 'close',
+          'op': switch (entry.key) {
+            'move_window' => 'move',
+            'update_window' => 'update',
+            _ => 'close',
+          },
           ...args,
         });
         return const MontyNone();

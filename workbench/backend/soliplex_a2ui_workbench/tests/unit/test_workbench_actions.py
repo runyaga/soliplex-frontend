@@ -24,7 +24,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.ui.ag_ui import AGUIAdapter
-
+from soliplex.agui import UnknownThread
 from soliplex_a2ui_workbench.workbench_actions import (
     CanvasSubmission,
     SubmissionDedup,
@@ -396,16 +396,16 @@ def test_preflight_route_removed():
 
 
 def test_persisted_run_input_restores_intake_and_dedup_after_restart():
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from soliplex.agui.persistence import ThreadStorage
     from soliplex.agui.schema import Base
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     async def exercise():
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         try:
             async with engine.begin() as connection:
                 await connection.run_sync(Base.metadata.create_all)
-            context, form, chart, window, program = await publication_fixture()
+            context, form, _chart, _window, _program = await publication_fixture()
             scope = context.deps._workbench_context.scope
             projection = RunWorkbenchProjection(scope, form.metadata)
             record = next(iter(projection.content.values()))
@@ -462,7 +462,7 @@ def test_persisted_run_input_restores_intake_and_dedup_after_restart():
             foreign_scope = type(scope)(
                 "mallory", scope.server_id, scope.room_id, scope.thread_id
             )
-            with pytest.raises(Exception):
+            with pytest.raises(UnknownThread):
                 await projection_from_thread(
                     SimpleNamespace(thread_persistence_engine=engine), foreign_scope
                 )
@@ -532,7 +532,8 @@ def test_malformed_action_shape_is_rejected_before_inference(boundary, user_acti
     ],
 )
 def test_invalid_custom_forms_never_reach_inference(boundary, monkeypatch, changes):
-    from test_workbench_forms import published, envelope as custom_envelope, VALUES
+    from test_workbench_forms import VALUES, published
+    from test_workbench_forms import envelope as custom_envelope
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
     _, projection, record = asyncio.run(published())
@@ -547,7 +548,8 @@ def test_invalid_custom_forms_never_reach_inference(boundary, monkeypatch, chang
 def test_custom_form_action_turn_persists_and_restores_canonical_pair(
     boundary, monkeypatch
 ):
-    from test_workbench_forms import published, envelope as custom_envelope
+    from test_workbench_forms import envelope as custom_envelope
+    from test_workbench_forms import published
 
     monkeypatch.setenv("SOLIPLEX_WORKBENCH_ROOMS", "room")
     _, projection, record = asyncio.run(published())
@@ -606,7 +608,7 @@ def test_save_failure_is_retryable_and_never_reaches_model(boundary, monkeypatch
 
     real_append = routes.append_form_result
 
-    def fail(*args):
+    def fail(*args, **kwargs):
         raise OSError("not writable")
 
     monkeypatch.setattr(routes, "append_form_result", fail)
@@ -684,3 +686,19 @@ def test_program_repair_rejects_unregistered_surface_and_unbounded_context(bound
     wrong["userAction"]["context"]["result"]["error"] = "x" * 2001
     assert send(boundary, wrong).status_code == 422
     assert boundary.captured == []
+
+
+def test_validated_form_receipt_has_server_row_number_and_visible_publication(boundary):
+    result = send(boundary, envelope(boundary.form))
+    assert result.status_code == 200
+    receipt = boundary.wires[-1].forwarded_props["workbenchFormReceipt"]
+    assert receipt == {"filename": "intake.csv", "row": 1}
+    record = boundary.projection.content[boundary.form["activityMessageId"]]
+    assert record["receipt"] == "Saved row 1 to intake.csv"
+    from soliplex_a2ui_workbench.workbench_publication import _content_operations
+
+    components = _content_operations(record)[-1]["updateComponents"]["components"]
+    assert (
+        next(c for c in components if c["id"] == "receipt")["text"]
+        == "Saved row 1 to intake.csv"
+    )

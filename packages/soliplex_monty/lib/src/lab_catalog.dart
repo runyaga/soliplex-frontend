@@ -698,7 +698,7 @@ class _PythonReplViewState extends State<PythonReplView> {
       _runs++;
       final invocationId =
           'invocation-${DateTime.now().microsecondsSinceEpoch}-$_runs';
-      widget.writeResult?.call({
+      final runResult = <String, Object?>{
         if (widget.includeRunMetadata) ...{
           'invocationId': invocationId,
           'chainId': _chain?.id ?? invocationId,
@@ -713,11 +713,18 @@ class _PythonReplViewState extends State<PythonReplView> {
               )
             : _clip(output, limits.maxOutputChars),
         'ok': ok,
-      });
+      };
+      widget.writeResult?.call(runResult);
       _afterRun(code, output, ok: ok);
       final onRun = widget.onRun;
       if (ok && _arena.workbench.actions.isNotEmpty) {
         await _publishWorkbench();
+        // Layout publication uses the same output binding. Restore the run's
+        // evidence after a repair so the model can observe its final result.
+        if (_claimed != null && !_disposed && onRun != null) {
+          widget.writeResult?.call(runResult);
+          unawaited(onRun().catchError((Object _) {}));
+        }
       } else if (onRun != null && (ok || !_repairable)) {
         // Repairable failures stay local unless AI Fix requests a repair.
         unawaited(onRun().catchError((Object _) {}));

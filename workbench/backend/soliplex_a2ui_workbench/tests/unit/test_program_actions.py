@@ -3,18 +3,17 @@
 import asyncio
 import copy
 
+import pytest
 from ag_ui.core import ActivitySnapshotEvent
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.testclient import TestClient
 from pydantic_ai import Agent
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.ui.ag_ui import AGUIAdapter
-import pytest
-
-from test_workbench_agent_tools import publication_fixture
 from soliplex_a2ui_workbench.program_actions import apply_program_actions
 from soliplex_a2ui_workbench.workbench_projection import RunWorkbenchProjection
 from soliplex_a2ui_workbench.workbench_routes import create_guarded_agui_router
+from test_workbench_agent_tools import publication_fixture
 
 
 def fixture():
@@ -32,7 +31,7 @@ def fixture():
 
 
 def test_program_batch_is_atomic_bounded_and_owner_scoped():
-    scope, projection, record, window = fixture()
+    scope, projection, record, _window = fixture()
     before = copy.deepcopy(projection.layout)
     opened = {
         "op": "open",
@@ -219,3 +218,83 @@ def test_action_only_stream_opens_closes_and_replay_runs_no_model():
     )
     assert send(actions * 9, "limit").status_code == 422
     assert not model_calls
+
+
+def test_update_reopens_owned_window_without_allocating_and_checks_ownership():
+    scope, projection, record, _ = fixture()
+
+    def apply(actions):
+        events = apply_program_actions(projection, scope, "update", record, actions)
+        for event in events:
+            projection._fold(ActivitySnapshotEvent.model_validate(event))
+
+    apply(
+        [
+            {
+                "op": "open",
+                "window_id": "log",
+                "title": "Log",
+                "kind": "text",
+                "content": "first",
+            }
+        ]
+    )
+    count = len(projection.layout["nodes"])
+    for i in range(35):
+        apply([{"op": "close", "window_id": "log"}])
+        apply([{"op": "update", "window_id": "log", "content": f"event {i}"}])
+        assert len(projection.layout["nodes"]) == count
+        assert (
+            next(n for n in projection.layout["nodes"] if n["id"] == "log")[
+                "visibility"
+            ]
+            == "open"
+        )
+    leaf = next(n for n in projection.layout["nodes"] if n["parentId"] == "log")
+    assert (
+        projection.content[leaf["payload"]["activityMessageId"]]["properties"]["text"]
+        == "event 34"
+    )
+    before = copy.deepcopy(projection.layout)
+    with pytest.raises(ValueError, match="owns"):
+        apply([{"op": "update", "window_id": "r_canvas", "content": "stolen"}])
+    assert projection.layout == before
+
+
+def test_reproducer_reuses_inert_python_child_with_parent_app_at_window_limit():
+    scope, projection, record, _ = fixture()
+
+    def apply(actions):
+        for event in apply_program_actions(projection, scope, "child", record, actions):
+            projection._fold(ActivitySnapshotEvent.model_validate(event))
+
+    apply(
+        [
+            {"op": "show_app"},
+            {
+                "op": "open",
+                "window_id": "reproducer",
+                "title": "Reproducer",
+                "kind": "python",
+                "content": "print(240)",
+            },
+        ]
+    )
+    count = len(projection.layout["nodes"])
+    for _ in range(35):
+        apply([{"op": "update", "window_id": "reproducer", "content": "print(241)"}])
+        assert len(projection.layout["nodes"]) == count
+    leaf = next(n for n in projection.layout["nodes"] if n["parentId"] == "reproducer")
+    child = projection.content[leaf["payload"]["activityMessageId"]]
+    assert child["source"] == "print(241)"
+    assert "retry" not in child
+    assert (
+        len(
+            [
+                n
+                for n in projection.layout["nodes"]
+                if n["kind"] == "window" and n["visibility"] == "open"
+            ]
+        )
+        == 3
+    )

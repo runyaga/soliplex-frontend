@@ -58,6 +58,11 @@
     "title": "A custom form",
     "assertions": [
       {
+        "kind": "text",
+        "name": "Walkthrough Team survey",
+        "region": "left"
+      },
+      {
         "kind": "role",
         "name": "Name * (max 4000 characters)",
         "role": "textbox",
@@ -95,6 +100,11 @@
         "kind": "text",
         "name": "walkthrough-team-survey.csv",
         "region": "tray"
+      },
+      {
+        "kind": "text",
+        "name": "Saved row 1 to walkthrough-team-survey.csv",
+        "region": "left"
       }
     ]
   },
@@ -180,8 +190,16 @@
       },
       {
         "kind": "text",
-        "name": "Weekly visits",
-        "region": "canvas"
+        "name": "Count: 4",
+        "window": "Monty GUI demo app",
+        "initialViewport": true
+      },
+      {
+        "kind": "role",
+        "role": "button",
+        "name": "Run",
+        "window": "Monty GUI demo",
+        "initialViewport": true
       }
     ]
   }

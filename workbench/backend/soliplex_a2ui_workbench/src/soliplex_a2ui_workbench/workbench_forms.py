@@ -62,7 +62,12 @@ def custom_form_components(record):
         {
             "id": "root",
             "component": "Column",
-            "children": ["provenance", *[c["id"] for c in controls], "submit"],
+            "children": [
+                "provenance",
+                *[c["id"] for c in controls],
+                "submit",
+                "receipt",
+            ],
         },
         {
             "id": "provenance",
@@ -82,6 +87,7 @@ def custom_form_components(record):
             },
         },
         {"id": "submit_label", "component": "Text", "text": "Submit"},
+        {"id": "receipt", "component": "Text", "text": record.get("receipt", "")},
     ]
     # Persist the definition in the activity, separate from mutable input values.
     return {

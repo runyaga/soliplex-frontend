@@ -2,15 +2,14 @@
 
 import asyncio
 import copy
-import json
 import itertools
+import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pydantic_ai import ModelRetry, ToolReturn
 from ag_ui.core import ActivitySnapshotEvent
-
+from pydantic_ai import ModelRetry, ToolReturn
 from soliplex_a2ui_workbench import workbench_tools
 from soliplex_a2ui_workbench.program_actions import apply_program_actions
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
@@ -88,7 +87,7 @@ def test_unknown_demo_is_corrective_and_publishes_nothing(monkeypatch):
 
 def test_demo_tool_accepts_only_a_name_and_suggestion_teaches_exact_call():
     assert set(MINIMUM_ROOM_TOOL_MANIFEST["open_demo"].model_fields) == {"name"}
-    assert "Open the Monty GUI demo." in ROOM_SUGGESTIONS
+    assert any(s.startswith("Open the Monty GUI demo.") for s in ROOM_SUGGESTIONS)
     teaching = room_skill("workbench")
     assert 'call open_demo("monty_gui")' in teaching
     assert "press Run, then click the buttons" in teaching

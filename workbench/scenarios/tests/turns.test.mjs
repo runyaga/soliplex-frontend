@@ -21,16 +21,13 @@ test('demo corpus checks Run, each counter click, window open and close in order
   const model = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
   const deterministic = await loadCases(new URL('../deterministic/cases.json', import.meta.url));
   const demo = model.find(c => c.id === 'monty_demo');
-  assert.equal(demo.prompt, 'Open the Monty GUI demo.');
+  assert.ok(demo.prompt.startsWith('Open the Monty GUI demo. I will press Run')); 
   assert.deepEqual(demo.actions, deterministic.find(c => c.id === 'monty_demo').actions);
-  assert.deepEqual(demo.actions.map(a => a.name), ['Run', 'Close log window', '+1', '+1', 'Open log window', 'Close log window']);
-  assert.ok(demo.actions[0].assertions.some(a => a.role === 'button' && a.name === 'Bar Start: 0'));
-  for (const count of [1, 2]) {
-    assert.ok(demo.actions[count + 1].assertions.some(a => a.name === `Count: ${count}`));
-    assert.ok(demo.actions[count + 1].assertions.some(a => a.name === `last event: plus, count ${count}`));
-  }
-  assert.ok(demo.actions[4].assertions.some(a => a.role === 'group' && a.name === 'Workbench window Monty event log' && !a.absent));
-  assert.ok(demo.actions[5].assertions.some(a => a.role === 'group' && a.name === 'Workbench window Monty event log' && a.absent));
+  assert.deepEqual(demo.actions.map(a => a.name), ['Run', '+1', 'Add point', 'Bar Start: 3', 'Open log window', 'Close log window', 'Open log window', 'Close log window']);
+  assert.ok(demo.actions[0].assertions.some(a => a.role === 'button' && a.name === 'Bar Start: 3'));
+  assert.ok(demo.actions[0].assertions.some(a => a.absent && a.name === 'Workbench window Monty event log'));
+  assert.ok(demo.actions[1].assertions.some(a => a.name === 'Count: 4'));
+  assert.ok(demo.actions[3].assertions.some(a => a.name === 'Count: 3'));
   assert.ok(demo.actions.filter(a => ['Run', 'Open log window', 'Close log window'].includes(a.name)).every(a => a.awaitTurn));
 });
 
@@ -304,7 +301,7 @@ test('custom form submission and CSV checks ignore the case of model-chosen fiel
   assert.equal(assertTurn({ kind: 'csv', filename: 'scenario-survey.csv', values: { ...values, color: 'Red' } }, turn).pass, false);
 });
 
-function programFixture({ repair = true, plainRun = false, arrive = true, success = true, unrelated = false, otherSurface = false, otherChain = false } = {}) {
+function programFixture({ repair = true, plainRun = false, arrive = true, success = true, unrelated = false, otherSurface = false, otherChain = false, rounds = 1 } = {}) {
   let handler;
   const operations = [];
   const turn = async (name, context, events = []) => {
@@ -327,7 +324,7 @@ function programFixture({ repair = true, plainRun = false, arrive = true, succes
         return;
       }
       if (!repair) return;
-      await turn('workbench.program.repair', { result: { run: 1, aiFix: true, autoRun: true, chainId: 'chain-test' } }, [
+      for (let attempt = 1; attempt <= rounds; attempt++) await turn('workbench.program.repair', { result: { run: attempt, attempt, aiFix: true, autoRun: true, chainId: 'chain-test' } }, [
         { type: 'TOOL_CALL_START', toolCallName: 'repair_program' },
         ...(arrive ? [{ type: 'ACTIVITY_SNAPSHOT' }] : []),
       ]);
@@ -457,4 +454,14 @@ test('an action prefers the one exact name when looser matches also qualify', as
   assert.deepEqual(narrowed, [run]);
   const both = [fake('Run'), fake('Run')];
   assert.equal((await narrowToExact(both, 'Run')).length, 2);
+});
+
+
+test('two-stage repairs require both ordered attempts in the same chain', async () => {
+  const { page } = programFixture({ rounds: 2 });
+  const result = await captureProgramTurns(page, options, () => page.trigger(), 2);
+  assert.equal(result.repairRequests, 2);
+  assert.equal(result.successfulRuns, 1);
+  const missing = programFixture();
+  await assert.rejects(captureProgramTurns(missing.page, options, () => missing.page.trigger(), 2), /repair arrival/);
 });

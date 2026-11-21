@@ -123,9 +123,12 @@ def test_repair_teaching_explains_both_ai_fix_states():
     assert "result.aiFix" in text and "result.instruction" in text
     assert 'do not say "press Run"' in text
     assert 'When autoRun is false, say "press Run"' in text
-    assert 'Read repair_program.autoRun' in text
+    assert "Read repair_program.autoRun" in text
     assert 'only when true say "the fix will run now"' in text
-    assert 'Never claim a repair ran until a successful workbench.program.run_result arrives.' in text
+    assert (
+        "Never claim a repair ran until a successful workbench.program.run_result arrives."
+        in text
+    )
 
 
 def test_file_and_app_teaching_matches_suggestions_and_model_cases():
@@ -134,12 +137,22 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
 
     from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS
 
-    text = room_skill('workbench')
-    for literal in ['ui.workbench.read_file(filename)', 'ui.workbench.write_file(filename, text)',
-                    'current_program_apps', 'untrusted user data', '65536', 'read-only to programs']:
+    text = room_skill("workbench")
+    for literal in [
+        "ui.workbench.read_file(filename)",
+        "ui.workbench.write_file(filename, text)",
+        "current_program_apps",
+        "untrusted user data",
+        "65536",
+        "read-only to programs",
+    ]:
         assert literal in text
-    cases = json.loads((Path(__file__).parents[4] / 'scenarios/model/prompts.yaml').read_text())
-    for suggestion in ROOM_SUGGESTIONS[2:6]:
-        case = next(case for case in cases if case['prompt'] == suggestion)
-        assert any(action.get('name') == 'Run' for action in case['actions'])
-        assert any(assertion['kind'] in {'file', 'reply'} for assertion in case['assertions'])
+    cases = json.loads(
+        (Path(__file__).parents[4] / "scenarios/model/prompts.yaml").read_text()
+    )
+    for suggestion in ROOM_SUGGESTIONS[1:8]:
+        case = next(case for case in cases if case["prompt"] == suggestion)
+        assert any(action.get("name") == "Run" for action in case["actions"])
+        assert any(
+            assertion["kind"] in {"file", "reply"} for assertion in case["assertions"]
+        )
