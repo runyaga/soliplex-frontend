@@ -367,6 +367,11 @@
           }
         ],
         "initialViewport": true
+      },
+      {
+        "role": "button",
+        "name": "Edit code",
+        "window": "Monty GUI demo"
       }
     ],
     "assertions": [

@@ -291,8 +291,8 @@ class WorkbenchHost extends StatelessWidget {
     );
   }
 
-  // Semantic sizes use the review's 1/2/3 weights. Small windows retain a
-  // readable mobile-sized viewport; taller content scrolls inside the chrome.
+  // Semantic sizes weight split children and bound tabbed viewports.
+  // Ordinary windows measure their content within the viewport cap.
   int _weight(LayoutNode node) => switch (node.size) {
         'small' => 1,
         'large' => 3,
@@ -396,23 +396,16 @@ class WorkbenchHost extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final child in children)
-                  SizedBox(
-                      height: _height(child), child: _render(context, child)),
+                for (final child in children) _render(context, child),
               ],
             );
           }
-          return SizedBox(
-            height: children.map(_height).reduce((a, b) => a > b ? a : b),
-            child: Flex(
-              direction: horizontal ? Axis.horizontal : Axis.vertical,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final child in children)
-                  Expanded(
-                      flex: _weight(child), child: _render(context, child)),
-              ],
-            ),
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final child in children)
+                Expanded(flex: _weight(child), child: _render(context, child)),
+            ],
           );
         },
       );
@@ -470,14 +463,23 @@ class WorkbenchHost extends StatelessWidget {
         node: node,
         child: narratedContent,
       );
+      final sized = ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height.clamp(
+                SoliplexBreakpoints.mobile,
+                SoliplexBreakpoints.desktop,
+              ),
+        ),
+        child: chrome,
+      );
       return node.kind == 'window'
           ? Semantics(
               container: true,
               explicitChildNodes: true,
               label: 'Workbench window ${node.title}',
-              child: SizedBox(height: _height(node), child: chrome),
+              child: sized,
             )
-          : SizedBox(height: _height(node), child: chrome);
+          : sized;
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

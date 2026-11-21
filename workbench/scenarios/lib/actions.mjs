@@ -65,7 +65,7 @@ export async function performActions(page, actions = [], turnOptions, onTurn = (
     };
     if (kind === 'run_program') {
       if (!turnOptions) throw new Error('run_program requires room and thread context');
-      observations.push(await captureProgramTurns(page, { ...turnOptions, expectedOutput: action.expectedOutput }, trigger, action.expectRepair, onTurn, wait));
+      observations.push(await captureProgramTurns(page, { ...turnOptions, expectedOutput: action.expectedOutput, expectRepairs: action.expectRepairs }, trigger, action.expectRepair, onTurn, wait));
     } else if (action.awaitTurn) {
       if (!turnOptions) throw new Error('awaitTurn requires room and thread context');
       await onTurn(await captureTurn(page, turnOptions, trigger));

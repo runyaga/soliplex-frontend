@@ -67,6 +67,7 @@ void main() {
               ],
               userMessage: null,
               toolResults: <ToolMessage>[],
+              actionOnly: false,
               endsWithToolMessage: false
             )
           ),
@@ -305,6 +306,69 @@ void main() {
     await tester.tap(find.text('Stop walkthrough').first);
     await tester.pump();
     expect(player.active, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'program app grows to content beside its source and caps overflow',
+      (tester) async {
+    tester.view
+      ..devicePixelRatio = 1
+      ..physicalSize = const Size(2200, 1200);
+    addTearDown(tester.view.reset);
+    final layout = jsonDecode(workbenchFixtures['layout_tree_v1.json']!)
+        as Map<String, dynamic>;
+    layout['shared'] = {
+      'programApps': {'app': 'program'}
+    };
+    final nodes = (layout['nodes'] as List).cast<Map<String, dynamic>>();
+    nodes.singleWhere((n) => n['id'] == 'r_canvas')['children'] = [
+      'source',
+      'app'
+    ];
+    nodes.addAll([
+      _node('source', 'r_canvas', ['leaf'], 'window', {}),
+      _node('leaf', 'source', [], 'surface',
+          {'activityMessageId': 'activity', 'surfaceId': 'program'}),
+      _node('app', 'r_canvas', [], 'window', {}),
+    ]);
+    final apps = ProgramApps();
+    addTearDown(apps.dispose);
+    final tree = LayoutTree.fromLayout(layout, [
+      WorkbenchRegistration(
+        role: WorkbenchRole.program,
+        activityMessageId: 'activity',
+        surfaceId: 'program',
+      )
+    ]);
+    Future<void> mount(double height) async {
+      apps.publish(
+          'program', SizedBox(height: height, child: const Text('app body')));
+      await tester.pumpWidget(_app(ProgramAppScope(
+          apps: apps,
+          child: WorkbenchHost(
+            tree: tree,
+            chat: const Text('chat'),
+            mounts: SurfaceMountRegistry(),
+            surfaceBuilder: (_, __) => const Text('source body'),
+          ))));
+      await tester.pumpAndSettle();
+    }
+
+    final appPanel = find.byKey(const ValueKey('app'));
+    await mount(100);
+    final small = tester.getSize(appPanel).height;
+    expect(small, lessThan(240));
+    await mount(560);
+    expect(tester.getSize(appPanel).height, greaterThan(560));
+    expect(tester.getTopLeft(find.text('source body')).dx,
+        lessThan(tester.getTopLeft(find.text('app body')).dx));
+    await mount(2000);
+    expect(tester.getSize(appPanel).height, lessThanOrEqualTo(1200));
+    final scroll =
+        find.descendant(of: appPanel, matching: find.byType(Scrollable));
+    expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent,
+        greaterThan(0));
     expect(tester.takeException(), isNull);
   });
 

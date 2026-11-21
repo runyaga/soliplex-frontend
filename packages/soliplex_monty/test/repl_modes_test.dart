@@ -131,6 +131,28 @@ void main() {
     await finish(tester);
   }, skip: skipWithoutMonty != false);
 
+  testWidgets('repl collapses successful code and allows editing again', (
+    tester,
+  ) async {
+    await mount(tester, surface('print("hello")'));
+    expect(editor, findsOneWidget);
+    await run(tester);
+    expect(editor, findsNothing);
+    await tester.tap(find.text('Edit code'));
+    await tester.pump();
+    expect(editor, findsOneWidget);
+    await run(tester);
+    expect(editor, findsOneWidget);
+    await tester.enterText(editor, 'raise ValueError("broken")');
+    await run(tester);
+    expect(editor, findsOneWidget);
+    expect(find.text('Hide code'), findsOneWidget);
+    await tester.tap(find.text('Hide code'));
+    await tester.pump();
+    expect(editor, findsNothing);
+    await finish(tester);
+  }, skip: skipWithoutMonty != false);
+
   testWidgets('run mode hides the editor until Edit code', (tester) async {
     await mount(tester, surface(counter, props: {'mode': 'run'}));
     expect(editor, findsNothing);

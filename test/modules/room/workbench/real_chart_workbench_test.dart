@@ -106,7 +106,7 @@ void main() {
     }
   }
 
-  testWidgets('small medium large windows use increasing readable heights',
+  testWidgets('short chart windows size to content for every semantic size',
       (tester) async {
     tester.view.physicalSize = const Size(1800, 1200);
     tester.view.devicePixelRatio = 1;
@@ -123,9 +123,9 @@ void main() {
       heights.add(tester.getSize(find.byKey(const ValueKey('owner'))).height);
       expect(tester.takeException(), isNull);
     }
-    expect(heights[0], greaterThanOrEqualTo(SoliplexBreakpoints.mobile));
-    expect(heights[0], lessThan(heights[1]));
-    expect(heights[1], lessThan(heights[2]));
+    expect(heights.toSet(), hasLength(1));
+    expect(heights.first, greaterThan(0));
+    expect(heights.first, lessThan(SoliplexBreakpoints.mobile));
   });
 }
 

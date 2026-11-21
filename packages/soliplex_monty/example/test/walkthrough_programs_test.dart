@@ -101,6 +101,8 @@ void main() {
       contains('last event: open_log, count 6'),
     );
     // An editor change revokes the allowlist before the next automatic action.
+    await tester.tap(find.text('Edit code'));
+    await tester.pump();
     await tester.enterText(repl.editor, 'print(123)');
     expect(
       () => WalkthroughPrograms.perform(controls, 'run'),

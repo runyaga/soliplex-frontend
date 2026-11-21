@@ -20,9 +20,7 @@ import '../image_fixtures.dart';
 
 void main() {
   group('composerAcceptsText', () {
-    test('refuses while a run holds the composer read-only', () {
-      // Typed characters are swallowed in these states, so text routed in from
-      // elsewhere would be stuck there until the run ended.
+    test('refuses send and attachment actions while a run is active', () {
       for (final state in [
         AgentSessionState.spawning,
         AgentSessionState.running,
@@ -191,7 +189,7 @@ void main() {
     sessionState.dispose();
   });
 
-  testWidgets('text field readOnly during active run', (tester) async {
+  testWidgets('text field stays editable during active run', (tester) async {
     final sessionState = signal<AgentSessionState?>(AgentSessionState.running);
 
     await tester.pumpWidget(MaterialApp(
@@ -206,7 +204,7 @@ void main() {
     ));
 
     final textField = tester.widget<TextField>(find.byType(TextField));
-    expect(textField.readOnly, isTrue);
+    expect(textField.readOnly, isFalse);
 
     sessionState.dispose();
   });
@@ -252,7 +250,7 @@ void main() {
       ),
     ));
 
-    // Enter text via controller since TextField is readOnly during active run.
+    // A draft entered during a run must survive a premature Enter.
     tester.widget<TextField>(find.byType(TextField)).controller!.text =
         'Draft message';
     await tester.pump();
@@ -267,6 +265,59 @@ void main() {
     );
 
     sessionState.dispose();
+  });
+
+  testWidgets(
+      'draft typed during a run survives Enter and sends after completion',
+      (tester) async {
+    final state = signal<AgentSessionState?>(AgentSessionState.running);
+    addTearDown(state.dispose);
+    final sent = <String>[];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+          body: ChatInput(
+        sessionState: state,
+        onSend: (parts) => sent.add(parts.plainText),
+        onCancel: () {},
+      )),
+    ));
+    expect(tester.widget<TextField>(find.byType(TextField)).readOnly, isFalse);
+    await tester.tap(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'Please keep this');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(sent, isEmpty);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Please keep this');
+    state.value = null;
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(sent, ['Please keep this']);
+  });
+
+  testWidgets(
+      'destination refusal preserves the draft until it can accept a send',
+      (tester) async {
+    var ready = false;
+    final sent = <String>[];
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ChatInput(
+      canSend: () => ready,
+      onSend: (parts) => sent.add(parts.plainText),
+      onCancel: () {},
+    ))));
+    await tester.enterText(find.byType(TextField), 'Draft during handoff');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(sent, isEmpty);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'Draft during handoff');
+    ready = true;
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(sent, ['Draft during handoff']);
   });
 
   testWidgets('chip deletion disabled during active run', (tester) async {
@@ -1026,10 +1077,8 @@ void main() {
 
     testWidgets('refuses to add images to a composer a run has taken',
         (tester) async {
-      // The picker can outlive the composer's availability, and an image put
-      // into a read-only composer cannot be taken back out of it — the chip
-      // showing a picture has no remove affordance — so it would be sent with
-      // whatever the user typed next.
+      // A picker can outlive the idle turn that opened it. Its result follows
+      // the same attachment gate as the disabled add-image button.
       final sessionState = signal<AgentSessionState?>(null);
       addTearDown(sessionState.dispose);
       final controller = await pumpComposer(
@@ -1272,8 +1321,7 @@ void main() {
         (tester) async {
       // The menu route outlives the build that filled it, so the state it was
       // enabled under can change while it is open. The buttons it stands in
-      // for go read-only in that window, and a pick started here would land in
-      // a composer that cannot show it.
+      // for become disabled in that window, so the stale item must refuse too.
       final ran = <String>[];
       final sessionState = signal<AgentSessionState?>(null);
 

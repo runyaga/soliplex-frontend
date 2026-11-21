@@ -772,6 +772,7 @@ void main() {
                 events: [for (final event in events) event.toJson()],
                 userMessage: null,
                 toolResults: <ToolMessage>[],
+                actionOnly: false,
                 endsWithToolMessage: false,
               ),
             ),
@@ -825,6 +826,7 @@ void main() {
               events: [event.toJson()],
               userMessage: null,
               toolResults: <ToolMessage>[],
+              actionOnly: false,
               endsWithToolMessage: false,
             ),
           ),
@@ -919,6 +921,7 @@ void main() {
           history.messages.whereType<GenUiMessage>().single.runId,
           'action-run',
         );
+        expect(history.runOutcomes, isNot(contains('action-run')));
         expect(history.transcript.messages.map((message) => message.id), [
           'question',
           'reply',

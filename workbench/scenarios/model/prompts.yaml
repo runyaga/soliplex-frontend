@@ -179,7 +179,8 @@
         "kind": "run_program",
         "name": "Run",
         "window": "Self-healing pipeline",
-        "expectRepair": 2,
+        "expectRepair": true,
+        "expectRepairs": 2,
         "expectedOutput": "2 clean rows, dropped 1, total 40",
         "assertions": [
           {
@@ -307,6 +308,10 @@
             "initialViewport": true
           }
         ]
+      },
+      {
+        "role": "button",
+        "name": "Edit code"
       }
     ],
     "assertions": [
@@ -365,6 +370,10 @@
       {
         "role": "button",
         "name": "Run"
+      },
+      {
+        "role": "button",
+        "name": "Edit code"
       }
     ],
     "assertions": [
@@ -1012,6 +1021,11 @@
           }
         ],
         "initialViewport": true
+      },
+      {
+        "role": "button",
+        "name": "Edit code",
+        "window": "Monty GUI demo"
       }
     ],
     "assertions": [

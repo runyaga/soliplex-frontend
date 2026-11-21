@@ -51,7 +51,8 @@ test('survey and pipeline selectors match the rendered catalog', async () => {
   assert.equal(survey.actions.find(a => a.kind === 'fill').name, 'Name *');
   const healing = cases.find(item => item.id === 'two_stage_healing_pipeline');
   const repairedRun = healing.actions.find(a => a.kind === 'run_program');
-  assert.equal(repairedRun.expectRepair, 2);
+  assert.equal(repairedRun.expectRepair, true);
+  assert.equal(repairedRun.expectRepairs, 2);
   assert.ok(repairedRun.assertions.some(a => a.kind === 'text' && a.name === 'Clean monthly sales'));
   const pipeline = cases.find(item => item.id === 'pipeline_saved_csv');
   assert.ok(pipeline.assertions.some(a => a.kind === 'text' && a.name === 'Monthly sales'));

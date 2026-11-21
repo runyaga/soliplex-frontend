@@ -57,7 +57,15 @@ Future<void> tapRun(WidgetTester tester) =>
 bool idle(WidgetTester tester) =>
     tester.widget<SoliplexButton>(runButton).onPressed != null;
 
+Future<void> openEditor(WidgetTester tester) async {
+  if (editor.evaluate().isEmpty) {
+    await tester.tap(find.byKey(const ValueKey('python-repl-edit')));
+    await tester.pump();
+  }
+}
+
 Future<void> typeSource(WidgetTester tester, String text) async {
+  await openEditor(tester);
   await tester.enterText(editor, text);
   await tester.pump();
 }
@@ -217,6 +225,7 @@ void main() {
       () => idle(tester) && model('/repl/result') != null,
     );
 
+    await openEditor(tester);
     expect(tester.getSemantics(editor).label, 'Python source');
     final nodes = [
       for (final label in [
@@ -336,6 +345,7 @@ void main() {
     create();
     await mount(tester);
     await runExample(tester, 'Counter');
+    await openEditor(tester);
     expect(find.text('Surface built by Python'), findsOneWidget);
     expect(find.text('Count: 0'), findsOneWidget);
     void expectSurfaceText(int count, String history) {
