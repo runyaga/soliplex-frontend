@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_format.dart';
 
 /// Renders a single KPI and an optional target on a bounded scale.
 class StaticGaugeChart extends StatelessWidget {
@@ -89,16 +90,21 @@ class StaticGaugeChart extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          '$value$unit',
+                          '${chartNumberText(value)}$unit',
                           style: theme.textTheme.headlineMedium,
                         ),
-                        if (target != null) Text('Target $target$unit'),
+                        if (target != null)
+                          Text('Target ${chartNumberText(target)}$unit'),
                       ],
                     ),
                   ],
                 ),
               ),
-              Center(child: Text('Scale $min$unit to $max$unit')),
+              Center(
+                child: Text(
+                  'Scale ${chartNumberText(min)}$unit to ${chartNumberText(max)}$unit',
+                ),
+              ),
             ],
           ),
         ),

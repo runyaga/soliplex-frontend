@@ -75,7 +75,7 @@ class PythonUiArena {
 
   bool _isToken(Object? value) =>
       value is String &&
-      value.startsWith('<ui:') &&
+      _handlePattern.hasMatch(value) &&
       value.contains(':$_nonce:');
 
   /// The `ui` module given to Monty; every call goes to [current]'s arena.
@@ -229,7 +229,8 @@ class PythonUiArena {
       if (key == 'id') {
         final v = value.dartValue;
         if (v is! String ||
-            !RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$').hasMatch(v)) {
+            !RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$').hasMatch(v) ||
+            v.startsWith(_anonPrefix)) {
           throw ExternalException(
             'ValueError',
             '$component() id must be an identifier.',
@@ -257,7 +258,7 @@ class PythonUiArena {
       props[key] = value.dartValue;
     }
     final token = _token('node');
-    final nodeId = id ?? 'n${_nodes.length}';
+    final nodeId = id ?? '$_anonPrefix${_nodes.length}';
     if (!_ids.add(nodeId)) {
       throw ExternalException(
         'ValueError',
@@ -310,7 +311,11 @@ class PythonUiArena {
     )) {
       component['@catalogId'] = chartGraphicsCatalogId;
       try {
-        validateStaticChartSpec(component['spec']);
+        validateChartComponent({
+          for (final entry in component.entries)
+            if (!['id', 'component', '@catalogId'].contains(entry.key))
+              entry.key: entry.value,
+        });
       } on FormatException catch (error) {
         throw ExternalException('ValueError', error.message);
       }
@@ -410,10 +415,11 @@ class PythonUiArena {
             'A component cannot be used as a property value.',
           )),
     ),
-    final String s when s.startsWith('<ui:') => throw const ExternalException(
-      'ValueError',
-      'A handle from an earlier run cannot be reused.',
-    ),
+    final String s when _handlePattern.hasMatch(s) =>
+      throw const ExternalException(
+        'ValueError',
+        'A handle from an earlier run cannot be reused.',
+      ),
     final List<Object?> l => [for (final v in l) _value(v)],
     final Map<Object?, Object?> m => {
       for (final MapEntry(:key, :value) in m.entries) '$key': _value(value),
@@ -426,10 +432,11 @@ class PythonUiArena {
   };
 
   Object? _lowerData(Object? value) => switch (value) {
-    final String s when s.startsWith('<ui:') => throw const ExternalException(
-      'TypeError',
-      'show() data holds plain values only.',
-    ),
+    final String s when _handlePattern.hasMatch(s) =>
+      throw const ExternalException(
+        'TypeError',
+        'show() data holds plain values only.',
+      ),
     final List<Object?> l => [for (final v in l) _lowerData(v)],
     final Map<Object?, Object?> m => {
       for (final MapEntry(:key, :value) in m.entries) '$key': _lowerData(value),
@@ -437,3 +444,9 @@ class PythonUiArena {
     _ => value,
   };
 }
+
+/// Matches only a complete handle from any arena.
+final _handlePattern = RegExp(r'^<ui:(?:node|bind|event):[0-9a-z]+:\d+>$');
+
+/// Explicit IDs cannot occupy the generated namespace.
+const _anonPrefix = 'monty_anon_';

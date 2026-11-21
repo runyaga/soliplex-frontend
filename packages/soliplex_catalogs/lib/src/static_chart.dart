@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 
 import 'chart_semantics.dart';
+import 'chart_format.dart';
 import 'chart_color.dart';
 
 import 'package:json_schema_builder/json_schema_builder.dart'
@@ -24,7 +25,6 @@ const chartGraphicsCatalogId = 'urn:soliplex:catalog:graphics:2';
 
 const _maxPoints = 5000;
 const int _maxSpecBytes = 1024 * 1024;
-const _maxSafeInteger = 9007199254740991;
 
 Map<String, Object> _string(int maxLength, {int minLength = 0}) => {
   'type': 'string',
@@ -122,6 +122,49 @@ final _gaugeSchema = <String, Object>{
   'required': ['kind', 'value', 'min_value', 'max_value'],
 };
 
+final _chartComponentSchema = {
+  'type': 'object',
+  'properties': {
+    'spec': {
+      'oneOf': [
+        _barSchema,
+        _lineSchema,
+        _gaugeSchema,
+        ...extendedChartSchemas.values,
+      ],
+    },
+    'selection': {'type': 'array', 'maxItems': 0},
+    'selected': CommonSchemasV1.dynamicString,
+    'action': {r'$ref': r'common_types.json#/$defs/Action'},
+    'weight': {'type': 'number'},
+    'description': _string(512, minLength: 1),
+    'height': {'type': 'number', 'minimum': 160, 'maximum': 1200},
+  },
+  'required': ['spec', 'selection', 'description'],
+};
+
+// Keep common A2UI bindings and actions valid during synchronous staging.
+final _chartValidationSchema = Schema.fromMap(
+  resolveSchemaRefs(
+    _chartComponentSchema,
+    _chartComponentSchema,
+    commonTypes: PayloadValidator.commonTypesFor(A2uiProtocolVersion.v1_0),
+  ),
+);
+
+/// Validates all Chart properties and its spec before publication.
+void validateChartComponent(Map<String, Object?> props) {
+  final height = props['height'];
+  if (height is num && !height.isFinite) {
+    throw const FormatException('Chart height must be finite.');
+  }
+  final errors = _chartValidationSchema.validateSync(stringKeyedChart(props));
+  if (errors.isNotEmpty) {
+    throw FormatException('Invalid Chart: ${errors.first}');
+  }
+  validateStaticChartSpec(props['spec']);
+}
+
 /// Registers the embeddable charts and the existing graphics components.
 CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
   id: chartGraphicsCatalogId,
@@ -130,26 +173,7 @@ CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
     ...chatGraphicsCatalog().components.values,
     ComponentImplementation(
       name: 'Chart',
-      schema: Schema.fromMap({
-        'type': 'object',
-        'properties': {
-          'spec': {
-            'oneOf': [
-              _barSchema,
-              _lineSchema,
-              _gaugeSchema,
-              ...extendedChartSchemas.values,
-            ],
-          },
-          'selection': {'type': 'array', 'maxItems': 0},
-          'selected': CommonSchemasV1.dynamicString,
-          'action': {r'$ref': r'common_types.json#/$defs/Action'},
-          'weight': {'type': 'number'},
-          'description': _string(512, minLength: 1),
-          'height': {'type': 'number', 'minimum': 160, 'maximum': 1200},
-        },
-        'required': ['spec', 'selection', 'description'],
-      }),
+      schema: Schema.fromMap(_chartComponentSchema),
       builder: (context, node, props, buildChild) {
         final spec = props.value('spec');
         try {
@@ -222,24 +246,54 @@ CatalogImplementation chartGraphicsCatalog() => CatalogImplementation(
 /// Validates semantic bounds shared by the Express and Monty authoring routes.
 void validateStaticChartSpec(Object? spec) {
   if (spec is! Map) throw const FormatException('Expected a chart spec.');
+  spec = stringKeyedChart(spec)! as Map<String, Object?>;
   switch (spec['kind']) {
     case 'bar':
+      _checkSchema(_barSchema, spec, 'bar');
       _pointLabels(spec['points']);
     case 'line':
+      _checkSchema(_lineSchema, spec, 'line');
       _validateLineSeries(spec['series']);
     case 'gauge':
+      _checkSchema(_gaugeSchema, spec, 'gauge');
       _validateGauge(spec);
     case final String kind when extendedChartSchemas.containsKey(kind):
       validateExtendedChart(spec.cast<Object?, Object?>(), kind);
     default:
       throw const FormatException('Unknown chart kind.');
   }
-  if (utf8.encode(jsonEncode(spec)).length > _maxSpecBytes) {
+  if (utf8.encode(jsonEncode(_canonicalNumbers(spec))).length > _maxSpecBytes) {
     throw const FormatException('Chart spec exceeds 1 MiB.');
   }
 }
 
+void _checkSchema(Map<String, Object> schema, Object? spec, String kind) {
+  final errors = Schema.fromMap(schema).validateSync(spec);
+  if (errors.isNotEmpty) {
+    throw FormatException('Invalid $kind spec: ${errors.first}');
+  }
+}
+
+// Measure the same representation on VM, dart2wasm and dart2js.
+Object? _canonicalNumbers(Object? value) => switch (value) {
+  final Map<String, Object?> map => {
+    for (final MapEntry(:key, value: entry) in map.entries)
+      key: _canonicalNumbers(entry),
+  },
+  final List<Object?> list => list.map(_canonicalNumbers).toList(),
+  final double number when number == number.truncateToDouble() =>
+    number.toInt(),
+  _ => value,
+};
+
 void _validateGauge(Map<Object?, Object?> spec) {
+  for (final key in ['min_value', 'max_value', 'value', 'target']) {
+    if (spec.containsKey(key) && !isSafeChartNumber(spec[key])) {
+      throw FormatException(
+        'Gauge $key must be a finite number in the JSON-safe range.',
+      );
+    }
+  }
   final min = spec['min_value'];
   final max = spec['max_value'];
   if (min is! num || max is! num) {
@@ -277,9 +331,7 @@ List<String> _pointLabels(Object? points, {bool allowGaps = false}) {
         when id.isNotEmpty &&
             ((allowGaps && value == null) ||
                 // Same bound as the server; dart2js cannot tell 1e100 from an int.
-                (value is num &&
-                    value.isFinite &&
-                    value.abs() <= _maxSafeInteger))) {
+                isSafeChartNumber(value))) {
       if (!ids.add(id)) throw FormatException('Duplicate point ID: $id.');
       labels.add(label);
     } else {
@@ -454,8 +506,8 @@ class _BarChart extends StatelessWidget {
                               Flexible(
                                 child: Text(
                                   value > 0 && diverges
-                                      ? '+${chartNumber(value)}'
-                                      : chartNumber(value),
+                                      ? '+${chartNumberText(value)}'
+                                      : chartNumberText(value),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: textTheme.labelLarge?.copyWith(
@@ -522,7 +574,7 @@ class _BarChart extends StatelessWidget {
                       if (onSelect == null) return row;
                       return Semantics(
                         container: true,
-                        label: 'Bar $label: ${chartNumber(value)}',
+                        label: 'Bar $label: ${chartNumberText(value)}',
                         button: true,
                         selected: label == selected,
                         excludeSemantics: true,

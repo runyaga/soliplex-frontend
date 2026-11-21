@@ -5,6 +5,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:soliplex_catalogs/soliplex_catalogs.dart';
 
 void main() {
+  test('scatter extensions reach Python as JSON Schema boolean entries', () {
+    final modules = hostFunctionSchemas();
+    final scatter = modules['chart']!.singleWhere(
+      (s) => s['name'] == 'scatter',
+    );
+    final parameters = scatter['parameters']! as Map;
+    final props = parameters['properties']! as Map;
+    final reversed = (props['y_reversed']! as Map)['anyOf']! as List;
+    expect((reversed.first as Map)['type'], 'boolean');
+    final series =
+        (((props['series']! as Map)['items']! as Map)['properties']! as Map);
+    expect(series['line'], {'type': 'boolean'});
+    final point =
+        (((series['points']! as Map)['items']! as Map)['properties']! as Map);
+    expect(point['highlight'], {'type': 'boolean'});
+  });
+
   test('host entries are pure JSON and preserve the A2UI function format', () {
     final modules = hostFunctionSchemas();
     expect(jsonDecode(jsonEncode(modules)), modules);

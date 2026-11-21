@@ -1826,6 +1826,9 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "y_reversed": {
+                      "type": "boolean"
+                    },
                     "series": {
                       "type": "array",
                       "items": {
@@ -1865,6 +1868,9 @@
                                 "label": {
                                   "type": "string",
                                   "maxLength": 512
+                                },
+                                "highlight": {
+                                  "type": "boolean"
                                 }
                               },
                               "required": [
@@ -1875,6 +1881,9 @@
                             },
                             "maxItems": 5000,
                             "minItems": 0
+                          },
+                          "line": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
@@ -2179,7 +2188,7 @@
     "chart.bar": "# Build a bar chart spec.\ndef bar(points: list[BarPointsItem], *, color: str | None = None, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None) -> BarSpec: ...\n",
     "chart.line": "# Build a line chart spec.\ndef line(series: list[LineSeriesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None) -> LineSpec: ...\n",
     "chart.gauge": "# Build a gauge chart spec.\ndef gauge(value: float, *, min_value: float, max_value: float, target: float | None = None, title: str | None = None, unit: str | None = None) -> GaugeSpec: ...\n",
-    "chart.scatter": "# Build a scatter chart spec.\ndef scatter(series: list[ScatterSeriesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None) -> ScatterSpec: ...\n",
+    "chart.scatter": "# Build a scatter chart spec.\ndef scatter(series: list[ScatterSeriesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None, y_reversed: bool | None = None) -> ScatterSpec: ...\n",
     "chart.pie": "# Build a pie chart spec.\ndef pie(slices: list[PieSlicesItem], *, title: str | None = None) -> PieSpec: ...\n",
     "chart.radar": "# Build a radar chart spec.\ndef radar(axes: list[RadarAxesItem], series: list[RadarSeriesItem], *, title: str | None = None) -> RadarSpec: ...\n",
     "chart.candlestick": "# Build a candlestick chart spec.\ndef candlestick(candles: list[CandlestickCandlesItem], *, title: str | None = None, xlabel: str | None = None, ylabel: str | None = None) -> CandlestickSpec: ...\n",
