@@ -18,7 +18,7 @@ test('repair examples explicitly enable checking and can run again after repair'
   assert.equal(runs.length, 2);
   assert.equal(runs[0].expectRepair, true);
   assert.equal(runs[1].expectRepair, false);
-  assert.ok(runs.every(a => a.expectedOutput === '766228'));
+  assert.ok(runs.every(a => a.expectedOutput === 'Ticket total: 24'));
   const typeCheck = prompts.find(p => p.id === 'type_check_ai_fix');
   assert.ok(typeCheck.actions.some(a => a.kind === 'check' && a.name === 'Type check'));
   for (const item of [nameError, typeCheck]) {
@@ -200,7 +200,7 @@ test('canvas matches use container ancestry even when composer geometry overlaps
 test('window scope distinguishes identical controls in neighbouring windows', async () => {
   const target = { boundingBox: async () => ({ x: 1, y: 1, width: 80, height: 30 }), isVisible: async () => true };
   const page = { locator(selector) {
-    assert.equal(selector, '[aria-label="Workbench region canvas"] [aria-label="Workbench window Monty GUI demo"]');
+    assert.equal(selector, '[aria-label="Workbench region canvas"] [aria-label="Workbench window Monty GUI demo" i]');
     return { getByRole(role, { name }) {
       assert.equal(role, 'button');
       assert.ok(name.test('Run'));

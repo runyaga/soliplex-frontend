@@ -416,12 +416,18 @@ test('run_program clicks through the action dispatcher and returns observation c
 
 test('fix examples require automatic output and a second run in the same window', async () => {
   const cases = await loadCases(new URL('../model/prompts.yaml', import.meta.url), { prompts: true });
-  for (const id of ['ai_fix_on', 'syntax_error_ai_fix', 'name_error_ai_fix', 'type_check_ai_fix']) {
+  const outputs = {
+    ai_fix_on: '766228',
+    syntax_error_ai_fix: 'Route distance: 14 km',
+    name_error_ai_fix: 'Ticket total: 24',
+    type_check_ai_fix: 'Stock after delivery: 4',
+  };
+  for (const [id, output] of Object.entries(outputs)) {
     const action = cases.find(c => c.id === id).actions.find(a => a.kind === 'run_program' && a.expectRepair);
     assert.equal(action.expectRepair, true);
-    assert.equal(action.expectedOutput, '766228');
+    assert.equal(action.expectedOutput, output);
     assert.ok(action.window);
-    for (const name of ['Run 2', '766228', 'ok']) {
+    for (const name of ['Run 2', output, 'ok']) {
       assert.ok(action.assertions.some(a => a.name === name && a.window === action.window && a.region === 'canvas'));
     }
   }
