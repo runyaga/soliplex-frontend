@@ -97,9 +97,9 @@ def handle_event(name, context):
         return
     index = book["next"].get(name, 0)
     sizes = {
-        "redraw": [50, 100, 200, 400, 401],
+        "redraw": [50, 20_000, 20_001],
         "charts": [8, 32, 50, 200, 500],
-        "files": [1024, 16384, 65536, 65537],
+        "files": [1024, 8 * 1024 * 1024, 8 * 1024 * 1024 + 1],
         "state": [1024, 8192, 14000, 14800, 15000, 16000, 16384, 16385],
     }
     size = sizes[name][index % len(sizes[name])] if name in sizes else index + 1
@@ -173,10 +173,10 @@ def handle_event(name, context):
             row["data_bytes"] = len(json.dumps(DATA).encode("utf-8"))
         elif name == "types":
             source = 'print("PROBE padded type check")\n#'
-            source += "x" * (11999 - len(source)) + "\n"
+            source += "x" * (1_000_000 - 1 - len(source)) + "\n"
             row["source_bytes"] = len(source.encode("utf-8"))
             row["window_id"] = ui.workbench.open_window(
-                "Probe type check 12000", "python", source
+                "Probe type check 1000000", "python", source
             )
             book["windows"].append(row["window_id"])
             row["status"] = "requested"
@@ -190,7 +190,7 @@ def handle_event(name, context):
         row["error"] = str(error)
         row["message"] = marker + " error"
         book["message"] = row["message"]
-        # At 401 nodes even the fallback controls cannot be allocated. Keep the
+        # At 20,001 nodes even the fallback controls cannot be allocated. Keep the
         # last accepted app and expose the rejection in the run transcript.
     save()
     print(marker + " " + row["status"] + " " + row.get("error", ""))

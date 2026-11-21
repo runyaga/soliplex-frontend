@@ -205,11 +205,11 @@ def build_router(
         scope=scope_dependency,
         the_installation=installation.depend_the_installation,
     ):
-        from .program_files import read_file, write_file
+        from .program_files import MAX_REQUEST_BYTES, read_file, write_file
 
         try:
             body = ProgramFileBody.model_validate(
-                await _read_request_json(request, max_bytes=400_000)
+                await _read_request_json(request, max_bytes=MAX_REQUEST_BYTES)
             )
             if operation == "read" and body.text is None:
                 return {"text": read_file(the_installation, scope, body.filename)}

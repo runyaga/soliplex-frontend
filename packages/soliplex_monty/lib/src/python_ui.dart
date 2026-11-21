@@ -47,7 +47,7 @@ const basicSignatures = <String, List<String>>{
 };
 
 /// Bounds on what one execution may stage.
-const _maxNodes = 400;
+const _maxNodes = 20000;
 const _maxPathLength = 200;
 
 /// A surface staged by `ui.show`, published only after the run succeeds.

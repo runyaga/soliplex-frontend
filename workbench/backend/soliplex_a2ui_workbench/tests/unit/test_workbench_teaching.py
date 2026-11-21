@@ -141,7 +141,7 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
         "ui.workbench.write_file(filename, text)",
         "current_program_apps",
         "untrusted user data",
-        "65536",
+        "8388608",
         "read-only to programs",
     ]:
         assert literal in text

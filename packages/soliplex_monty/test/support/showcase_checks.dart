@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:dart_monty/dart_monty.dart';
+import 'package:soliplex_monty/soliplex_monty.dart' show ReplLimits;
 import 'package:soliplex_monty/src/chart_module.dart';
 import 'package:soliplex_monty/src/program_type_check.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
@@ -81,10 +82,11 @@ Future<void> checkShowcase(
     source = source.replaceFirst('return value + "1"', 'return value + 1');
   }
 
-  const limits = ResourceLimits(
-    maxMemory: 32 * 1024 * 1024,
-    maxFeedDuration: Duration(seconds: 5),
-    maxSuspensions: 1000000,
+  const defaults = ReplLimits();
+  final limits = ResourceLimits(
+    maxMemory: defaults.maxMemory,
+    maxFeedDuration: defaults.maxFeedDuration,
+    maxSuspensions: defaults.maxSuspensions,
   );
   Future<String?> check(String code) =>
       checkProgramTypes(code, limits, workerLocation: nativeWorker);
@@ -194,7 +196,7 @@ Future<void> checkShowcase(
     switch (name) {
       case 'incident_flight_recorder':
         require(
-          utf8.encode(source).length < 12000,
+          utf8.encode(source).length < 1000000,
           'Publication exceeds budget',
         );
         require(

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:soliplex_design/soliplex_design.dart';
 import 'package:soliplex_monty/soliplex_monty.dart';
 import 'package:soliplex_monty/src/program_type_check.dart';
+import 'package:soliplex_monty/src/python_workbench.dart';
 
 import 'python_repl_test.dart' as repl;
 import 'support/monty.dart';
@@ -18,11 +19,12 @@ import 'support/showcase_checks.dart' show demoSource;
 void main() {
   test('fast probe gestures run in real Monty and persist receipts', () async {
     final source = demoSource('platform_probe');
-    expect(utf8.encode(source).length, lessThan(12000));
-    const limits = ResourceLimits(
-      maxMemory: 32 * 1024 * 1024,
-      maxFeedDuration: Duration(seconds: 1),
-      maxSuspensions: 1000000,
+    expect(utf8.encode(source).length, lessThan(1000000));
+    const defaults = ReplLimits();
+    final limits = ResourceLimits(
+      maxMemory: defaults.maxMemory,
+      maxFeedDuration: defaults.maxFeedDuration,
+      maxSuspensions: defaults.maxSuspensions,
     );
     expect(
       await checkProgramTypes(source, limits, workerLocation: montyWorker),
@@ -97,7 +99,7 @@ void main() {
       expect(last()['status'], 'completed');
       expect(last()['checksum'], isA<int>());
       expect(statusText(), last()['message']);
-      for (final size in [50, 100, 200, 400]) {
+      for (final size in [50, 20000]) {
         await event('redraw');
         expect(current.staged!.components, hasLength(size));
         expect(last()['status'], 'completed');
@@ -112,7 +114,7 @@ void main() {
         (node) => node['component'] == 'Chart',
       );
       expect((chart['spec']! as Map)['points'] as List, hasLength(8));
-      for (final size in [1024, 16384, 65536]) {
+      for (final size in [1024, PythonWorkbench.maxFileBytes]) {
         await event('files');
         expect(last()['matches'], true);
         expect(last()['read_bytes'], size);
@@ -120,13 +122,13 @@ void main() {
       await event('files');
       expect(last()['status'], 'error');
       expect(last()['error'], contains('Thread file request failed'));
-      expect(files['probe-payload.txt']!.length, 65536);
+      expect(files['probe-payload.txt']!.length, PythonWorkbench.maxFileBytes);
       await event('state');
       expect(last()['field_bytes'], 1024);
       expect(last()['data_bytes'], greaterThan(1024));
       await event('types');
       final child = current.workbench.actions.single['content']! as String;
-      expect(utf8.encode(child), hasLength(12000));
+      expect(utf8.encode(child), hasLength(1000000));
       expect(
         await checkProgramTypes(child, limits, workerLocation: montyWorker),
         isNull,

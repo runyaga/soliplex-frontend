@@ -19,11 +19,18 @@ from pydantic import (
     model_validator,
 )
 
+from .workbench_limits import (
+    MAX_ACTION_BYTES,
+    MAX_EDITOR_SOURCE_CHARS,
+    MAX_OUTPUT_CHARS,
+    MAX_PROGRAM_SOURCE_BYTES,
+)
+
 Id = Annotated[
     str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z][A-Za-z0-9_-]*$")
 ]
 Title = Annotated[str, Field(min_length=1, max_length=80)]
-Source = Annotated[str, Field(min_length=1, max_length=12_000)]
+Source = Annotated[str, Field(min_length=1, max_length=MAX_PROGRAM_SOURCE_BYTES)]
 Engine = Annotated[
     str,
     Field(
@@ -390,7 +397,7 @@ class ExportChart(Closed):
 
 class ProgramRepairResult(Closed):
     run: Annotated[int, Field(ge=0)]
-    source: Annotated[str, Field(max_length=20_000)]
+    source: Annotated[str, Field(max_length=MAX_EDITOR_SOURCE_CHARS)]
     output: Annotated[str, Field(max_length=2000)]
     error: Annotated[str, Field(max_length=2000)]
     ok: Literal[False]
@@ -411,7 +418,7 @@ class RunResult(Closed):
     invocationId: Id
     chainId: Id
     outcome: Literal["success", "error", "timeout", "cancelled", "crashed"]
-    output: Annotated[str, Field(max_length=4000)]
+    output: Annotated[str, Field(max_length=MAX_OUTPUT_CHARS)]
 
     @field_validator("engine")
     @classmethod
@@ -522,8 +529,10 @@ class ActionEnvelope(Closed):
         encoded = json.dumps(
             self.model_dump(mode="json"), separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8")
-        if len(encoded) > 16_384:
-            raise ValueError("workbench action exceeds 16 KiB")
+        if len(encoded) > MAX_ACTION_BYTES:
+            raise ValueError(f"workbench action exceeds {MAX_ACTION_BYTES} bytes")
+        if self.userAction.name in {"submit_form", "submit_intake"} and len(encoded) > 16_384:
+            raise ValueError("Form submission exceeds 16 KiB; shorten text fields")
         return self
 
 
@@ -679,7 +688,7 @@ class RunPythonClient(Closed):
     @field_validator("source")
     @classmethod
     def source_utf8_limit(cls, value: str) -> str:
-        if len(value.encode("utf-8")) > 12_000:
+        if len(value.encode("utf-8")) > MAX_PROGRAM_SOURCE_BYTES:
             raise ValueError("source exceeds UTF-8 byte limit")
         return value
 
@@ -691,7 +700,7 @@ class RunPythonServer(Closed):
     @field_validator("source")
     @classmethod
     def source_utf8_limit(cls, value: str) -> str:
-        if len(value.encode("utf-8")) > 12_000:
+        if len(value.encode("utf-8")) > MAX_PROGRAM_SOURCE_BYTES:
             raise ValueError("source exceeds UTF-8 byte limit")
         return value
 
@@ -728,7 +737,7 @@ class RepairProgram(Closed):
     @field_validator("source")
     @classmethod
     def source_utf8_limit(cls, value: str) -> str:
-        if len(value.encode("utf-8")) > 12_000:
+        if len(value.encode("utf-8")) > MAX_PROGRAM_SOURCE_BYTES:
             raise ValueError("source exceeds UTF-8 byte limit")
         return value
 

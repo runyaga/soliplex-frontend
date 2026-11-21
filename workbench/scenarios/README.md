@@ -243,14 +243,14 @@ never starts an experiment. The demo has no room suggestion button.
 
 | Button | Measurement |
 | --- | --- |
-| Compute | One loop per click, starting at 10,000 iterations and doubling until the first failure, with a 24-sample safety cap. The attempted size is saved before execution. Chrome records elapsed time, largest tested success, first failure and literal error. A CPU feed or memory limit may precede the five-second deadline. An unreached ceiling is marked censored. |
-| Redraw | Exact total trees of 50, 100, 200, 400 and 401 components, including controls, labels and containers. Records rejection text; accepted redraws require a visible marker and painted pixels. |
+| Compute | One loop per click, starting at 10,000 iterations and doubling until the first failure, with a 24-sample safety cap. The attempted size is saved before execution. Chrome records elapsed time, largest tested success, first failure and literal error. A CPU feed or memory limit may precede the 60-second deadline. An unreached ceiling is marked censored. |
+| Redraw | Exact total trees of 50, 20,000 and 20,001 components, including controls, labels and containers. Records rejection text; accepted redraws require a visible marker and painted pixels. |
 | Charts | Embedded `BarChart` with 8/32 bars, then `LineChart` with six series of 50/200/500 points. Records click-to-result time and checks the chart's image semantics and painted pixels. |
 | Events | One counter click through the retained interpreter and visible redraw. No server action is expected for a local counter update. |
 | Long session | 300 separate counter clicks in the same interpreter, with no Run or reset between them. Records each duration in browser evidence and the final count in the workdir receipt. An early failure records the last count. |
-| Files | Writes ASCII payloads of 1 KiB, 16 KiB, 64 KiB and 64 KiB + 1, then reads accepted writes and compares the complete content. Records the observed rejection message. |
+| Files | Writes ASCII payloads of 1 KiB, 8 MiB and 8 MiB + 1, then reads accepted writes and compares the complete content. Records the observed rejection message. |
 | App state | Grows `DATA.largest_field` through 1,024/8,192/14,000/14,800/15,000/16,000/16,384/16,385 bytes. After each step asks Glimmer for its length and suffix without supplying either. Captures the actual outgoing `workbenchApps` and reply. The browser currently omits an entire app above its 15,000-byte snapshot budget; the server separately bounds the wrapped snapshot at 16 KiB. |
-| Type check | Opens an inert, exactly 12,000-byte Python program. Enables Type check and presses Run on both the probe itself and that program. The checker duration shown beside the controls uses `Stopwatch` and includes checker worker startup; browser wall time also includes execution and rendering. Neither source executes during checking. |
+| Type check | Opens an inert, exactly 1,000,000-byte Python program. Enables Type check and presses Run on both the probe itself and that program. The checker duration shown beside the controls uses `Stopwatch` and includes checker worker startup; browser wall time also includes execution and rendering. Neither source executes during checking. |
 | Windows | Opens one window per click until a server rejection (20-sample safety cap), retaining the actual response and accepted server window/node counts. Closes accepted probe windows before cycling. |
 | Window cycles | Opens and closes a new window per click until the server refuses (40-cycle safety cap). Closed nodes remain allocated. Runs last because exhausting the 64-node budget prevents new content in that thread. |
 

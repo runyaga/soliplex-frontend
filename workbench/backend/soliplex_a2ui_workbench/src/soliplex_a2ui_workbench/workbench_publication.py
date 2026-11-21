@@ -11,6 +11,7 @@ from ag_ui.core import ActivitySnapshotEvent
 
 from .chart_validation import validate_chart
 from .workbench_forms import custom_form_components
+from .workbench_limits import MAX_OUTPUT_CHARS, MAX_PROGRAM_SOURCE_BYTES
 from .workbench_schemas import LayoutSnapshot, PlaceForm, validate_registered_mounts
 
 BASIC_CATALOG = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
@@ -191,10 +192,10 @@ class WorkbenchCatalogValidator:
             if (
                 not isinstance(source, str)
                 or not source
-                or len(source.encode("utf-8")) > 12_000
+                or len(source.encode("utf-8")) > MAX_PROGRAM_SOURCE_BYTES
             ):
                 raise ValueError("invalid PythonRepl source")
-            if not isinstance(output, str) or len(output) > 4_000:
+            if not isinstance(output, str) or len(output) > MAX_OUTPUT_CHARS:
                 raise ValueError("invalid PythonRepl output")
         elif catalog_id == WORKBENCH_CATALOG and component == "PlaceForm":
             if "receipt" in record and (

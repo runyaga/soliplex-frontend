@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .program_files import MAX_BYTES
 from .workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
 
 TOOL_EXAMPLES = {
@@ -280,7 +281,7 @@ Replay, reload, restore and layout moves never execute a program or API call.
 `ui.workbench.read_file(filename)` returns UTF-8 text, or "" for a missing file.
 `ui.workbench.write_file(filename, text)` saves UTF-8 text immediately; returns None.
 Both call the authenticated server for this thread, only during Run or a widget event.
-Use plain filenames ending .csv, .md, .txt or .json; maximum 65536 UTF-8 bytes.
+Use plain filenames ending .csv, .md, .txt or .json; maximum {MAX_BYTES} UTF-8 bytes.
 Form CSVs with submitted_at,submission_id columns are read-only to programs.
 These file calls are immediate I/O, separate from the staged layout transaction.
 Use import csv and csv.DictReader(ui.workbench.read_file("team-survey.csv").splitlines())

@@ -11,6 +11,9 @@ class PythonWorkbench {
   final Future<void> Function(String filename, String text)? writeFile;
 
   static const maxActions = 8;
+
+  /// Maximum UTF-8 size of a thread file, shared with the server contract.
+  static const int maxFileBytes = 8 * 1024 * 1024;
   static const signatures = <String, List<String>>{
     'read_file': ['filename'],
     'write_file': ['filename', 'text'],
@@ -74,10 +77,10 @@ class PythonWorkbench {
             if (entry.key == 'write_file' &&
                 writeFile != null &&
                 text is String) {
-              if (utf8.encode(text).length > 65536) {
+              if (utf8.encode(text).length > maxFileBytes) {
                 throw const ExternalException(
                   'ValueError',
-                  'Write exceeds 65536 UTF-8 bytes.',
+                  'Write exceeds $maxFileBytes UTF-8 bytes.',
                 );
               }
               await writeFile!(filename, text);

@@ -22,7 +22,7 @@ def test_platform_probe_publishes_exact_bounded_source_without_execution():
     published = tools.open_demo(ctx, "platform_probe")
     assert published["execution"] == "awaiting_user"
     source = Path(tools.__file__).with_name("platform_probe_demo.py").read_text()
-    assert len(source.encode("utf-8")) < 12000
+    assert len(source.encode("utf-8")) < 1_000_000
     record = ctx.snapshot()["content"][0]
     assert record["source"] == source
     assert record["output"] == ""
