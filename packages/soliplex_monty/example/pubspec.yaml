@@ -43,5 +43,8 @@ flutter:
 # hooks ^2 through better_player_macos -> objective_c. The web build runs no
 # code-asset hook, so the override only has to compile dart_monty's hook.
 dependency_overrides:
+  # soliplex_monty asks for dart_monty: any; this app pins the local checkout.
+  dart_monty:
+    path: ../../../../../dart_monty2/packages/dart_monty
   code_assets: ^2.2.0
   hooks: ^2.2.0

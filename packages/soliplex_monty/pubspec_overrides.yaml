@@ -1,0 +1,5 @@
+# Local dart_monty checkout. Pub reads this file only when this package is
+# the root, so git consumers pin dart_monty themselves.
+dependency_overrides:
+  dart_monty:
+    path: ../../../../dart_monty2/packages/dart_monty

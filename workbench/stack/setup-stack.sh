@@ -477,16 +477,17 @@ import os
 from pathlib import Path
 import yaml
 p = Path(os.environ['SCRATCH'])
-q = p/'frontend/packages/soliplex_monty/pubspec.yaml'
+monty = str(p/'deps/dart_monty2/packages/dart_monty')
+q = p/'frontend/packages/soliplex_monty/pubspec_overrides.yaml'
 data = yaml.safe_load(q.read_text())
-data['dependencies']['dart_monty']['path'] = str(p/'deps/dart_monty2/packages/dart_monty')
+data['dependency_overrides']['dart_monty']['path'] = monty
 with q.open('w') as f:
     yaml.safe_dump(data, f, sort_keys=False)
 q = p/'frontend/packages/soliplex_monty/example/pubspec.yaml'
 data = yaml.safe_load(q.read_text())
-for section in ('dependencies', 'dev_dependencies'):
+for section in ('dependencies', 'dev_dependencies', 'dependency_overrides'):
     if 'dart_monty' in (data.get(section) or {}):
-        data[section]['dart_monty']['path'] = str(p/'deps/dart_monty2/packages/dart_monty')
+        data[section]['dart_monty']['path'] = monty
 with q.open('w') as f:
     yaml.safe_dump(data, f, sort_keys=False)
 # dart2js wraps a shift by 32 to zero, and Random.nextInt(0) throws on the web.
