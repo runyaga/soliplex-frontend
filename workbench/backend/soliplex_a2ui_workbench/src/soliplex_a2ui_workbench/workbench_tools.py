@@ -232,9 +232,16 @@ def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
         "syntax_error": ("Syntax error example", "syntax_error_demo.py.txt", False),
         "name_error": ("NameError example", "name_error_demo.py", False),
         "type_check": ("Type check example", "type_check_demo.py", True),
+        "survey_results": ("Survey results", "survey_results_demo.py", False),
+        "notes": ("Notes", "notes_demo.py", False),
+        "todo": ("To-do", "todo_demo.py", False),
+        "sales_pipeline": ("Pipeline", "sales_pipeline_demo.py", False),
+        "hot_patch": ("Traffic lab", "hot_patch_demo.py", False),
+        "reproducer": ("Anomaly explorer", "reproducer_demo.py", False),
+        "healing_pipeline": ("Self-healing pipeline", "healing_pipeline_demo.py", True),
     }
     if name not in demos:
-        raise ValueError('unknown demo; use open_demo with monty_gui, syntax_error, name_error or type_check')
+        raise ValueError("unknown demo; use open_demo with " + ", ".join(demos))
     title, filename, type_check = demos[name]
     source = Path(__file__).with_name(filename).read_text()
     if not type_check:
@@ -323,15 +330,26 @@ def create_container(
 
 
 def place_form(
-    ctx: WorkbenchToolContext, title: str, parent_id: str,
-    template: str | None = None, fields: list[dict[str, object] | str] | None = None
+    ctx: WorkbenchToolContext,
+    title: str,
+    parent_id: str,
+    template: str | None = None,
+    fields: list[dict[str, object] | str] | None = None,
 ) -> dict[str, object]:
     """Place a validated bound form under an allowed container."""
     from .workbench_schemas import PlaceForm
-    definition = PlaceForm.model_validate({"title": title, "parent_id": parent_id, "template": template, "fields": fields})
+
+    definition = PlaceForm.model_validate(
+        {"title": title, "parent_id": parent_id, "template": template, "fields": fields}
+    )
     activity_id, surface_id = _record_ids()
     return _content_result(
-        ctx, form_record(activity_id, surface_id, title, fields=definition.model_dump()["fields"]), parent_id, title=title
+        ctx,
+        form_record(
+            activity_id, surface_id, title, fields=definition.model_dump()["fields"]
+        ),
+        parent_id,
+        title=title,
     )
 
 
@@ -477,7 +495,8 @@ def close_panel(ctx: WorkbenchToolContext, node_id: str) -> dict[str, object]:
     node["visibility"] = "closed"
     closed_ids = {node_id} | _descendant_ids(layout["nodes"], node)
     programs = {
-        n["payload"].get("surfaceId") for n in layout["nodes"]
+        n["payload"].get("surfaceId")
+        for n in layout["nodes"]
         if n["id"] in closed_ids and n["kind"] == "surface"
     }
     for app_id, owner in layout["shared"].get("programApps", {}).items():
@@ -551,9 +570,14 @@ def repair_program(
         if ancestor["parentId"] is None:
             break
         ancestor = _node(layout["nodes"], ancestor["parentId"])
-    auto_run = bool(request and request["surfaceId"] == record["surfaceId"]
-                    and request["result"]["aiFix"] and request["result"]["autoRun"]
-                    and previous_source != source and mounted)
+    auto_run = bool(
+        request
+        and request["surfaceId"] == record["surfaceId"]
+        and request["result"]["aiFix"]
+        and request["result"]["autoRun"]
+        and previous_source != source
+        and mounted
+    )
     return {
         "status": "published",
         "layoutRevision": result["layoutRevision"],
@@ -562,12 +586,16 @@ def repair_program(
         "surfaceId": record["surfaceId"],
         "execution": "client_controlled",
         "autoRun": auto_run,
-        "instruction": ("The fix will run now. Wait for a successful client run result before claiming it ran."
-                        if auto_run else "Tell the user to press Run. Do not claim the repair ran."),
+        "instruction": (
+            "The fix will run now. Wait for a successful client run result before claiming it ran."
+            if auto_run
+            else "Tell the user to press Run. Do not claim the repair ran."
+        ),
     }
 
 
 def start_walkthrough(ctx):
     """Start only the server-curated walkthrough, without running Python."""
     from .workbench_walkthrough import start_walkthrough as start
+
     return start(ctx)

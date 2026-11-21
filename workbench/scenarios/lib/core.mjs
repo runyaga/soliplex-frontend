@@ -114,7 +114,7 @@ export function validateCases(data, { prompts = false } = {}) {
       if (!['click', 'fill', 'select', 'choose', 'check', 'run_program'].includes(kind) || typeof action.name !== 'string' || !action.name.trim() || !regions.has(action.region ?? 'workspace')) throw new Error('Invalid action');
       if (!validWindow(action.window)) throw new Error('Invalid action window');
       if ((kind === 'run_program' && role !== 'button') || (kind === 'click' && !['button', 'tab'].includes(role)) || (kind === 'fill' && role !== 'textbox') || (kind === 'check' && role !== 'checkbox') || (['select', 'choose'].includes(kind) && !['button', 'checkbox', 'radio', 'option'].includes(role))) throw new Error('Invalid action role');
-      if (kind === 'run_program' && (!prompts || typeof action.expectRepair !== 'boolean')) throw new Error('Invalid program repair expectation');
+      if (kind === 'run_program' && (!prompts || !(typeof action.expectRepair === 'boolean' || (Number.isInteger(action.expectRepair) && action.expectRepair >= 1 && action.expectRepair <= 5)))) throw new Error('Invalid program repair expectation');
       if (kind === 'fill' && typeof action.value !== 'string') throw new Error('Missing fill value');
       if (action.awaitTurn !== undefined && (typeof action.awaitTurn !== 'boolean' || kind !== 'click')) throw new Error('Invalid awaitTurn flag');
       if (action.assertions !== undefined) validateCases([{ id: 'action', assertions: action.assertions }]);

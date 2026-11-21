@@ -124,6 +124,27 @@ For "Start the walkthrough." call start_walkthrough(); do nothing else.
 For "Open the syntax error example." call open_demo("syntax_error").
 For "Open the NameError example." call open_demo("name_error").
 For "Open the type check example." call open_demo("type_check").
+For the hot-patch demo call open_demo("hot_patch"). Tell the user to enable AI Fix,
+press Run, click Normal traffic and Burst, then Export report. Preserve STATE,
+samples and pending when repairing. Fix only the failing division line.
+The repaired module retries the pending export in the retained session.
+For the anomaly reproducer demo call open_demo("reproducer"). Run, click C,
+Spawn reproducer, then press Run in Anomaly reproducer. Its assertion verifies the breach:
+compare its peak of 240 ms with the parent selection and target of 100 ms.
+For the self-healing pipeline demo call open_demo("healing_pipeline"). Type check
+is already on; ask the user to enable AI Fix and press Run once. Fix only the
+reported line each round: first the annotated return expression, then the CSV
+numeric conversion. Keep the assertions, dropped count, chart and clean.csv write.
+For Team survey with live results, call place_form with title="Team survey",
+parent_id="r_left", fields=[{{"name":"name","label":"Name","kind":"text","required":true}},
+{{"name":"color","label":"Color","kind":"choice","options":["Red","Green","Blue"],"required":true}}],
+then call open_demo("survey_results"). The user submits responses, presses Run,
+then Refresh; clicking a colour bar reveals its respondents.
+For Notes that save call open_demo("notes"). Run, edit Notes, Save, Run to reload.
+For the saved To-do demo call open_demo("todo"). Run, add tasks, mark Done,
+then answer what's left from current_program_apps, respecting each done flag.
+For the sales pipeline demo call open_demo("sales_pipeline"). Run, set Rows,
+Generate; monthly totals are written to sales.csv and charted.
 Keep these curated sources unchanged. Reply with a short confirmation:
 "The example is open. Enable AI Fix, then press Run to try the repair."
 Type check is already on for the type check example; its checker error can be repaired with AI Fix.
@@ -229,7 +250,8 @@ do not assume a screen size before a user gesture.
 ui.workbench layout requests are allowed only during the user's Run or button event.
 They are staged until successful completion, limited to 8 per gesture, and
 accepted by the server using the same tree rules as tools. open_window returns
-an id; move_window(id, order=0) reorders on the canvas; close_window(id) closes.
+an id; update_window(id, content) replaces owned text or Python content and reopens
+the same window without allocating nodes. It never runs Python source; move_window(id, order=0) reorders on the canvas; close_window(id) closes.
 A program may change its own window and windows it opened. kind is text or
 python. A python window shows source and Run; opening never executes it.
 Replay, reload, restore and layout moves never execute a program or API call.
@@ -285,14 +307,15 @@ WELCOME_MESSAGE = (
 # and matches a reproducible harness flow.
 ROOM_SUGGESTIONS = (
     "Start the walkthrough.",
-    "Open the Monty GUI demo.",
-    "Build Team survey: Name and single choice Color (Red, Green, Blue), saving CSV. Add a Survey results Python app that reads team-survey.csv, charts color counts and has Refresh. I will press Run.",
-    "Build a Notes Python app with a Notes text area and Save button. Save notes.md and load it on Run so reopening the thread keeps my notes. I will press Run.",
-    "Build a Python To-do app with New task, Add, Done and Remove controls. Save items to todo.json, load on Run and share items as app data so I can ask what's left. I will press Run.",
-    "Build a Pipeline Python app with a Rows input and Generate button. Generate monthly totals, save sales.csv and chart it. Default 3 rows: Jan 10, Feb 20, Mar 30. I will press Run.",
-    ("Write a Python program in a window titled Primes that sums all primes below 50000. After I press Run, "
-    "tell me the result."),
-    "Open the syntax error example.",
-    "Open the NameError example.",
-    "Open the type check example.",
+    "Open the hot-patch demo. I will enable AI Fix, press Run, build traffic and Export report; repair the crashing button without losing samples, then I will ask whether we breached the target.",
+    "Open the anomaly reproducer demo. I will press Run, click an outlier bar and Spawn reproducer, then Run the child script and ask you to compare it with the app.",
+    "Open the self-healing pipeline demo. With Type check and AI Fix on, I will press Run once to watch two repairs end in a chart and clean.csv, then ask how many rows were dropped.",
+    "Open Team survey with live results. Place the survey and curated results app; I will submit responses, press Run, Refresh and click a colour bar to see its respondents.",
+    "Open Notes that save. I will press Run, edit notes, see unsaved status and Save to notes.md, then Run again to reload them.",
+    "Open the saved To-do demo. I will press Run, Add tasks and mark one Done, then ask what's left; save items in todo.json and share app state.",
+    "Open the sales pipeline demo. I will press Run, choose Rows and Generate to save sales.csv and chart monthly totals.",
+    "Open the Monty GUI demo. I will press Run, change stock, record samples and click bars to restore stock; Open log window shows recent events.",
+    "Open the syntax error example. I will enable AI Fix and press Run to watch a syntax repair produce a route distance.",
+    "Open the NameError example. I will enable AI Fix and press Run to watch a misspelled name repaired and the ticket total computed.",
+    "Open the type check example. Type check is on; I will enable AI Fix and press Run to repair the type error and compute stock after delivery.",
 )

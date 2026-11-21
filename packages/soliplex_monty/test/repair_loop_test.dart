@@ -260,6 +260,36 @@ void main() {
     skip: skipWithoutMonty != false,
   );
 
+  testWidgets(
+    'a repaired GUI publishes layout then reports successful run output',
+    (tester) async {
+      controller.apply(replSurface(failing, workbench: true));
+      await mount(tester);
+      await click(tester, checkbox);
+      await runAndWait(tester);
+      await replace(
+        tester,
+        'import ui\nui.show(ui.Text("Recovered"))\n'
+        'ui.workbench.open_window("Result", "text", "artifact saved")\n'
+        'print("artifact saved")',
+      );
+      await startAutoRuns(tester);
+      await pumpUntil(
+        tester,
+        () => actions.any((a) => a['name'] == 'workbench.program.run_result'),
+      );
+      expect(actions.map((a) => a['name']), [
+        'workbench.program.repair',
+        'workbench.program.layout',
+        'workbench.program.run_result',
+      ]);
+      expect(resultOf(actions.last)['output'], contains('artifact saved'));
+      expect(resultOf(actions.last)['outcome'], 'success');
+      await finish(tester);
+    },
+    skip: skipWithoutMonty != false,
+  );
+
   testWidgets('unchecking pending repair ends chain and blocks arrival', (
     tester,
   ) async {

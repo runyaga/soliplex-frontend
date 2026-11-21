@@ -12,6 +12,215 @@
     ]
   },
   {
+    "id": "hot_patch_retains_samples",
+    "prompt": "Open the hot-patch demo. I will enable AI Fix, press Run, build traffic and Export report; repair the crashing button without losing samples, then I will ask whether we breached the target.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "window": "Traffic lab"
+      },
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Traffic lab",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Normal traffic",
+        "window": "Traffic lab app"
+      },
+      {
+        "role": "button",
+        "name": "Burst",
+        "window": "Traffic lab app",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "4 samples \u00b7 peak 140",
+            "window": "Traffic lab app"
+          }
+        ]
+      },
+      {
+        "kind": "run_program",
+        "name": "Export report",
+        "window": "Traffic lab app",
+        "expectRepair": true,
+        "expectedOutput": "Samples: 4; peak: 140; target: 100",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Fixed after 1 attempt",
+            "window": "Traffic lab"
+          },
+          {
+            "kind": "text",
+            "name": "4 samples \u00b7 peak 140",
+            "window": "Traffic lab app"
+          },
+          {
+            "kind": "text",
+            "name": "Saved traffic-report.txt",
+            "window": "Traffic lab app"
+          }
+        ]
+      }
+    ],
+    "followup": [
+      "Did we breach the target in my Traffic lab? Give the peak and target."
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "traffic-report.txt",
+        "includes": "Samples: 4; peak: 140; target: 100"
+      },
+      {
+        "kind": "reply",
+        "includes": "140"
+      },
+      {
+        "kind": "reply",
+        "includes": "100"
+      }
+    ]
+  },
+  {
+    "id": "anomaly_spawns_reproducer",
+    "prompt": "Open the anomaly reproducer demo. I will press Run, click an outlier bar and Spawn reproducer, then Run the child script and ask you to compare it with the app.",
+    "actions": [
+      {
+        "role": "button",
+        "name": "Run",
+        "window": "Anomaly explorer",
+        "awaitTurn": true
+      },
+      {
+        "role": "button",
+        "name": "Bar C: 240",
+        "window": "Anomaly explorer app",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "'latency_ms': 240",
+            "window": "Anomaly explorer app"
+          }
+        ]
+      },
+      {
+        "role": "button",
+        "name": "Spawn reproducer",
+        "window": "Anomaly explorer app",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "source",
+            "name": "Python source",
+            "window": "Anomaly reproducer",
+            "includes": "assert peak > target"
+          },
+          {
+            "kind": "text",
+            "name": "Run 1",
+            "window": "Anomaly reproducer",
+            "absent": true
+          }
+        ]
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "window": "Anomaly reproducer",
+        "expectRepair": false,
+        "expectedOutput": "Selected peak: 240 ms; target: 100 ms"
+      }
+    ],
+    "followup": [
+      "Compare the reproducer result with the selected rows in my Anomaly explorer. Which batch breached which target?"
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "anomalies.csv",
+        "includes": "C,240"
+      },
+      {
+        "kind": "text",
+        "name": "Selected peak: 240",
+        "window": "Anomaly reproducer"
+      },
+      {
+        "kind": "reply",
+        "includes": "240"
+      },
+      {
+        "kind": "reply",
+        "includes": "100"
+      }
+    ]
+  },
+  {
+    "id": "two_stage_healing_pipeline",
+    "prompt": "Open the self-healing pipeline demo. With Type check and AI Fix on, I will press Run once to watch two repairs end in a chart and clean.csv, then ask how many rows were dropped.",
+    "actions": [
+      {
+        "kind": "check",
+        "name": "Type check",
+        "window": "Self-healing pipeline"
+      },
+      {
+        "kind": "check",
+        "name": "AI Fix",
+        "window": "Self-healing pipeline"
+      },
+      {
+        "kind": "run_program",
+        "name": "Run",
+        "window": "Self-healing pipeline",
+        "expectRepair": 2,
+        "expectedOutput": "2 clean rows, dropped 1, total 40",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Fixed after 2 attempts",
+            "window": "Self-healing pipeline"
+          },
+          {
+            "kind": "text",
+            "name": "Saved clean.csv",
+            "window": "Self-healing pipeline app"
+          },
+          {
+            "kind": "role",
+            "role": "img",
+            "name": "Clean monthly sales",
+            "window": "Self-healing pipeline app"
+          }
+        ]
+      }
+    ],
+    "followup": [
+      "How many rows were dropped by my Self-healing pipeline and what is the cleaned total?"
+    ],
+    "assertions": [
+      {
+        "kind": "file",
+        "filename": "clean.csv",
+        "includes": "Jan,10\nMar,30"
+      },
+      {
+        "kind": "reply",
+        "includes": "1"
+      },
+      {
+        "kind": "reply",
+        "includes": "40"
+      }
+    ]
+  },
+  {
     "id": "intake_left",
     "prompt": "Place an intake form in the left sidebar. Use the built-in intake template. Title it Scenario intake.",
     "assertions": [
@@ -662,271 +871,169 @@
       {
         "role": "button",
         "name": "Run",
-        "region": "canvas",
+        "window": "Monty GUI demo",
         "awaitTurn": true,
         "assertions": [
           {
             "kind": "text",
-            "name": "Python drives the GUI",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "text",
-            "name": "Count: 0",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "text",
-            "name": "last event: run, count 0",
-            "region": "canvas",
+            "name": "Count: 3",
             "window": "Monty GUI demo app",
             "initialViewport": true
           },
           {
             "kind": "role",
             "role": "button",
-            "name": "Bar Start: 0",
-            "region": "canvas",
+            "name": "Bar Start: 3",
             "window": "Monty GUI demo app",
             "initialViewport": true
           },
           {
             "kind": "role",
-            "role": "button",
-            "name": "+1",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
-            "role": "button",
-            "name": "-1",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
-            "role": "button",
-            "name": "Reset",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
-            "role": "button",
-            "name": "Add point",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
-            "role": "button",
-            "name": "Open log window",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
-            "role": "button",
-            "name": "Close log window",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "role",
+            "role": "group",
             "name": "Workbench window Monty event log",
-            "region": "canvas",
-            "role": "group"
-          },
-          {
-            "kind": "text",
-            "name": "Counter samples",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
+            "absent": true
           }
-        ],
-        "window": "Monty GUI demo"
-      },
-      {
-        "role": "button",
-        "name": "Close log window",
-        "region": "canvas",
-        "awaitTurn": true,
-        "assertions": [
-          {
-            "kind": "role",
-            "name": "Workbench window Monty event log",
-            "region": "canvas",
-            "absent": true,
-            "role": "group"
-          },
-          {
-            "kind": "text",
-            "name": "Count: 0",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          }
-        ],
-        "window": "Monty GUI demo app",
-        "initialViewport": true
+        ]
       },
       {
         "role": "button",
         "name": "+1",
-        "region": "canvas",
+        "window": "Monty GUI demo app",
         "assertions": [
           {
             "kind": "text",
-            "name": "Count: 1",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
-          },
-          {
-            "kind": "text",
-            "name": "last event: plus, count 1",
-            "region": "canvas",
+            "name": "Count: 4",
             "window": "Monty GUI demo app",
             "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo app",
         "initialViewport": true
       },
       {
         "role": "button",
-        "name": "+1",
-        "region": "canvas",
+        "name": "Add point",
+        "window": "Monty GUI demo app",
+        "assertions": [
+          {
+            "kind": "role",
+            "role": "button",
+            "name": "Bar Sample 1: 4",
+            "window": "Monty GUI demo app",
+            "initialViewport": true
+          }
+        ],
+        "initialViewport": true
+      },
+      {
+        "role": "button",
+        "name": "Bar Start: 3",
+        "window": "Monty GUI demo app",
         "assertions": [
           {
             "kind": "text",
-            "name": "Count: 2",
-            "region": "canvas",
+            "name": "Count: 3",
             "window": "Monty GUI demo app",
             "initialViewport": true
           },
           {
             "kind": "text",
-            "name": "last event: plus, count 2",
-            "region": "canvas",
+            "name": "Restored stock from Start: 3.",
             "window": "Monty GUI demo app",
             "initialViewport": true
           }
         ],
-        "window": "Monty GUI demo app",
         "initialViewport": true
       },
       {
         "role": "button",
         "name": "Open log window",
-        "region": "canvas",
+        "window": "Monty GUI demo app",
         "awaitTurn": true,
         "assertions": [
           {
-            "kind": "role",
-            "name": "Workbench window Monty event log",
-            "region": "canvas",
-            "role": "group"
-          },
-          {
             "kind": "text",
-            "name": "last event: open_log, count 2",
-            "region": "canvas",
-            "window": "Monty GUI demo app",
-            "initialViewport": true
+            "name": "last event: open_log, count 3",
+            "window": "Monty event log"
           }
         ],
-        "window": "Monty GUI demo app",
         "initialViewport": true
       },
       {
         "role": "button",
         "name": "Close log window",
-        "region": "canvas",
+        "window": "Monty GUI demo app",
         "awaitTurn": true,
         "assertions": [
           {
             "kind": "role",
+            "role": "group",
             "name": "Workbench window Monty event log",
-            "region": "canvas",
-            "absent": true,
-            "role": "group"
+            "absent": true
           },
           {
             "kind": "text",
-            "name": "last event: close_log, count 2",
-            "region": "canvas",
+            "name": "Count: 3",
             "window": "Monty GUI demo app",
             "initialViewport": true
           }
         ],
+        "initialViewport": true
+      },
+      {
+        "role": "button",
+        "name": "Open log window",
         "window": "Monty GUI demo app",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "last event: close_log, count 3",
+            "window": "Monty event log"
+          }
+        ],
+        "initialViewport": true
+      },
+      {
+        "role": "button",
+        "name": "Close log window",
+        "window": "Monty GUI demo app",
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "role",
+            "role": "group",
+            "name": "Workbench window Monty event log",
+            "absent": true
+          },
+          {
+            "kind": "text",
+            "name": "Count: 3",
+            "window": "Monty GUI demo app",
+            "initialViewport": true
+          }
+        ],
         "initialViewport": true
       }
     ],
     "assertions": [
       {
         "kind": "text",
-        "name": "Monty GUI demo",
-        "region": "canvas"
+        "name": "Count: 3",
+        "window": "Monty GUI demo app"
+      },
+      {
+        "kind": "text",
+        "name": "Stock samples",
+        "window": "Monty GUI demo app"
       },
       {
         "kind": "role",
         "role": "textbox",
         "name": "Python source",
-        "region": "canvas",
         "window": "Monty GUI demo"
-      },
-      {
-        "kind": "role",
-        "role": "button",
-        "name": "Run",
-        "region": "canvas",
-        "window": "Monty GUI demo"
-      },
-      {
-        "kind": "text",
-        "name": "Count: 2",
-        "region": "canvas",
-        "window": "Monty GUI demo app",
-        "initialViewport": true
-      },
-      {
-        "kind": "text",
-        "name": "last event: close_log, count 2",
-        "region": "canvas",
-        "window": "Monty GUI demo app",
-        "initialViewport": true
-      },
-      {
-        "kind": "role",
-        "role": "button",
-        "name": "Bar Start: 0",
-        "region": "canvas",
-        "window": "Monty GUI demo app",
-        "initialViewport": true
-      },
-      {
-        "kind": "role",
-        "name": "Workbench window Monty event log",
-        "region": "canvas",
-        "absent": true,
-        "role": "group"
       }
     ],
-    "prompt": "Open the Monty GUI demo."
+    "prompt": "Open the Monty GUI demo. I will press Run, change stock, record samples and click bars to restore stock; Open log window shows recent events."
   },
   {
     "id": "ai_fix_off",
@@ -1015,7 +1122,7 @@
   },
   {
     "id": "syntax_error_ai_fix",
-    "prompt": "Open the syntax error example.",
+    "prompt": "Open the syntax error example. I will enable AI Fix and press Run to watch a syntax repair produce a route distance.",
     "actions": [
       {
         "kind": "check",
@@ -1063,7 +1170,7 @@
   },
   {
     "id": "name_error_ai_fix",
-    "prompt": "Open the NameError example.",
+    "prompt": "Open the NameError example. I will enable AI Fix and press Run to watch a misspelled name repaired and the ticket total computed.",
     "actions": [
       {
         "kind": "check",
@@ -1125,7 +1232,7 @@
   },
   {
     "id": "type_check_ai_fix",
-    "prompt": "Open the type check example.",
+    "prompt": "Open the type check example. Type check is on; I will enable AI Fix and press Run to repair the type error and compute stock after delivery.",
     "actions": [
       {
         "kind": "check",
@@ -1212,7 +1319,7 @@
   },
   {
     "id": "team_survey_live_results",
-    "prompt": "Build Team survey: Name and single choice Color (Red, Green, Blue), saving CSV. Add a Survey results Python app that reads team-survey.csv, charts color counts and has Refresh. I will press Run.",
+    "prompt": "Open Team survey with live results. Place the survey and curated results app; I will submit responses, press Run, Refresh and click a colour bar to see its respondents.",
     "actions": [
       {
         "role": "button",
@@ -1222,7 +1329,7 @@
       },
       {
         "kind": "fill",
-        "name": "Name",
+        "name": "Name * (max 4000 characters)",
         "value": "Casey",
         "region": "left"
       },
@@ -1236,7 +1343,14 @@
         "role": "button",
         "name": "Submit",
         "region": "left",
-        "awaitTurn": true
+        "awaitTurn": true,
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Saved row 1 to team-survey.csv",
+            "region": "left"
+          }
+        ]
       },
       {
         "role": "button",
@@ -1245,8 +1359,20 @@
         "assertions": [
           {
             "kind": "role",
-            "role": "img",
-            "name": "Blue: 1",
+            "role": "button",
+            "name": "Bar Blue: 1",
+            "window": "Survey results app"
+          }
+        ]
+      },
+      {
+        "role": "button",
+        "name": "Bar Blue: 1",
+        "window": "Survey results app",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Blue respondents: Casey",
             "window": "Survey results app"
           }
         ]
@@ -1256,19 +1382,25 @@
       {
         "kind": "file",
         "filename": "team-survey.csv",
-        "includes": "Blue"
+        "includes": "Casey"
       },
       {
-        "kind": "role",
-        "role": "img",
-        "name": "Blue: 1",
+        "kind": "text",
+        "name": "Blue respondents: Casey",
         "window": "Survey results app"
+      },
+      {
+        "kind": "reply",
+        "includes": "Casey"
       }
+    ],
+    "followup": [
+      "Who chose the selected colour in my Survey results app? Give the name."
     ]
   },
   {
     "id": "notes_that_save",
-    "prompt": "Build a Notes Python app with a Notes text area and Save button. Save notes.md and load it on Run so reopening the thread keeps my notes. I will press Run.",
+    "prompt": "Open Notes that save. I will press Run, edit notes, see unsaved status and Save to notes.md, then Run again to reload them.",
     "actions": [
       {
         "role": "button",
@@ -1281,12 +1413,26 @@
         "name": "Notes",
         "value": "Keep these notes",
         "region": "canvas",
-        "window": "Notes app"
+        "window": "Notes app",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Unsaved changes: true",
+            "window": "Notes app"
+          }
+        ]
       },
       {
         "role": "button",
         "name": "Save",
-        "window": "Notes app"
+        "window": "Notes app",
+        "assertions": [
+          {
+            "kind": "text",
+            "name": "Unsaved changes: false",
+            "window": "Notes app"
+          }
+        ]
       },
       {
         "role": "button",
@@ -1318,7 +1464,7 @@
   },
   {
     "id": "todo_current_state",
-    "prompt": "Build a Python To-do app with New task, Add, Done and Remove controls. Save items to todo.json, load on Run and share items as app data so I can ask what's left. I will press Run.",
+    "prompt": "Open the saved To-do demo. I will press Run, Add tasks and mark one Done, then ask what's left; save items in todo.json and share app state.",
     "actions": [
       {
         "role": "button",
@@ -1391,7 +1537,7 @@
   },
   {
     "id": "pipeline_saved_csv",
-    "prompt": "Build a Pipeline Python app with a Rows input and Generate button. Generate monthly totals, save sales.csv and chart it. Default 3 rows: Jan 10, Feb 20, Mar 30. I will press Run.",
+    "prompt": "Open the sales pipeline demo. I will press Run, choose Rows and Generate to save sales.csv and chart monthly totals.",
     "actions": [
       {
         "role": "button",
@@ -1421,9 +1567,16 @@
       {
         "kind": "role",
         "role": "img",
-        "name": "Mar: 30",
+        "name": "Monthly sales",
         "window": "Pipeline app"
+      },
+      {
+        "kind": "reply",
+        "includes": "60"
       }
+    ],
+    "followup": [
+      "What is the total in my Pipeline app? Reply with the number only."
     ]
   }
 ]

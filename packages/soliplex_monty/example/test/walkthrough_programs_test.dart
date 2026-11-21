@@ -95,7 +95,7 @@ void main() {
     await perform('open_log');
     expect(actions.last['name'], 'workbench.program.layout');
     final batch = ((actions.last['context']! as Map)['actions'] as List)
-        .cast<Map>();
+        .cast<Map<String, Object?>>();
     expect(
       batch.where((a) => a['op'] == 'open').single['content'],
       contains('last event: open_log, count 6'),

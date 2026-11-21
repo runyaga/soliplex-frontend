@@ -2278,6 +2278,7 @@
     "workbench.read_file": "ui.workbench.read_file(filename)",
     "workbench.write_file": "ui.workbench.write_file(filename, text)",
     "workbench.open_window": "ui.workbench.open_window(title, kind, content)",
+    "workbench.update_window": "ui.workbench.update_window(window_id, content)",
     "workbench.move_window": "ui.workbench.move_window(window_id, order)",
     "workbench.close_window": "ui.workbench.close_window(window_id)"
   }

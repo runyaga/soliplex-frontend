@@ -38,7 +38,7 @@ test('every new suggestion has a real Run, edits and a saved file or model answe
     assert.ok(item.assertions.some(assertion => ['file', 'reply'].includes(assertion.kind)));
   }
   const survey = cases.find(item => item.id === 'team_survey_live_results');
-  assert.ok(survey.actions.some(action => action.name === 'Refresh' && action.assertions.some(a => a.name === 'Blue: 1')));
+  assert.ok(survey.actions.some(action => action.name === 'Refresh' && action.assertions.some(a => a.name === 'Bar Blue: 1')));
   const todo = cases.find(item => item.id === 'todo_current_state');
   assert.ok(todo.actions.some(action => action.name === 'Done Buy tea'));
   assert.ok(todo.actions.some(action => action.name === 'Remove Discard me'));

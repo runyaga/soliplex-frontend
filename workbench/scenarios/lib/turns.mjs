@@ -73,6 +73,7 @@ export async function captureTurn(page, { room, threadId, timeoutMs }, trigger) 
 // Off must stay quiet for the full 20 seconds; a single captured turn is a failure.
 // An expectedOutput without a repair instead requires a successful ordinary Run.
 export async function captureProgramTurns(page, { room, threadId, timeoutMs, expectedOutput }, trigger, expectRepair, onTurn = () => {}, wait = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const repairCount = expectRepair === true ? 1 : (expectRepair || 0);
   const expectSuccess = !expectRepair && Boolean(expectedOutput);
   const turns = [];
   let completed;
@@ -129,14 +130,21 @@ export async function captureProgramTurns(page, { room, threadId, timeoutMs, exp
     if (firstError) throw firstError;
     const repairs = turns.filter(t => t.actionName === 'workbench.program.repair');
     const runs = turns.filter(t => t.actionName === 'workbench.program.run_result');
+    const layouts = turns.filter(t => t.actionName === 'workbench.program.layout');
+    const unexpected = turns.filter(t => !['workbench.program.repair', 'workbench.program.run_result', 'workbench.program.layout'].includes(t.actionName));
     if (expectSuccess && (repairs.length !== 0 || runs.length !== 1 || turns.length !== 1 || runs[0].programContext?.outcome !== 'success')) {
       throw new Error('Expected one successful Run and no repair');
     }
-    if (expectRepair && (repairs.length !== 1 || repairs[0].programContext?.result?.run !== 1 || repairs[0].programContext?.result?.aiFix !== true || repairs[0].programContext?.result?.autoRun !== true || !repairs[0].toolCalls.some(name => ['repair_program', 'run_python_client'].includes(name)) || repairs[0].activitySnapshots < 1 || runs.length !== 1 || runs[0].programContext?.outcome !== 'success' || turns.length !== 2)) {
-      throw new Error(`Expected one repair arrival and one automatic success: ${repairs.length} repairs, ${runs.length} results, ${turns.length} action turns`);
+    if (expectRepair && (repairs.length !== repairCount ||
+        repairs.some((repair, i) => repair.programContext?.result?.run !== i + 1 ||
+          (repairCount > 1 && repair.programContext?.result?.attempt !== i + 1) ||
+          repair.programContext?.result?.aiFix !== true || repair.programContext?.result?.autoRun !== true ||
+          !repair.toolCalls.some(name => ['repair_program', 'run_python_client'].includes(name)) || repair.activitySnapshots < 1) ||
+        runs.length !== 1 || runs[0].programContext?.outcome !== 'success' || turns.length !== repairCount + 1 + layouts.length || layouts.length > 1 || unexpected.length > 0)) {
+      throw new Error(`Expected ${repairCount === 1 ? 'one' : repairCount} repair arrival and one automatic success: ${repairs.length} repairs, ${runs.length} results, ${turns.length} action turns`);
     }
-    if (expectRepair && (!repairs[0].surfaceId || repairs[0].surfaceId !== runs[0].surfaceId ||
-        !repairs[0].programContext.result.chainId || repairs[0].programContext.result.chainId !== runs[0].programContext.chainId)) {
+    if (expectRepair && [...repairs, ...layouts].some(repair => !repair.surfaceId || repair.surfaceId !== runs[0].surfaceId ||
+        (repair.actionName === 'workbench.program.repair' && (!repair.programContext.result.chainId || repair.programContext.result.chainId !== runs[0].programContext.chainId)))) {
       throw new Error('Automatic Run did not belong to the repaired program and chain');
     }
     if ((expectRepair || expectSuccess) && expectedOutput && !runs[0].programContext.output?.includes(expectedOutput)) {

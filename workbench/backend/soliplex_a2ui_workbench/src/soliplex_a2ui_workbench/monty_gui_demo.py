@@ -11,11 +11,11 @@ history = ["last event: run, count 3"]
 notice = "Stock starts at 3. +1 adds stock; -1 removes stock until empty."
 # A new Run resets the app and closes the previous snapshot, if present.
 try:
-    if log_window:  # ty: ignore[unresolved-reference]
+    if log_window and log_open:  # ty: ignore[unresolved-reference]
         ui.workbench.close_window(log_window)  # ty: ignore[unresolved-reference]
 except NameError:
-    pass
-log_window = ""
+    log_window = ""
+log_open = False
 
 
 def draw():
@@ -65,19 +65,18 @@ def draw():
 
 
 def open_log():
-    global log_window
+    global log_window, log_open
+    content = "Recent events (snapshot; reopen to refresh):\n" + "\n".join(history)
     if log_window:
-        ui.workbench.close_window(log_window)
-    log_window = ui.workbench.open_window(
-        "Monty event log",
-        "text",
-        "Recent events (snapshot; reopen to refresh):\n" + "\n".join(history),
-    )
+        ui.workbench.update_window(log_window, content)
+    else:
+        log_window = ui.workbench.open_window("Monty event log", "text", content)
+    log_open = True
     ui.workbench.move_window(log_window, 1)
 
 
 def handle_event(name, context):
-    global count, points, last_event, log_window, history, notice
+    global count, points, last_event, history, notice, log_open
     last_event = name
     if name == "plus":
         count += 1
@@ -105,9 +104,9 @@ def handle_event(name, context):
     history = (history + [f"last event: {name}, count {count}"])[-8:]
     if name == "open_log":
         open_log()
-    elif name == "close_log" and log_window:
+    elif name == "close_log" and log_window and log_open:
         ui.workbench.close_window(log_window)
-        log_window = ""
+        log_open = False
     draw()
 
 

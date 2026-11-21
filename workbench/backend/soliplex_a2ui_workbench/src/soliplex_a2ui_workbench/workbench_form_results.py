@@ -103,7 +103,7 @@ def _files(directory, slug):
     return sorted(name for name in os.listdir(directory) if pattern.fullmatch(name))
 
 
-def append_form_result(installation, scope, submission, record):
+def append_form_result(installation, scope, submission, record, *, with_receipt=False):
     """Save a validated submission; deduplicate on disk even after a restart."""
     intake = submission.userAction.name == "submit_intake"
     fields = (
@@ -134,9 +134,13 @@ def append_form_result(installation, scope, submission, record):
                 columns = next(reader, [])
                 if columns[:2] != METADATA_COLUMNS:
                     continue
-                for row in reader:
+                for row_number, row in enumerate(reader, 1):
                     if len(row) > 1 and row[1] == submission_id:
-                        return existing
+                        return (
+                            {"filename": existing, "row": row_number}
+                            if with_receipt
+                            else existing
+                        )
                 if (
                     existing in candidates
                     and columns == header
@@ -152,6 +156,8 @@ def append_form_result(installation, scope, submission, record):
                 filename = f"{slug}-{suffix}.csv"
                 suffix += 1
         with _csv_file(directory, filename, append=True) as target:
+            target.seek(0)
+            row_number = max(0, sum(1 for _ in csv.reader(target)) - 1) + 1
             output = io.StringIO(newline="")
             writer = csv.writer(output)
             if os.fstat(target.fileno()).st_size == 0:
@@ -166,7 +172,7 @@ def append_form_result(installation, scope, submission, record):
             target.write(output.getvalue())
             target.flush()
             os.fsync(target.fileno())
-        return filename
+        return {"filename": filename, "row": row_number} if with_receipt else filename
 
 
 def read_form_results(installation, scope, title):

@@ -156,7 +156,9 @@ async def open_demo(ctx: RunContext[AgentDependencies], name: str) -> ToolReturn
     For error examples, invite the user to enable AI Fix and press Run.
 
     Args:
-        name: ``monty_gui``, ``syntax_error``, ``name_error`` or ``type_check``.
+        name: ``monty_gui``, ``syntax_error``, ``name_error``, ``type_check``,
+            ``survey_results``, ``notes``, ``todo``, ``sales_pipeline``,
+            ``hot_patch``, ``reproducer`` or ``healing_pipeline``.
             Never write or alter its source.
     """
     return await _call(workbench_tools.open_demo, ctx, name=name)

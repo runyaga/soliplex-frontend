@@ -39,7 +39,8 @@ const publishedEventsJson = '''[
                   "question",
                   "districts",
                   "acknowledged",
-                  "submit"
+                  "submit",
+                  "receipt"
                 ]
               },
               {
@@ -58,7 +59,7 @@ const publishedEventsJson = '''[
               {
                 "id": "districts",
                 "component": "ChoicePicker",
-                "label": "Districts * (choose 1\u20132)",
+                "label": "Districts * (choose 1–2)",
                 "variant": "multipleSelection",
                 "options": [
                   {
@@ -108,6 +109,11 @@ const publishedEventsJson = '''[
                 "id": "submit_label",
                 "component": "Text",
                 "text": "Submit"
+              },
+              {
+                "id": "receipt",
+                "component": "Text",
+                "text": ""
               }
             ]
           }

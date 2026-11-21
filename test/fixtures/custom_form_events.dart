@@ -146,7 +146,8 @@ const customFormEventsJson = r'''[
                   "field_4",
                   "field_5",
                   "field_6",
-                  "submit"
+                  "submit",
+                  "receipt"
                 ]
               },
               {
@@ -258,6 +259,11 @@ const customFormEventsJson = r'''[
                 "id": "submit_label",
                 "component": "Text",
                 "text": "Submit"
+              },
+              {
+                "id": "receipt",
+                "component": "Text",
+                "text": ""
               }
             ]
           }

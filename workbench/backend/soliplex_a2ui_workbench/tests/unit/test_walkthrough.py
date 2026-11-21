@@ -105,6 +105,8 @@ def test_every_step_uses_validator_and_stable_ids_and_saves_real_csv(tmp_path):
             if step == 7:
                 assert "walkthrough-team-survey.csv" in result["narration"]
                 assert f"{state['id']}-sample" in result["narration"]
+                form = projection.content[state["nodes"]["form"]["activityMessageId"]]
+                assert form["receipt"] == "Saved row 1 to walkthrough-team-survey.csv"
             if step == 8:
                 record = projection.content[
                     state["nodes"]["program"]["activityMessageId"]
@@ -336,3 +338,38 @@ def test_explicit_restart_cleans_only_previous_tour_surfaces(tmp_path):
         tools._panel_target(projection.layout["nodes"], other["nodeId"])["visibility"]
         == "open"
     )
+
+
+def test_finale_puts_live_program_and_app_before_charts_and_log(tmp_path):
+    from soliplex_a2ui_workbench.program_actions import apply_program_actions
+
+    scope, projection, installation = fixture(tmp_path)
+    for _ in range(8):
+        advance(scope, projection, installation)
+    state = projection.layout["shared"]["walkthrough"]
+    record = projection.content[state["nodes"]["program"]["activityMessageId"]]
+    for event in apply_program_actions(
+        projection,
+        scope,
+        "app",
+        record,
+        [
+            {"op": "show_app"},
+            {
+                "op": "open",
+                "window_id": "tour_log",
+                "kind": "text",
+                "title": "Monty event log",
+                "content": "snapshot",
+            },
+        ],
+    ):
+        projection._fold(ActivitySnapshotEvent.model_validate(event))
+    for _ in range(9, len(STEPS)):
+        advance(scope, projection, installation)
+    canvas = tools._node(projection.layout["nodes"], "r_canvas")
+    program = tools._panel_target(
+        projection.layout["nodes"], state["nodes"]["program"]["nodeId"]
+    )
+    assert canvas["children"][0] == program["id"]
+    assert canvas["children"][1] in projection.layout["shared"]["programApps"]
