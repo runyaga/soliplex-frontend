@@ -135,7 +135,6 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
     import json
     from pathlib import Path
 
-    from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS
 
     text = room_skill("workbench")
     for literal in [
@@ -150,7 +149,9 @@ def test_file_and_app_teaching_matches_suggestions_and_model_cases():
     cases = json.loads(
         (Path(__file__).parents[4] / "scenarios/model/prompts.yaml").read_text()
     )
-    for suggestion in ROOM_SUGGESTIONS[1:8]:
+    from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS
+
+    for suggestion in list(DEMO_SUGGESTIONS)[:7]:
         case = next(case for case in cases if case["prompt"] == suggestion)
         assert any(action.get("name") == "Run" for action in case["actions"])
         assert any(
@@ -173,3 +174,19 @@ def test_ui_and_chart_teaching_describes_one_embeddable_chart_system():
     assert 'context["label"]' in text
     assert "None to leave a gap" in text
     assert "standalone chart" not in text
+
+
+def test_room_suggestions_show_only_the_advanced_demos():
+    from soliplex_a2ui_workbench.workbench_teaching import (
+        DEMO_SUGGESTIONS,
+        ROOM_SUGGESTIONS,
+    )
+
+    assert ROOM_SUGGESTIONS == (
+        "Start the walkthrough.",
+        "Hot-patch a crashing button without losing data.",
+        "Reproduce an anomaly in a runnable script.",
+        "Watch a pipeline heal through two repairs.",
+    )
+    # Culled demos still open when typed; only their buttons are gone.
+    assert DEMO_SUGGESTIONS["Fix a syntax error with AI."] == "syntax_error"

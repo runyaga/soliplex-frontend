@@ -10,11 +10,12 @@ from unittest.mock import patch
 import pytest
 from ag_ui.core import ActivitySnapshotEvent
 from pydantic_ai import ModelRetry, ToolReturn
+from test_workbench_agent_tools import _context, _tool
+
 from soliplex_a2ui_workbench import workbench_tools
 from soliplex_a2ui_workbench.program_actions import apply_program_actions
 from soliplex_a2ui_workbench.workbench_schemas import MINIMUM_ROOM_TOOL_MANIFEST
-from soliplex_a2ui_workbench.workbench_teaching import ROOM_SUGGESTIONS, room_skill
-from test_workbench_agent_tools import _context, _tool
+from soliplex_a2ui_workbench.workbench_teaching import DEMO_SUGGESTIONS, room_skill
 
 FIXTURE = (
     Path(__file__).parents[5] / "packages/soliplex_monty/test/fixtures/monty_demo.json"
@@ -87,7 +88,7 @@ def test_unknown_demo_is_corrective_and_publishes_nothing(monkeypatch):
 
 def test_demo_tool_accepts_only_a_name_and_suggestion_teaches_exact_call():
     assert set(MINIMUM_ROOM_TOOL_MANIFEST["open_demo"].model_fields) == {"name"}
-    assert "Explore a Python app with buttons and charts." in ROOM_SUGGESTIONS
+    assert "Explore a Python app with buttons and charts." in DEMO_SUGGESTIONS
     teaching = room_skill("workbench")
     assert 'call open_demo("monty_gui")' in teaching
     assert "reply with only its confirmation field, one sentence" in teaching
