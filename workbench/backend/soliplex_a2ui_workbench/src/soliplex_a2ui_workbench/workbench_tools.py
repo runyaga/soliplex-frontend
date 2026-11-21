@@ -233,6 +233,7 @@ def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
             "incident_flight_recorder_demo.py",
             False,
         ),
+        "platform_probe": ("Platform probe", "platform_probe_demo.py", False),
         "monty_gui": ("Monty GUI demo", "monty_gui_demo.py", False),
         "syntax_error": ("Syntax error example", "syntax_error_demo.py.txt", False),
         "name_error": ("NameError example", "name_error_demo.py", False),

@@ -446,6 +446,7 @@ class _PythonReplViewState extends State<PythonReplView> {
   String? _lastError;
   bool _aiFix = false;
   bool _typeCheck = false;
+  double? _lastTypeCheckMs;
   bool _failedWithAiFix = false;
   bool _preferencesLoaded = false;
   late final Future<void> _preferences;
@@ -1039,10 +1040,15 @@ class _PythonReplViewState extends State<PythonReplView> {
     final ExecutionHandle handle;
     try {
       if (_typeCheck) {
+        final clock = Stopwatch()..start();
         final error = await widget.checkTypes(
           checkSource ?? code,
           _resourceLimits,
         );
+        clock.stop();
+        if (!_disposed) {
+          setState(() => _lastTypeCheckMs = clock.elapsedMicroseconds / 1000);
+        }
         if (error != null) return (error, false);
         if (_disposed) return ('Stopped.', false);
       }
@@ -1337,6 +1343,7 @@ extension on _PythonReplViewState {
           ),
         ),
       ),
+      if (_lastTypeCheckMs case final ms?) Text('Type check: $ms ms.'),
       if (_repairable && _lastError != null)
         SoliplexButton.outlined(
           key: const ValueKey('python-repl-ai-fix'),

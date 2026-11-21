@@ -338,6 +338,7 @@ DEMO_SUGGESTIONS = {
     "Fix a misspelled Python name with AI.": "name_error",
     "Fix a Python type error with AI.": "type_check",
     "Investigate a retry-storm incident and hand it off.": "incident_flight_recorder",
+    "Open the platform probe.": "platform_probe",
 }
 
 # Room buttons show only the advanced demos; every DEMO_SUGGESTIONS text still

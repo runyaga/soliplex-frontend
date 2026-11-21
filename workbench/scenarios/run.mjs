@@ -5,17 +5,13 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cleanEvidence, cleanupCreatedThreads, failedAssertions, loadCases, parseCredentials, redactor, writeReport } from './lib/core.mjs';
 
+import { parseScenarioArgs } from './lib/options.mjs';
+
 const root = dirname(fileURLToPath(import.meta.url));
 const repository = resolve(root, '../..');
 const base = 'https://soliplex-a2ui-workbench.localhost:9743';
 const alias = process.env.WB_SERVER_ALIAS || 'soliplex-a2ui-workbench-localhost-9743';
 const stack = process.env.WB_STACK_DIR || resolve(homedir(), 'dev/soliplex-a2ui-workbench');
-
-function options(args) {
-  if (args.length === 1 && args[0] === '--help') return null;
-  if (!args.length || args.some(arg => !['--deterministic', '--models', '--all'].includes(arg))) throw new Error('Use --deterministic, --models, or --all');
-  return { deterministic: args.includes('--deterministic') || args.includes('--all'), models: args.includes('--models') || args.includes('--all') };
-}
 
 async function backendScript(source, config) {
   // Configuration travels over stdin. No credentials in process arguments,
@@ -55,14 +51,18 @@ async function seed(credentials, recordThread) {
 }
 
 async function main() {
-  const selected = options(process.argv.slice(2));
+  const selected = parseScenarioArgs(process.argv.slice(2));
   if (!selected) {
-    console.log('Usage: workbench/scenarios/run.sh --deterministic | --models | --all');
+    console.log('Usage: workbench/scenarios/run.sh --deterministic | --models | --all | --probes');
     return;
   }
   // WB_CASES=id1,id2 runs only those cases.
   const only = new Set((process.env.WB_CASES || '').split(',').map(id => id.trim()).filter(Boolean));
   const pick = cases => (only.size ? cases.filter(item => only.has(item.id)) : cases);
+  if (selected.probes) {
+    const { runProbes } = await import('./probes/run_probes.mjs');
+    return runProbes({ repository, base, alias });
+  }
   const deterministic = pick(await loadCases(`${root}/deterministic/cases.json`));
   const prompts = pick(await loadCases(`${root}/model/prompts.yaml`, { prompts: true }));
   const timestamp = new Date().toISOString();
