@@ -28,9 +28,9 @@ test('repair examples explicitly enable checking and can run again after repair'
   }
 });
 
-test('prompt corpus has twenty-nine independent cases and checked follow-up prerequisites', async () => {
+test('prompt corpus has thirty-one independent cases and checked follow-up prerequisites', async () => {
   const prompts = await loadCases(new URL('model/prompts.yaml', root), { prompts: true });
-  assert.equal(prompts.length, 29);
+  assert.equal(prompts.length, 31);
   assert.ok(prompts.find(p => p.id === 'fix_program').setup.length);
   for (const prompt of prompts.filter(p => p.setup)) assert.ok(prompt.setup_assertions.length);
   assert.ok(prompts.some(p => p.actions?.some(a => a.name === 'Run')));

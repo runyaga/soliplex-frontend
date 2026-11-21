@@ -69,6 +69,7 @@ void main() {
           }
         }
         if ([
+          'incident_flight_recorder',
           'survey_results',
           'sales_pipeline',
           'hot_patch',

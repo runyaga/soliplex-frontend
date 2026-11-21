@@ -228,6 +228,11 @@ def _content_result(
 def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
     """Publish a curated program, without importing or executing its source."""
     demos = {
+        "incident_flight_recorder": (
+            "Incident Flight Recorder",
+            "incident_flight_recorder_demo.py",
+            False,
+        ),
         "monty_gui": ("Monty GUI demo", "monty_gui_demo.py", False),
         "syntax_error": ("Syntax error example", "syntax_error_demo.py.txt", False),
         "name_error": ("NameError example", "name_error_demo.py", False),
@@ -244,6 +249,9 @@ def open_demo(ctx: WorkbenchToolContext, name: str) -> dict[str, object]:
         raise ValueError("unknown demo; use open_demo with " + ", ".join(demos))
     title, filename, type_check = demos[name]
     source = Path(__file__).with_name(filename).read_text()
+    if name == "incident_flight_recorder":
+        template = Path(__file__).with_name("incident_replay_template.py").read_text()
+        source = source.replace('"__INCIDENT_REPLAY_TEMPLATE__"', repr(template))
     if not type_check:
         result = run_python_client(ctx, title, source, "r_canvas")
     else:

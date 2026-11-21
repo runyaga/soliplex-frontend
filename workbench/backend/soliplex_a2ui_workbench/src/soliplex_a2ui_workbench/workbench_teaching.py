@@ -128,6 +128,12 @@ For "Start the walkthrough." call start_walkthrough(); do nothing else.
 For "Open the syntax error example." call open_demo("syntax_error").
 For "Open the NameError example." call open_demo("name_error").
 For "Open the type check example." call open_demo("type_check").
+For "Open Incident Flight Recorder." call open_demo("incident_flight_recorder").
+Answer incident questions from current_program_apps state only, one comparison
+at a time, with no arithmetic of your own. Read capacity_final_backlog,
+retry_disabled_final_backlog, cleared_at_tick, minimal_trigger, and
+verification_status. A capsule is inert until the user presses its Run;
+never claim verification before the parent loads a matching passing receipt.
 For the hot-patch demo call open_demo("hot_patch"). Tell the user to enable AI Fix,
 press Run, click Normal traffic and Burst, then Export report.
 For the anomaly reproducer demo call open_demo("reproducer"). Run, click C,
@@ -331,11 +337,17 @@ DEMO_SUGGESTIONS = {
     "Fix a syntax error with AI.": "syntax_error",
     "Fix a misspelled Python name with AI.": "name_error",
     "Fix a Python type error with AI.": "type_check",
+    "Investigate a retry-storm incident and hand it off.": "incident_flight_recorder",
 }
 
 # Room buttons show only the advanced demos; every DEMO_SUGGESTIONS text still
 # opens its demo when typed.
-ADVANCED_DEMOS = ("hot_patch", "reproducer", "healing_pipeline")
+ADVANCED_DEMOS = (
+    "hot_patch",
+    "reproducer",
+    "healing_pipeline",
+    "incident_flight_recorder",
+)
 ROOM_SUGGESTIONS = (
     "Start the walkthrough.",
     *(text for text, name in DEMO_SUGGESTIONS.items() if name in ADVANCED_DEMOS),

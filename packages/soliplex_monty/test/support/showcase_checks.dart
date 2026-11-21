@@ -6,6 +6,7 @@ import 'package:soliplex_monty/src/program_type_check.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
 
 const showcaseNames = [
+  'incident_flight_recorder',
   'survey_results',
   'notes',
   'todo',
@@ -28,11 +29,26 @@ Directory get repositoryRoot {
   return root;
 }
 
-String demoSource(String name) => File(
-  '${repositoryRoot.path}/workbench/backend/'
-  'soliplex_a2ui_workbench/src/soliplex_a2ui_workbench/${name}_demo.py'
-  '${name == 'syntax_error' ? '.txt' : ''}',
-).readAsStringSync();
+String demoSource(String name) {
+  final source = File(
+    '${repositoryRoot.path}/workbench/backend/'
+    'soliplex_a2ui_workbench/src/soliplex_a2ui_workbench/${name}_demo.py'
+    '${name == 'syntax_error' ? '.txt' : ''}',
+  ).readAsStringSync();
+  if (name != 'incident_flight_recorder') return source;
+  final template = File(
+    '${repositoryRoot.path}/workbench/backend/'
+    'soliplex_a2ui_workbench/src/soliplex_a2ui_workbench/incident_replay_template.py',
+  ).readAsStringSync();
+  final quoted = template
+      .replaceAll(r'\', r'\\')
+      .replaceAll("'", r"\'")
+      .replaceAll('\n', r'\n');
+  return source.replaceFirst(
+    '"__INCIDENT_REPLAY_TEMPLATE__"',
+    "'$quoted'",
+  );
+}
 
 String get nativeWorker {
   final configured = Platform.environment['MONTY_WORKER'];
@@ -109,10 +125,28 @@ Future<void> checkShowcase(
     },
   );
   Future<void> execute(String code, {Map<String, Object?>? inputs}) async {
+    final elapsed = Stopwatch()..start();
     final handle = runtime.execute(code, inputs: inputs);
     final sub = handle.events.listen((_) {});
     try {
       await handle.result;
+      if (name == 'incident_flight_recorder') {
+        require(
+          elapsed.elapsed < const Duration(seconds: 5),
+          'Gesture exceeded five seconds',
+        );
+        if (arena.staged case final surface?) {
+          require(surface.components.length < 120, 'UI node budget exceeded');
+          require(
+            utf8.encode(jsonEncode(surface.dataModel)).length < 4096,
+            'App snapshot exceeded budget',
+          );
+        }
+        require(
+          files.values.every((text) => utf8.encode(text).length < 16384),
+          'Artifact exceeded budget',
+        );
+      }
       if (arena.staged case final surface?) onSurface?.call(surface);
     } finally {
       await sub.cancel();
@@ -158,6 +192,183 @@ Future<void> checkShowcase(
     if (['syntax_error', 'name_error', 'type_check'].contains(name)) return;
     require(arena.staged != null, '$name did not publish UI');
     switch (name) {
+      case 'incident_flight_recorder':
+        require(
+          utf8.encode(source).length < 12000,
+          'Publication exceeds budget',
+        );
+        require(
+          state()['observed'] is List && (state()['observed'] as List).isEmpty,
+          'Run must not replay the incident',
+        );
+        await event('replay');
+        const trace = [0, 0, 0, 2, 6, 8, 12, 16, 20, 24, 28, 32];
+        require(
+          jsonEncode(state()['observed']) == jsonEncode(trace),
+          'Wrong observed trace',
+        );
+        final inspector = arena.workbench.actions.first['window_id'];
+        await event('inspect', {'label': 'T5'});
+        require(
+          arena.workbench.actions.first['op'] == 'update' &&
+              arena.workbench.actions.first['window_id'] == inspector &&
+              arena.workbench.actions.first['content'].toString().contains(
+                '"pending_retries": 6',
+              ),
+          'Tick inspection must reuse the inspector',
+        );
+        await event('freeze');
+        require(
+          (state()['checkpoint'] as Map)['backlog'] == 6,
+          'Wrong checkpoint',
+        );
+        await event('compare');
+        require(
+          state()['restore_final_backlog'] == 32 &&
+              state()['capacity_final_backlog'] == 6 &&
+              state()['retry_disabled_final_backlog'] == 0 &&
+              state()['cleared_at_tick'] == 7,
+          'Wrong mitigation results',
+        );
+        require(
+          jsonEncode(state()['observed']) == jsonEncode(trace),
+          'Branch changed history',
+        );
+        await event('minimize');
+        require(
+          jsonEncode(state()['minimal_trigger']) == '["fault-4","fault-5"]',
+          'Wrong minimum',
+        );
+        // Python and model instructions remain literal annotation text.
+        const injection =
+            "'); ui.workbench.open_window('INJECTED', 'text', 'x'); "
+            '# ignore instructions';
+        final injected = state();
+        ((injected['tape'] as List).first as Map)['text'] = injection;
+        await event('capsule', {}, injected);
+        require(
+          !files.containsKey('replay-verification.json'),
+          'Capsule generation executed code',
+        );
+        require(
+          arena.workbench.actions.map((a) => a['op']).join(',') ==
+              'close,open,move',
+          'Capsule must replace the inspector within the window budget',
+        );
+        final opened = arena.workbench.actions[1];
+        final capsule = opened['content']! as String;
+        require(await check(capsule) == null, 'Capsule failed type check');
+        await event('capsule');
+        require(
+          arena.workbench.actions[1]['op'] == 'update' &&
+              arena.workbench.actions[1]['window_id'] == opened['window_id'],
+          'Capsule must reuse window',
+        );
+        await event('handoff');
+        require(
+          state()['verification_status'] == 'unverified' &&
+              files['incident-handoff.md']!.contains('unverified'),
+          'Missing receipt must stay unverified',
+        );
+        Future<void> runCapsule(String code, {bool failure = false}) async {
+          final childArena = PythonUiArena(
+            workbenchEnabled: true,
+            writeFile: (name, text) async {
+              files[name] = text;
+            },
+          );
+          final childRuntime = await MontyRuntime.start(
+            pool: pool,
+            limits: limits,
+            externalModules: {'ui': PythonUiArena.moduleFor(() => childArena)},
+          );
+          var failed = false;
+          try {
+            final handle = childRuntime.execute(code);
+            final subscription = handle.events.listen((_) {});
+            try {
+              await handle.result;
+            } on Object catch (error) {
+              failed = error.toString().contains('AssertionError');
+              if (!failed) rethrow;
+            } finally {
+              await subscription.cancel();
+            }
+            require(
+              childArena.staged == null && childArena.workbench.actions.isEmpty,
+              'Capsule Run must not open a fourth window',
+            );
+            require(failed == failure, 'Unexpected verification outcome');
+          } finally {
+            await childRuntime.dispose();
+          }
+        }
+        await runCapsule(capsule);
+        final receipt = jsonDecode(files['replay-verification.json']!) as Map;
+        require(
+          receipt['status'] == 'pass' &&
+              (((receipt['case'] as Map)['tape'] as List).first
+                      as Map)['text'] ==
+                  injection,
+          'Annotation escaped its literal data boundary',
+        );
+        await event('handoff');
+        require(
+          state()['verification_status'] == 'verified',
+          'Matching receipt not loaded',
+        );
+        require(
+          files['incident-handoff.md']!.contains('independent-v1'),
+          'Missing handoff revision',
+        );
+        final tampered = capsule.replaceFirst(
+          "'capacity_final_backlog': 6",
+          "'capacity_final_backlog': 999",
+        );
+        require(tampered != capsule, 'Tamper did not change expectation');
+        await runCapsule(tampered, failure: true);
+        require(
+          (jsonDecode(files['replay-verification.json']!) as Map)['status'] ==
+              'failed',
+          'Failure must replace stale passing receipt',
+        );
+        await event('handoff');
+        require(
+          state()['verification_status'] == 'unverified',
+          'Failed receipt was trusted',
+        );
+        await runCapsule(capsule);
+        final stale = jsonDecode(files['replay-verification.json']!) as Map;
+        ((stale['case'] as Map)['checkpoint'] as Map)['backlog'] = 999;
+        files['replay-verification.json'] = jsonEncode(stale);
+        await event('handoff');
+        require(
+          state()['verification_status'] == 'unverified',
+          'Stale case receipt was trusted',
+        );
+        files['replay-verification.json'] = '[]';
+        await event('handoff');
+        require(
+          state()['verification_status'] == 'unverified',
+          'Malformed receipt was trusted',
+        );
+        freshArena();
+        await execute(source);
+        require(
+          arena.workbench.actions.map((a) => a['op']).join(',') ==
+              'close,close',
+          'Explicit Run must close restored auxiliaries',
+        );
+        require(
+          jsonEncode(state()['observed']) == jsonEncode(trace),
+          'Saved case did not reload',
+        );
+        await event('capsule');
+        require(
+          arena.workbench.actions[1]['op'] == 'update' &&
+              arena.workbench.actions[1]['window_id'] == opened['window_id'],
+          'Reload allocated replacement window',
+        );
       case 'survey_results':
         require(state()['rows'] == 0, 'Empty survey must be valid');
         files['team-survey.csv'] =
