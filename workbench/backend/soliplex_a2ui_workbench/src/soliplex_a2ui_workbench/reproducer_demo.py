@@ -36,7 +36,7 @@ def draw():
                 ),
                 ui.BarChart(
                     [
-                        {"label": str(r["batch"])[:60], "value": r["latency_ms"]}
+                        {"label": str(r["batch"])[:60], "value": int(r["latency_ms"])}
                         for r in rows
                     ],
                     title="Batch latency (ms)",

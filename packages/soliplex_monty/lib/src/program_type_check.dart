@@ -2,7 +2,6 @@ import 'package:dart_monty/core.dart';
 
 import 'package:soliplex_monty/src/chart_module.dart';
 import 'package:soliplex_monty/src/python_ui.dart';
-import 'package:soliplex_monty/src/ui_chart.dart';
 import 'package:soliplex_monty/src/worker_location.dart';
 
 /// Checks a whole program on a fresh worker without running any user statement.
@@ -67,48 +66,5 @@ def handle_event(name: str, context: dict[str, Any]) -> None: ...
 Map<String, Object?> _modules() {
   final arena = PythonUiArena(workbenchEnabled: true);
   final ui = PythonUiArena.moduleFor(() => arena);
-  final constructors = {...basicSignatures, ...uiChartSignatures};
-  final stubs = StringBuffer(
-    'from typing import Any\nfrom . import workbench, graphics\n',
-  );
-  // Constructors accept heterogeneous property/binding values; validation of
-  // the constructed component remains with the catalog.
-  for (final name in constructors.keys) {
-    stubs.writeln('def $name(*args: Any, **kwargs: Any) -> str: ...');
-  }
-  stubs.write('''
-def bind(path: str) -> Any: ...
-def Event(name: str, context: dict[str, Any] = {}) -> str: ...
-def show(root: str, data: Any = None) -> None: ...
-''');
-  final chart = chartModule();
-  return {
-    'ui': ExternalModule({
-      ...ui.attrs,
-      'workbench': ExternalModule(
-        (ui.attrs['workbench']! as ExternalModule).attrs,
-        stubs: '''
-def read_file(filename: str) -> str: ...
-def write_file(filename: str, text: str) -> None: ...
-def open_window(title: str, kind: str, content: str) -> str: ...
-def update_window(window_id: str, content: str) -> None: ...
-def move_window(window_id: str, order: int = 0) -> None: ...
-def close_window(window_id: str) -> None: ...
-''',
-      ),
-      'graphics': ExternalModule(
-        (ui.attrs['graphics']! as ExternalModule).attrs,
-        stubs:
-            'from typing import Any\n'
-            'def Chart(*args: Any, **kwargs: Any) -> str: ...',
-      ),
-    }, stubs: stubs.toString()),
-    'chart': ExternalModule(
-      chart.attrs,
-      stubs:
-          'from typing import Any\n'
-          '${chart.attrs.keys.map((name) => 'def $name(*args: Any, '
-              '**kwargs: Any) -> dict[str, Any]: ...').join('\n')}',
-    ),
-  };
+  return {'ui': ui, 'chart': chartModule()};
 }
